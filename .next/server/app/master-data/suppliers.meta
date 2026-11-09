@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/master-data/layout,_N_T_/master-data/suppliers/layout,_N_T_/master-data/suppliers/page,_N_T_/master-data/suppliers"
+  },
+  "routeCache": {
+    "key": "/route-cache/APP_PAGE/a71150c6c289fed94439875ce42fc12bc68baef6a864a03e419a1bda8d9148b4/$/master-data/suppliers",
+    "owner": {
+      "kind": "APP_PAGE",
+      "sourceRoute": "/master-data/suppliers/page"
+    },
+    "isFallback": false
+  }
+}

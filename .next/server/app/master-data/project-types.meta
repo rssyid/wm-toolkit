@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/master-data/layout,_N_T_/master-data/project-types/layout,_N_T_/master-data/project-types/page,_N_T_/master-data/project-types"
+  },
+  "routeCache": {
+    "key": "/route-cache/APP_PAGE/c4feb96c8c666bc1428a8201726b8951565b2cd3c8c9b14e9aaca3abc5bbdb01/$/master-data/project-types",
+    "owner": {
+      "kind": "APP_PAGE",
+      "sourceRoute": "/master-data/project-types/page"
+    },
+    "isFallback": false
+  }
+}

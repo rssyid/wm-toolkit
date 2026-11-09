@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/master-data/layout,_N_T_/master-data/procurement-types/layout,_N_T_/master-data/procurement-types/page,_N_T_/master-data/procurement-types"
+  },
+  "routeCache": {
+    "key": "/route-cache/APP_PAGE/22527d6d4e6f9b80bcc41c069a6169e1cb1626906ef1b11dba4a941dc896bc4b/$/master-data/procurement-types",
+    "owner": {
+      "kind": "APP_PAGE",
+      "sourceRoute": "/master-data/procurement-types/page"
+    },
+    "isFallback": false
+  }
+}
