@@ -132,6 +132,13 @@ import {
   resetToEmptyProductionAction,
 } from "@/server/actions/admin";
 import {
+  markNotificationAsReadAction,
+  markAllNotificationsAsReadAction,
+  deleteNotificationAction,
+  clearAllNotificationsAction,
+  updateNotificationSettingAction,
+} from "@/server/actions/notifications";
+import {
   addMasterDataLocationAction,
   addMasterDataMaterialAction,
   addMasterDataSupplierAction,
@@ -323,7 +330,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [spkContracts, setSpkContracts] = useState<SPKContract[]>(INITIAL_SPK_CONTRACTS);
   const [comments, setComments] = useState<ProjectComment[]>(INITIAL_COMMENTS);
   const [attachments, setAttachments] = useState<ProjectAttachment[]>(INITIAL_ATTACHMENTS);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSetting[]>(INITIAL_NOTIFICATION_SETTINGS);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
   const [dailyProgress, setDailyProgress] = useState<DailyProgressRecord[]>(INITIAL_DAILY_PROGRESS);
@@ -419,6 +426,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     if (d.projectTypes && Array.isArray(d.projectTypes)) setProjectTypes(d.projectTypes);
     if (d.procurementTypes && Array.isArray(d.procurementTypes)) setProcurementTypes(d.procurementTypes);
     if (d.auditLogs && Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
+    if (d.notifications && Array.isArray(d.notifications)) setNotifications(d.notifications);
+    if (d.notificationSettings && Array.isArray(d.notificationSettings)) setNotificationSettings(d.notificationSettings);
   };
 
   const refreshFromDatabase = async () => {
@@ -473,7 +482,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         if (parsed.spkContracts) setSpkContracts(parsed.spkContracts);
         if (parsed.comments) setComments(parsed.comments);
         if (parsed.attachments) setAttachments(parsed.attachments);
-        if (parsed.notifications) setNotifications(parsed.notifications);
+        if (parsed.notifications) {
+          if (parsed.projects && Array.isArray(parsed.projects) && parsed.projects.length === 0) {
+            setNotifications([]);
+          } else {
+            setNotifications(parsed.notifications);
+          }
+        }
         if (parsed.notificationSettings) setNotificationSettings(parsed.notificationSettings);
         if (parsed.auditLogs) setAuditLogs(parsed.auditLogs);
         if (parsed.dailyProgress) setDailyProgress(parsed.dailyProgress);
@@ -1771,21 +1786,33 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
     );
+    markNotificationAsReadAction(id).catch((err) =>
+      console.warn("Sync DB error (markNotificationAsReadAction):", err)
+    );
   };
 
   const markAllNotificationsAsRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     toast.success("Semua notifikasi telah ditandai sebagai dibaca");
+    markAllNotificationsAsReadAction().catch((err) =>
+      console.warn("Sync DB error (markAllNotificationsAsReadAction):", err)
+    );
   };
 
   const deleteNotification = (id: string) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
     toast.info("Notifikasi telah dihapus");
+    deleteNotificationAction(id).catch((err) =>
+      console.warn("Sync DB error (deleteNotificationAction):", err)
+    );
   };
 
   const clearAllNotifications = () => {
     setNotifications([]);
     toast.info("Semua notifikasi telah dibersihkan");
+    clearAllNotificationsAction().catch((err) =>
+      console.warn("Sync DB error (clearAllNotificationsAction):", err)
+    );
   };
 
   const addNotification = (
@@ -1808,6 +1835,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       prev.map((s) => (s.notificationType === type ? { ...s, isEnabled } : s))
     );
     toast.success("Pengaturan notifikasi berhasil diperbarui");
+    updateNotificationSettingAction(type, isEnabled).catch((err) =>
+      console.warn("Sync DB error (updateNotificationSettingAction):", err)
+    );
   };
 
   const simulateCronReminderCheck = () => {
@@ -2119,6 +2149,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       setWeeklyProgress([]);
       setComments([]);
       setAttachments([]);
+      setNotifications([]);
       await refreshFromDatabase();
       toast.success(res.message);
     } else {
@@ -2144,6 +2175,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       setComments([]);
       setAttachments([]);
       setAuditLogs([]);
+      setNotifications([]);
       await refreshFromDatabase();
       toast.success(res.message);
     } else {

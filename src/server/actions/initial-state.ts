@@ -31,6 +31,8 @@ export async function getInitialAppStateAction() {
       dbProjectTypes,
       dbProcurementTypes,
       dbAuditLogs,
+      dbNotifications,
+      dbNotificationSettings,
     ] = await Promise.all([
       db.project.findMany({
         include: {
@@ -82,6 +84,8 @@ export async function getInitialAppStateAction() {
       db.projectTypeItem.findMany({ orderBy: { code: "asc" } }),
       db.procurementTypeItem.findMany({ orderBy: { code: "asc" } }),
       db.auditLog.findMany({ take: 100, orderBy: { createdAt: "desc" } }),
+      db.notification.findMany({ orderBy: { createdAt: "desc" } }),
+      db.notificationSetting.findMany(),
     ]);
 
     // Map projects to UI format
@@ -622,6 +626,28 @@ export async function getInitialAppStateAction() {
       notes: al.notes || undefined,
     }));
 
+    const notifications = dbNotifications.map((n) => ({
+      id: n.id,
+      userId: n.userId,
+      type: n.type as any,
+      title: n.title,
+      message: n.message,
+      isRead: n.isRead,
+      createdAt: n.createdAt.toISOString(),
+      linkUrl: n.linkUrl || undefined,
+      projectId: n.projectId || undefined,
+      projectCode: n.projectCode || undefined,
+      projectName: n.projectName || undefined,
+      priority: (n.priority as any) || "normal",
+    }));
+
+    const notificationSettings = dbNotificationSettings.map((ns) => ({
+      id: ns.id,
+      userId: ns.userId,
+      notificationType: ns.notificationType as any,
+      isEnabled: ns.isEnabled,
+    }));
+
     return {
       success: true,
       hasDbData: true,
@@ -683,6 +709,8 @@ export async function getInitialAppStateAction() {
         projectTypes,
         procurementTypes,
         auditLogs,
+        notifications,
+        notificationSettings,
       },
     };
   } catch (error: any) {

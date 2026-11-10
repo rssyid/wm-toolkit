@@ -26,6 +26,7 @@ export async function loadDemoDataAction() {
     revalidatePath("/dashboard");
     revalidatePath("/workspace");
     revalidatePath("/settings");
+    revalidatePath("/notifications");
     return { success: true, message: "Dataset demo berhasil dimuat ulang ke Neon PostgreSQL!" };
   } catch (error: any) {
     console.error("Gagal memuat dataset demo:", error);
@@ -61,6 +62,7 @@ export async function clearDemoDataAction() {
     await db.projectAttachment.deleteMany();
     await db.projectComment.deleteMany();
     await db.project.deleteMany();
+    await db.notification.deleteMany();
 
     await recordServerAuditLog({
       action: "DELETE",
@@ -73,6 +75,7 @@ export async function clearDemoDataAction() {
     revalidatePath("/dashboard");
     revalidatePath("/workspace");
     revalidatePath("/settings");
+    revalidatePath("/notifications");
     return { success: true, message: "Seluruh data transaksi demo berhasil dibersihkan dari database!" };
   } catch (error: any) {
     console.error("Gagal membersihkan data demo:", error);
@@ -121,6 +124,7 @@ export async function resetToEmptyProductionAction() {
     revalidatePath("/dashboard");
     revalidatePath("/workspace");
     revalidatePath("/settings");
+    revalidatePath("/notifications");
     return {
       success: true,
       message: "Basis data berhasil direset ke kondisi produksi kosong. Siap untuk penginputan proyek riil!",

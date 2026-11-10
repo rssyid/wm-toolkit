@@ -1112,6 +1112,61 @@ export async function seedDatabase() {
     });
   }
 
+  // 17. Notifications & Notification Settings
+  console.log("-> Seeding Notifications & Settings...");
+  for (const notif of INITIAL_NOTIFICATIONS) {
+    await prisma.notification.upsert({
+      where: { id: notif.id },
+      update: {
+        userId: notif.userId || "usr-1",
+        type: notif.type,
+        title: notif.title,
+        message: notif.message,
+        isRead: notif.isRead,
+        createdAt: new Date(notif.createdAt),
+        linkUrl: notif.linkUrl,
+        projectId: notif.projectId,
+        projectCode: notif.projectCode,
+        projectName: notif.projectName,
+        priority: notif.priority || "normal",
+      },
+      create: {
+        id: notif.id,
+        userId: notif.userId || "usr-1",
+        type: notif.type,
+        title: notif.title,
+        message: notif.message,
+        isRead: notif.isRead,
+        createdAt: new Date(notif.createdAt),
+        linkUrl: notif.linkUrl,
+        projectId: notif.projectId,
+        projectCode: notif.projectCode,
+        projectName: notif.projectName,
+        priority: notif.priority || "normal",
+      },
+    });
+  }
+
+  for (const setting of INITIAL_NOTIFICATION_SETTINGS) {
+    await prisma.notificationSetting.upsert({
+      where: {
+        userId_notificationType: {
+          userId: setting.userId || "usr-1",
+          notificationType: setting.notificationType,
+        },
+      },
+      update: {
+        isEnabled: setting.isEnabled,
+      },
+      create: {
+        id: setting.id,
+        userId: setting.userId || "usr-1",
+        notificationType: setting.notificationType,
+        isEnabled: setting.isEnabled,
+      },
+    });
+  }
+
   console.log("✅ Seeding database selesai 100%! Seluruh data demo berhasil disimpan di Neon PostgreSQL.");
 }
 
