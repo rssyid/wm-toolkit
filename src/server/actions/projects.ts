@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "@/server/auth-guard";
 import { recordServerAuditLog } from "@/server/audit";
 import { CreateProjectSchema, UpdateProjectSchema, ScheduleRevisionSchema } from "@/server/schemas";
 import { revalidatePath } from "next/cache";
+import { getOrCreateGoogleDriveFolder } from "@/server/google-drive";
 
 function toProjectStatusEnum(status?: string): "PLANNED" | "IN_PROGRESS" | "ON_HOLD" | "COMPLETED" | "CANCELLED" {
   switch (status) {
@@ -379,4 +380,45 @@ export async function reviseScheduleAction(projectId: string, rawInput: any) {
 
   revalidatePath(`/workspace/${projectId}`);
   return { success: true, revision };
+}
+
+/**
+ * Ambil atau buat folder Google Drive khusus untuk proyek tertentu
+ */
+export async function getProjectDriveFolderAction(projectId: string): Promise<{
+  success: boolean;
+  folderId?: string;
+  folderName?: string;
+  webViewLink?: string;
+  message?: string;
+}> {
+  try {
+    const project = await db.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, projectCode: true, name: true },
+    });
+
+    if (!project) {
+      return { success: false, message: "Proyek tidak ditemukan" };
+    }
+
+    const folderName = `[${project.projectCode}] ${project.name}`.trim();
+    const folderInfo = await getOrCreateGoogleDriveFolder({
+      folderName,
+      parentFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID,
+    });
+
+    return {
+      success: true,
+      folderId: folderInfo.id,
+      folderName: folderInfo.name,
+      webViewLink: folderInfo.webViewLink,
+    };
+  } catch (error: any) {
+    console.error(`Gagal mendapatkan folder Drive untuk proyek ${projectId}:`, error);
+    return {
+      success: false,
+      message: error?.message || "Gagal mengakses folder Google Drive",
+    };
+  }
 }

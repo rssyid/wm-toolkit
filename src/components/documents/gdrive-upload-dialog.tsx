@@ -131,7 +131,7 @@ export function GDriveUploadDialog({
         toast.success(
           uploadedData.isMock
             ? "Dokumen tersimpan (mode simulasi link)!"
-            : "Dokumen berhasil diunggah langsung ke Google Drive perusahaan!"
+            : `Dokumen berhasil diunggah ke folder Google Drive: ${uploadedData.folderName || project?.name || "Proyek"}!`
         );
       }
 
@@ -160,7 +160,10 @@ export function GDriveUploadDialog({
             <div>
               <DialogTitle className="text-base">Unggah Berkas ke Google Drive</DialogTitle>
               <DialogDescription className="text-xs">
-                Simpan dokumen ke folder Google Drive proyek: <span className="font-mono text-foreground font-semibold">{project?.code || "PROYEK"}</span>
+                Simpan dokumen ke folder Google Drive:{" "}
+                <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">
+                  [{project?.code || "PROYEK"}] {project?.name || ""}
+                </span>
               </DialogDescription>
             </div>
           </div>

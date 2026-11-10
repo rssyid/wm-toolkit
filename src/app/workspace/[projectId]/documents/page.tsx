@@ -45,6 +45,7 @@ import { GDriveUploadDialog } from "@/components/documents/gdrive-upload-dialog"
 import { useAppState } from "@/context/app-state-context";
 import { formatIDDate } from "@/lib/utils";
 import { ProjectAttachment } from "@/types";
+import { getProjectDriveFolderAction } from "@/server/actions/projects";
 import { toast } from "sonner";
 
 export default function DocumentsTab() {
@@ -63,6 +64,23 @@ export default function DocumentsTab() {
   const [selectedDriveDoc, setSelectedDriveDoc] = useState<ProjectAttachment | null>(null);
   const [driveViewerOpen, setDriveViewerOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [openingDriveFolder, setOpeningDriveFolder] = useState(false);
+
+  const handleOpenDriveFolder = async () => {
+    setOpeningDriveFolder(true);
+    try {
+      const res = await getProjectDriveFolderAction(projectId);
+      if (res.success && res.webViewLink) {
+        window.open(res.webViewLink, "_blank", "noopener,noreferrer");
+      } else {
+        toast.error(res.message || "Gagal membuka folder Google Drive");
+      }
+    } catch {
+      toast.error("Terjadi kesalahan saat mengakses folder Google Drive");
+    } finally {
+      setOpeningDriveFolder(false);
+    }
+  };
 
   if (!project) return null;
 
@@ -154,17 +172,27 @@ export default function DocumentsTab() {
 
         <Card className="shadow-xs">
           <CardContent className="p-3.5 flex items-center justify-between">
-            <div>
+            <div className="space-y-0.5">
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                 Status Integrasi
               </p>
-              <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+              <h3 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Google Drive Aktif
               </h3>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                Folder: PTPN/{project.code}
+              <p className="text-[11px] text-muted-foreground truncate max-w-[200px]" title={`[${project.code}] ${project.name}`}>
+                Folder: [{project.code}] {project.name}
               </p>
+              <button
+                type="button"
+                onClick={handleOpenDriveFolder}
+                disabled={openingDriveFolder}
+                className="text-[11px] text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-medium inline-flex items-center gap-1 hover:underline pt-0.5"
+              >
+                <FolderOpen className="w-3 h-3" />
+                <span>{openingDriveFolder ? "Membuka..." : "Buka Folder Drive"}</span>
+                <ExternalLink className="w-2.5 h-2.5" />
+              </button>
             </div>
             <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 flex items-center justify-center shrink-0">
               <Cloud className="w-4 h-4" />
@@ -188,26 +216,41 @@ export default function DocumentsTab() {
             </p>
           </div>
 
-          {!isViewerOnly && (
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setLinkDialogOpen(true)}
-                className="gap-1.5 text-xs border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950"
-              >
-                <Link2 className="w-3.5 h-3.5" /> + Tautkan Google Drive
-              </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={openingDriveFolder}
+              onClick={handleOpenDriveFolder}
+              className="gap-1.5 text-xs border-muted-foreground/30 text-muted-foreground hover:text-foreground"
+              title="Buka direktori Google Drive proyek ini di tab baru"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-amber-500" />
+              <span className="hidden sm:inline">Folder Drive</span>
+              <ExternalLink className="w-3 h-3 opacity-60" />
+            </Button>
 
-              <Button
-                size="sm"
-                onClick={() => setUploadDialogOpen(true)}
-                className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
-              >
-                <UploadCloud className="w-3.5 h-3.5" /> + Unggah Dokumen
-              </Button>
-            </div>
-          )}
+            {!isViewerOnly && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setLinkDialogOpen(true)}
+                  className="gap-1.5 text-xs border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+                >
+                  <Link2 className="w-3.5 h-3.5" /> + Tautkan Google Drive
+                </Button>
+
+                <Button
+                  size="sm"
+                  onClick={() => setUploadDialogOpen(true)}
+                  className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                >
+                  <UploadCloud className="w-3.5 h-3.5" /> + Unggah Dokumen
+                </Button>
+              </>
+            )}
+          </div>
         </CardHeader>
 
         {/* Filter & Search Bar */}

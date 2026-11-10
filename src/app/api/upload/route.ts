@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadFileToGoogleDrive } from "@/server/google-drive";
+import { uploadFileToGoogleDrive, getOrCreateGoogleDriveFolder } from "@/server/google-drive";
+import { db } from "@/server/db";
 import { auth } from "@/auth";
 
 export const maxDuration = 60; // Izinkan durasi streaming hingga 60 detik di Vercel
@@ -14,6 +15,7 @@ export async function POST(req: NextRequest) {
     // 2. Ambil payload multi-part FormData
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
+    const projectId = (formData.get("projectId") as string | null) || undefined;
 
     if (!file) {
       return NextResponse.json(
@@ -38,11 +40,39 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // 5. Unggah ke Google Drive
+    // 5. Tentukan folder target di Google Drive (Folder khusus per proyek jika ada projectId)
+    let targetFolderId: string | undefined = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    let projectFolderName: string | undefined;
+    let projectFolderViewLink: string | undefined;
+
+    if (projectId) {
+      try {
+        const project = await db.project.findUnique({
+          where: { id: projectId },
+          select: { id: true, projectCode: true, name: true },
+        });
+
+        if (project) {
+          projectFolderName = `[${project.projectCode}] ${project.name}`.trim();
+          const folderInfo = await getOrCreateGoogleDriveFolder({
+            folderName: projectFolderName,
+            parentFolderId: targetFolderId,
+          });
+          targetFolderId = folderInfo.id;
+          projectFolderViewLink = folderInfo.webViewLink;
+        }
+      } catch (folderErr: any) {
+        console.warn("Peringatan pembuatan folder proyek Google Drive:", folderErr?.message);
+        // Tetap lanjutkan upload ke folder induk root jika gagal membuat folder spesifik proyek
+      }
+    }
+
+    // 6. Unggah ke Google Drive (di dalam folder proyek)
     const uploadResult = await uploadFileToGoogleDrive({
       buffer,
       fileName: file.name,
       mimeType: file.type || "application/octet-stream",
+      folderId: targetFolderId,
     });
 
     return NextResponse.json({
@@ -50,6 +80,9 @@ export async function POST(req: NextRequest) {
       data: {
         ...uploadResult,
         uploaderName,
+        folderId: targetFolderId,
+        folderName: projectFolderName,
+        folderViewLink: projectFolderViewLink,
       },
     });
   } catch (error: any) {

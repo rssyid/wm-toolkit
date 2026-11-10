@@ -113,6 +113,159 @@ export function getGoogleDriveClient(preferredMode?: "oauth2" | "service_account
   return null;
 }
 
+export interface DriveFolderInfo {
+  id: string;
+  name: string;
+  webViewLink?: string;
+  isMock?: boolean;
+}
+
+// In-memory cache & pending promise locks untuk mencegah duplikasi pembuatan folder di Google Drive
+const folderCache = new Map<string, DriveFolderInfo>();
+const pendingFolderCreations = new Map<string, Promise<DriveFolderInfo>>();
+
+/**
+ * Mencari atau membuat folder khusus per proyek di Google Drive
+ */
+export async function getOrCreateGoogleDriveFolder({
+  folderName,
+  parentFolderId,
+}: {
+  folderName: string;
+  parentFolderId?: string;
+}): Promise<DriveFolderInfo> {
+  const targetParentId = parentFolderId || process.env.GOOGLE_DRIVE_FOLDER_ID;
+  const cacheKey = `${targetParentId || "root"}:${folderName.trim()}`;
+
+  // 1. Cek cache in-memory
+  if (folderCache.has(cacheKey)) {
+    return folderCache.get(cacheKey)!;
+  }
+
+  // 2. Cek apakah ada proses pembuatan folder yang sedang berlangsung untuk key yang sama
+  if (pendingFolderCreations.has(cacheKey)) {
+    return await pendingFolderCreations.get(cacheKey)!;
+  }
+
+  const creationPromise = (async (): Promise<DriveFolderInfo> => {
+    const drive = getGoogleDriveClient();
+    const hasOAuth = Boolean(
+      process.env.GOOGLE_CLIENT_ID &&
+      process.env.GOOGLE_CLIENT_SECRET &&
+      process.env.GOOGLE_REFRESH_TOKEN
+    );
+
+    // Graceful Mock Fallback jika Drive belum dikonfigurasi
+    if (!drive) {
+      console.warn("Google Drive API client tidak terkonfigurasi. Menggunakan mock folder fallback.");
+      const mockFolderId = `mock-folder-${Date.now()}`;
+      const mockResult: DriveFolderInfo = {
+        id: mockFolderId,
+        name: folderName,
+        webViewLink: `https://drive.google.com/drive/folders/${mockFolderId}`,
+        isMock: true,
+      };
+      folderCache.set(cacheKey, mockResult);
+      return mockResult;
+    }
+
+    const executeFindOrCreate = async (driveClient: drive_v3.Drive): Promise<DriveFolderInfo> => {
+      // Escape karakter ' dan \ untuk query parameter Drive
+      const escapedName = folderName.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+      let query = `mimeType = 'application/vnd.google-apps.folder' and name = '${escapedName}' and trashed = false`;
+      if (targetParentId) {
+        query += ` and '${targetParentId}' in parents`;
+      }
+
+      // 1. Cari folder yang sudah ada
+      const listRes = await driveClient.files.list({
+        q: query,
+        fields: "files(id, name, webViewLink)",
+        spaces: "drive",
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+
+      const existingFolder = listRes.data.files?.[0];
+      if (existingFolder && existingFolder.id) {
+        return {
+          id: existingFolder.id,
+          name: existingFolder.name || folderName,
+          webViewLink: existingFolder.webViewLink || `https://drive.google.com/drive/folders/${existingFolder.id}`,
+          isMock: false,
+        };
+      }
+
+      // 2. Buat folder baru jika belum ditemukan
+      const createRes = await driveClient.files.create({
+        requestBody: {
+          name: folderName,
+          mimeType: "application/vnd.google-apps.folder",
+          parents: targetParentId ? [targetParentId] : undefined,
+        },
+        fields: "id, name, webViewLink",
+        supportsAllDrives: true,
+      });
+
+      const newFolder = createRes.data;
+      if (!newFolder.id) {
+        throw new Error(`Google Drive API gagal mengembalikan ID folder baru: "${folderName}"`);
+      }
+
+      // Berikan izin view (reader) untuk tautan folder
+      try {
+        await driveClient.permissions.create({
+          fileId: newFolder.id,
+          requestBody: {
+            role: "reader",
+            type: "anyone",
+          },
+          supportsAllDrives: true,
+        });
+      } catch (permErr) {
+        console.warn("Peringatan izin folder Google Drive:", permErr);
+      }
+
+      return {
+        id: newFolder.id,
+        name: newFolder.name || folderName,
+        webViewLink: newFolder.webViewLink || `https://drive.google.com/drive/folders/${newFolder.id}`,
+        isMock: false,
+      };
+    };
+
+    try {
+      return await executeFindOrCreate(drive);
+    } catch (error: any) {
+      const isQuotaError =
+        error?.message?.includes("storage quota") ||
+        error?.message?.includes("Service Accounts do not have storage quota") ||
+        error?.status === 403;
+
+      if (isQuotaError && hasOAuth) {
+        console.warn("Kuota 0-byte Service Account terdeteksi saat membuat folder. Beralih ke OAuth 2.0...");
+        const oauthDrive = createOAuth2Client();
+        if (oauthDrive) {
+          return await executeFindOrCreate(oauthDrive);
+        }
+      }
+
+      console.error("Gagal membuat/mencari folder Google Drive:", error);
+      throw error;
+    }
+  })();
+
+  pendingFolderCreations.set(cacheKey, creationPromise);
+
+  try {
+    const result = await creationPromise;
+    folderCache.set(cacheKey, result);
+    return result;
+  } finally {
+    pendingFolderCreations.delete(cacheKey);
+  }
+}
+
 /**
  * Upload file buffer ke Google Drive folder terpusat perusahaan
  */
