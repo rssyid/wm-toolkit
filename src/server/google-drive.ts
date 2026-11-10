@@ -18,7 +18,7 @@ export function extractGoogleDriveFileId(input?: string | null): string | null {
   if (!input) return null;
   const str = input.trim();
 
-  // Jika input sudah merupakan Google Drive ID murni (alfanumerik 25-45 karakter)
+  // Jika input sudah merupakan Google Drive ID murni (alfanumerik 25-50 karakter)
   if (/^[a-zA-Z0-9_-]{25,50}$/.test(str)) {
     return str;
   }
@@ -44,11 +44,20 @@ export function extractGoogleDriveFileId(input?: string | null): string | null {
   return null;
 }
 
-/**
- * Inisialisasi client Google Drive API
- * Mendukung Google Service Account (rekomendasi) atau OAuth 2.0
- */
-export function getGoogleDriveClient(): drive_v3.Drive | null {
+function createOAuth2Client(): drive_v3.Drive | null {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+  if (clientId && clientSecret && refreshToken) {
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
+    return google.drive({ version: "v3", auth: oauth2Client });
+  }
+  return null;
+}
+
+function createServiceAccountClient(): drive_v3.Drive | null {
   const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   let privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
 
@@ -64,16 +73,41 @@ export function getGoogleDriveClient(): drive_v3.Drive | null {
 
     return google.drive({ version: "v3", auth });
   }
+  return null;
+}
 
-  // Cek apakah OAuth2 refresh token tersedia
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+/**
+ * Inisialisasi client Google Drive API
+ * Prioritas:
+ * 1. OAuth 2.0 (jika kredensial tersedia): Memiliki kuota penyimpanan (15 GB akun pengguna)
+ *    sehingga tidak pernah terkena limit 0-byte kuota Service Account pada folder pribadi.
+ * 2. Service Account: Cocok untuk Google Workspace Shared Drive.
+ */
+export function getGoogleDriveClient(preferredMode?: "oauth2" | "service_account"): drive_v3.Drive | null {
+  const hasOAuth = Boolean(
+    process.env.GOOGLE_CLIENT_ID &&
+    process.env.GOOGLE_CLIENT_SECRET &&
+    process.env.GOOGLE_REFRESH_TOKEN
+  );
+  const hasServiceAccount = Boolean(
+    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
+    process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+  );
 
-  if (clientId && clientSecret && refreshToken) {
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
-    oauth2Client.setCredentials({ refresh_token: refreshToken });
-    return google.drive({ version: "v3", auth: oauth2Client });
+  if (preferredMode === "oauth2" && hasOAuth) return createOAuth2Client();
+  if (preferredMode === "service_account" && hasServiceAccount) return createServiceAccountClient();
+
+  const authModeEnv = process.env.GOOGLE_DRIVE_AUTH_MODE?.toLowerCase();
+  if (authModeEnv === "service_account" && hasServiceAccount) return createServiceAccountClient();
+  if (authModeEnv === "oauth2" && hasOAuth) return createOAuth2Client();
+
+  // Prioritaskan OAuth2 jika tersedia, karena Service Account memiliki kuota 0 bytes di folder "Drive Saya"
+  if (hasOAuth) {
+    return createOAuth2Client();
+  }
+
+  if (hasServiceAccount) {
+    return createServiceAccountClient();
   }
 
   return null;
@@ -93,6 +127,12 @@ export async function uploadFileToGoogleDrive({
   mimeType: string;
   folderId?: string;
 }): Promise<UploadResult> {
+  const hasOAuth = Boolean(
+    process.env.GOOGLE_CLIENT_ID &&
+    process.env.GOOGLE_CLIENT_SECRET &&
+    process.env.GOOGLE_REFRESH_TOKEN
+  );
+
   const drive = getGoogleDriveClient();
   const targetFolderId = folderId || process.env.GOOGLE_DRIVE_FOLDER_ID;
 
@@ -112,8 +152,7 @@ export async function uploadFileToGoogleDrive({
     };
   }
 
-  try {
-    // Gunakan Readable.from untuk stream buffer yang stabil di Node.js
+  const executeUpload = async (driveClient: drive_v3.Drive): Promise<UploadResult> => {
     const stream = Readable.from(buffer);
 
     const fileMetadata: drive_v3.Schema$File = {
@@ -126,7 +165,7 @@ export async function uploadFileToGoogleDrive({
       body: stream,
     };
 
-    const res = await drive.files.create({
+    const res = await driveClient.files.create({
       requestBody: fileMetadata,
       media,
       fields: "id, name, webViewLink, webContentLink, size, mimeType",
@@ -141,7 +180,7 @@ export async function uploadFileToGoogleDrive({
 
     // Set permission agar berkas dapat diakses/dilihat (read-only) oleh siapa saja yang memiliki tautan
     try {
-      await drive.permissions.create({
+      await driveClient.permissions.create({
         fileId: file.id,
         requestBody: {
           role: "reader",
@@ -166,7 +205,35 @@ export async function uploadFileToGoogleDrive({
       fileSize: `${sizeKb} KB`,
       isMock: false,
     };
+  };
+
+  try {
+    return await executeUpload(drive);
   } catch (error: any) {
+    const isQuotaError =
+      error?.message?.includes("storage quota") ||
+      error?.message?.includes("Service Accounts do not have storage quota") ||
+      error?.status === 403;
+
+    // Jika terjadi kuota error pada Service Account dan OAuth2 tersedia, beralih otomatis ke OAuth2
+    if (isQuotaError && hasOAuth) {
+      console.warn("Mendeteksi kuota 0-byte Service Account. Mencoba otomatis menggunakan kredensial OAuth 2.0...");
+      const oauthDrive = createOAuth2Client();
+      if (oauthDrive) {
+        return await executeUpload(oauthDrive);
+      }
+    }
+
+    if (isQuotaError) {
+      console.error("Gagal kuota Service Account Google Drive:", error.message);
+      throw new Error(
+        "Google Drive menolak unggahan karena akun Service Account memiliki kuota penyimpanan 0 Bytes. " +
+        "Penyebab: Folder target berada di 'Drive Saya' akun pribadi (@gmail.com). " +
+        "Solusi: (1) Jika menggunakan akun @gmail.com: Masukkan variabel OAuth 2.0 (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN) di Vercel dan HAPUS variabel GOOGLE_SERVICE_ACCOUNT_EMAIL. " +
+        "(2) Jika menggunakan Google Workspace perusahaan: Buat folder di 'Drive Bersama' (Shared Drive), bukan di 'Drive Saya'."
+      );
+    }
+
     console.error("Gagal mengunggah berkas ke Google Drive API:", error);
     throw new Error(
       `Gagal mengunggah berkas ke Google Drive: ${error?.message || "Kesalahan API Google Drive"}`
