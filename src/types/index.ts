@@ -597,6 +597,7 @@ export interface ProjectAttachment {
   mimeType?: string;
   category?: string;
   docNumber?: string;
+  googleDriveFileId?: string | null;
   uploadedBy: string;
   uploadedAt: string;
 }

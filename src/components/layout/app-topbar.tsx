@@ -37,6 +37,7 @@ import { useAppState } from "@/context/app-state-context";
 import { toast } from "sonner";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { signOut } from "next-auth/react";
 
 interface AppTopbarProps {
   onToggleSidebar?: () => void;
@@ -57,6 +58,15 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
     switchDemoUser,
     users,
   } = useAppState();
+
+  const handleLogout = async () => {
+    try {
+      toast.info("Sedang keluar dari sesi akun...");
+      await signOut({ callbackUrl: "/login" });
+    } catch {
+      window.location.href = "/login";
+    }
+  };
 
   const getInitials = (name?: string) => {
     if (!name) return "U";
@@ -361,14 +371,12 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
               </Link>
             </DropdownMenuItem>
 
-            <DropdownMenuItem asChild>
-              <Link
-                href="/login"
-                className="flex items-center gap-2 cursor-pointer text-xs text-rose-600 dark:text-rose-400 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Ganti Akun Demo / Keluar</span>
-              </Link>
+            <DropdownMenuItem
+              onClick={handleLogout}
+              className="flex items-center gap-2 cursor-pointer text-xs text-rose-600 dark:text-rose-400 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Ganti Akun Demo / Keluar</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

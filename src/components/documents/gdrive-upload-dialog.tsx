@@ -54,22 +54,24 @@ export function GDriveUploadDialog({
   const project = projects.find((p) => p.id === projectId);
 
   const [fileName, setFileName] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [category, setCategory] = useState("Berita Acara (BAST)");
   const [docNumber, setDocNumber] = useState("");
   const [fileSize, setFileSize] = useState("2.4 MB");
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const handleSimulatedFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setSelectedFile(file);
       setFileName(file.name);
       const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
       setFileSize(`${sizeMb} MB`);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!fileName.trim()) {
@@ -78,32 +80,47 @@ export function GDriveUploadDialog({
     }
 
     setUploading(true);
-    setUploadProgress(15);
+    setUploadProgress(20);
 
-    const step1 = setTimeout(() => setUploadProgress(50), 300);
-    const step2 = setTimeout(() => setUploadProgress(85), 600);
-    const step3 = setTimeout(() => {
-      setUploadProgress(100);
+    try {
+      setUploadProgress(45);
+      const formData = new FormData();
+      if (selectedFile) {
+        formData.append("file", selectedFile);
+      } else {
+        const cleanName = fileName.includes(".") ? fileName : `${fileName}.pdf`;
+        const blob = new Blob(["Lampiran dokumen proyek WM-Toolkit: " + fileName], {
+          type: "application/pdf",
+        });
+        formData.append("file", blob, cleanName);
+      }
+      formData.append("projectId", projectId);
 
-      let cleanName = fileName.trim();
-      if (!cleanName.includes(".")) {
-        cleanName += ".pdf";
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      setUploadProgress(85);
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Gagal mengunggah berkas ke Google Drive API.");
       }
 
-      const hash = Math.random().toString(36).substring(2, 10);
+      setUploadProgress(100);
+      const uploadedData = json.data;
+
       const newAttachmentData: Omit<ProjectAttachment, "id" | "uploadedAt"> = {
         projectId,
         source: "UPLOAD",
-        fileName: cleanName,
-        fileUrl: `https://drive.google.com/file/d/upload-${hash}-${encodeURIComponent(cleanName)}/view?usp=sharing`,
-        fileSize: fileSize || "2.1 MB",
-        mimeType: cleanName.endsWith(".dwg")
-          ? "application/acad"
-          : cleanName.endsWith(".png") || cleanName.endsWith(".jpg")
-          ? "image/jpeg"
-          : "application/pdf",
+        fileName: uploadedData.fileName || fileName,
+        fileUrl: uploadedData.webViewLink,
+        fileSize: uploadedData.fileSize || fileSize || "1.5 MB",
+        mimeType: uploadedData.mimeType || "application/pdf",
         category,
         docNumber: docNumber.trim() || undefined,
+        googleDriveFileId: uploadedData.fileId,
         uploadedBy: userProfile.fullName,
       };
 
@@ -111,21 +128,25 @@ export function GDriveUploadDialog({
         onSaveAttachment(newAttachmentData);
       } else {
         addAttachment(newAttachmentData);
-        toast.success("Dokumen berhasil diunggah ke Google Drive proyek!");
+        toast.success(
+          uploadedData.isMock
+            ? "Dokumen tersimpan (mode simulasi link)!"
+            : "Dokumen berhasil diunggah langsung ke Google Drive perusahaan!"
+        );
       }
 
       setUploading(false);
       setUploadProgress(0);
       setFileName("");
       setDocNumber("");
+      setSelectedFile(null);
       onOpenChange(false);
-    }, 900);
-
-    return () => {
-      clearTimeout(step1);
-      clearTimeout(step2);
-      clearTimeout(step3);
-    };
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      toast.error(err.message || "Terjadi kesalahan saat mengunggah berkas.");
+      setUploading(false);
+      setUploadProgress(0);
+    }
   };
 
   return (
@@ -150,7 +171,7 @@ export function GDriveUploadDialog({
           <div className="p-4 border-2 border-dashed rounded-lg text-center bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer relative">
             <input
               type="file"
-              onChange={handleSimulatedFileSelect}
+              onChange={handleFileSelect}
               className="absolute inset-0 opacity-0 cursor-pointer"
             />
             <UploadCloud className="w-7 h-7 text-emerald-600 mx-auto mb-1.5" />
