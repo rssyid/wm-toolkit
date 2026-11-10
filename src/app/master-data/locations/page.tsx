@@ -69,7 +69,7 @@ function MasterDataLocationsContent() {
   } = useAppState();
 
   const searchParams = useSearchParams();
-  const tabParam = searchParams.get("tab");
+  const tabParam = searchParams?.get("tab");
 
   const [activeTab, setActiveTab] = useState<"estates" | "companies" | "regions" | "blocks">(
     tabParam === "companies" || tabParam === "regions" || tabParam === "blocks"

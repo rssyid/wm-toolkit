@@ -400,10 +400,10 @@ function WorkspaceContent() {
 
   // Sync with URL search params from KPI cards or global search
   useEffect(() => {
-    const statusParam = searchParams.get("status");
-    const afceParam = searchParams.get("afceStatus");
-    const locParam = searchParams.get("location");
-    const queryParam = searchParams.get("q");
+    const statusParam = searchParams?.get("status");
+    const afceParam = searchParams?.get("afceStatus");
+    const locParam = searchParams?.get("location");
+    const queryParam = searchParams?.get("q");
 
     if (statusParam) {
       if (statusParam === "delayed") {

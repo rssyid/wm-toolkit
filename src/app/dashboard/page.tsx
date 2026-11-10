@@ -42,7 +42,7 @@ function formatCompactIDR(amount: number): string {
 function DashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const tabParam = searchParams.get("tab");
+  const tabParam = searchParams?.get("tab");
 
   const [activeTab, setActiveTab] = useState<string>(
     tabParam === "audit-log" ? "audit-log" : "overview"
@@ -76,7 +76,7 @@ function DashboardContent() {
 
   const handleTabChange = (val: string) => {
     setActiveTab(val);
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(searchParams?.toString() || "");
     params.set("tab", val);
     router.replace(`/dashboard?${params.toString()}`);
   };

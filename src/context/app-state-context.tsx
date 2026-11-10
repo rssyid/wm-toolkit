@@ -86,6 +86,57 @@ import {
   getInitialApprovalStatus,
   isAfceLevelsOutOfSync,
 } from "@/lib/approval-matrix-utils";
+import { getInitialAppStateAction } from "@/server/actions/initial-state";
+import {
+  createProjectAction,
+  updateProjectAction,
+  deleteProjectAction,
+  restoreProjectAction,
+  reviseScheduleAction,
+} from "@/server/actions/projects";
+import {
+  processAfceApprovalAction,
+  submitAfceApprovalAction,
+  updateAfceAction,
+} from "@/server/actions/afce";
+import {
+  createPrAction,
+  recordVendorEvaluationAction,
+  createPoAction,
+  recordGoodsReceiptAction,
+  recordGoodsHandoverAction,
+} from "@/server/actions/procurement";
+import {
+  createUspkAction,
+  updateUspkStatusAction,
+  recordTechnicalEvaluationAction,
+  createSpkAction,
+  updateSpkStatusAction,
+} from "@/server/actions/services";
+import {
+  addDailyProgressAction,
+  addWeeklyProgressAction,
+} from "@/server/actions/progress";
+import {
+  addCommentAction,
+  deleteCommentAction,
+} from "@/server/actions/comments";
+import {
+  addAttachmentAction,
+  deleteAttachmentAction,
+} from "@/server/actions/attachments";
+import {
+  loadDemoDataAction,
+  clearDemoDataAction,
+  resetToEmptyProductionAction,
+} from "@/server/actions/admin";
+import {
+  addMasterDataLocationAction,
+  addMasterDataMaterialAction,
+  addMasterDataSupplierAction,
+  addMasterDataUserAction,
+  updateApprovalMatrixAction,
+} from "@/server/actions/master-data";
 
 interface AppStateContextType {
   projects: Project[];
@@ -240,6 +291,10 @@ interface AppStateContextType {
   updateMasterDataProcurementType: (id: string, item: Partial<ProcurementTypeItem>) => void;
 
   resetToMockData: () => void;
+  refreshFromDatabase: () => Promise<void>;
+  loadDemoData: () => Promise<void>;
+  clearDemoData: () => Promise<void>;
+  resetToEmptyProduction: () => Promise<void>;
 }
 
 const AppStateContext = createContext<AppStateContextType | undefined>(undefined);
@@ -315,6 +370,46 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const canEditProjects = activeRole === "PIC" || activeRole === "ADMIN";
   const canManageSystem = activeRole === "ADMIN";
   const isViewerOnly = activeRole === "VIEWER";
+
+  const applyDbData = (d: any) => {
+    if (d.projects && Array.isArray(d.projects)) setProjects(d.projects);
+    if (d.afces && Array.isArray(d.afces)) setAfces(d.afces);
+    if (d.prs && Array.isArray(d.prs)) setPrs(d.prs);
+    if (d.pos && Array.isArray(d.pos)) setPos(d.pos);
+    if (d.grs && Array.isArray(d.grs)) setGrs(d.grs);
+    if (d.vendorEvaluations && Array.isArray(d.vendorEvaluations)) setVendorEvaluations(d.vendorEvaluations);
+    if (d.goodsHandovers && Array.isArray(d.goodsHandovers)) setGoodsHandovers(d.goodsHandovers);
+    if (d.uspks && Array.isArray(d.uspks)) setUspks(d.uspks);
+    if (d.technicalEvaluations && Array.isArray(d.technicalEvaluations)) setTechnicalEvaluations(d.technicalEvaluations);
+    if (d.spkContracts && Array.isArray(d.spkContracts)) setSpkContracts(d.spkContracts);
+    if (d.dailyProgress && Array.isArray(d.dailyProgress)) setDailyProgress(d.dailyProgress);
+    if (d.weeklyProgress && Array.isArray(d.weeklyProgress)) setWeeklyProgress(d.weeklyProgress);
+    if (d.comments && Array.isArray(d.comments)) setComments(d.comments);
+    if (d.attachments && Array.isArray(d.attachments)) setAttachments(d.attachments);
+    if (d.regions && Array.isArray(d.regions)) setRegions(d.regions);
+    if (d.companies && Array.isArray(d.companies)) setCompanies(d.companies);
+    if (d.locations && Array.isArray(d.locations)) setLocations(d.locations);
+    if (d.blocks && Array.isArray(d.blocks)) setBlocks(d.blocks);
+    if (d.materials && Array.isArray(d.materials)) setMaterials(d.materials);
+    if (d.suppliers && Array.isArray(d.suppliers)) setSuppliers(d.suppliers);
+    if (d.users && Array.isArray(d.users)) setUsers(d.users);
+    if (d.approvalMatrix && Array.isArray(d.approvalMatrix)) setApprovalMatrix(d.approvalMatrix);
+    if (d.projectCategories && Array.isArray(d.projectCategories)) setProjectCategories(d.projectCategories);
+    if (d.projectTypes && Array.isArray(d.projectTypes)) setProjectTypes(d.projectTypes);
+    if (d.procurementTypes && Array.isArray(d.procurementTypes)) setProcurementTypes(d.procurementTypes);
+    if (d.auditLogs && Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
+  };
+
+  const refreshFromDatabase = async () => {
+    try {
+      const res = await getInitialAppStateAction();
+      if (res.success && res.hasDbData && res.data) {
+        applyDbData(res.data);
+      }
+    } catch (e) {
+      console.warn("Gagal menyegarkan data dari database:", e);
+    }
+  };
 
   // Load from LocalStorage
   useEffect(() => {
@@ -474,6 +569,15 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       // Fallback to initial mock data
     }
     setMounted(true);
+
+    // Sync with Neon PostgreSQL
+    getInitialAppStateAction()
+      .then((res) => {
+        if (res.success && res.hasDbData && res.data) {
+          applyDbData(res.data);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Save to LocalStorage
@@ -803,6 +907,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setProjects((prev) => [newProject, ...prev]);
     setAfces((prev) => [newAfce, ...prev]);
 
+    // Persist to Neon DB in background
+    createProjectAction(newProject).catch((err) => console.warn("Sync DB error (createProjectAction):", err));
+
     // Record Immutable Audit Log
     addAuditLog({
       action: "CREATE",
@@ -834,6 +941,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         return updated;
       })
     );
+    updateProjectAction(id, updates).catch((err) => console.warn("Sync DB error (updateProjectAction):", err));
   };
 
   const deleteProject = (projectId: string) => {
@@ -843,6 +951,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setProjects((prev) =>
       prev.map((p) => (p.id === projectId ? { ...p, deletedAt: nowIso } : p))
     );
+    deleteProjectAction(projectId).catch((err) => console.warn("Sync DB error (deleteProjectAction):", err));
     addAuditLog({
       action: "DELETE",
       entityType: "PROJECT",
@@ -864,6 +973,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setProjects((prev) =>
       prev.map((p) => (p.id === projectId ? { ...p, deletedAt: null } : p))
     );
+    restoreProjectAction(projectId).catch((err) => console.warn("Sync DB error (restoreProjectAction):", err));
     addAuditLog({
       action: "UPDATE",
       entityType: "PROJECT",
@@ -909,6 +1019,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         };
       })
     );
+    reviseScheduleAction(projectId, revision).catch((err) => console.warn("Sync DB error (reviseScheduleAction):", err));
   };
 
   const updateAfceDocument = (afceId: string, updates: Partial<AFCEDocument>) => {
@@ -966,6 +1077,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         return updated;
       })
     );
+    updateAfceAction(afceId, updates).catch((err) => console.warn("Sync DB error (updateAfceAction):", err));
   };
 
   const syncAfceWithMatrix = (afceId: string) => {
@@ -1128,6 +1240,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         return updated;
       })
     );
+    submitAfceApprovalAction(afceId, note).catch((err) => console.warn("Sync DB error (submitAfceApprovalAction):", err));
   };
 
   const processAfceAction = (
@@ -1282,6 +1395,18 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         return updated;
       })
     );
+    processAfceApprovalAction({
+      afceId,
+      action,
+      note,
+      approverName,
+      approverRole,
+      approverJabatan: approverRole || "Approver",
+      approvalDate: actDate,
+      sapDocNumber,
+      sapEvidenceUrl,
+      targetLevelIndex,
+    }).catch((err) => console.warn("Sync DB error (processAfceApprovalAction):", err));
   };
 
   const createPr = (prData: Omit<PurchaseRequisition, "id" | "createdAt">) => {
@@ -1291,6 +1416,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString().split("T")[0],
     };
     setPrs((prev) => [newPr, ...prev]);
+    createPrAction(newPr).catch((err) => console.warn("Sync DB error (createPrAction):", err));
   };
 
   const recordVendorEvaluation = (
@@ -1302,6 +1428,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString().split("T")[0],
     };
     setVendorEvaluations((prev) => [newEval, ...prev]);
+    recordVendorEvaluationAction(newEval).catch((err) => console.warn("Sync DB error (recordVendorEvaluationAction):", err));
   };
 
   const createPo = (poData: Omit<PurchaseOrder, "id" | "receiptProgressPercent">) => {
@@ -1316,6 +1443,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     };
 
     setPos((prev) => [newPo, ...prev]);
+    createPoAction(newPo).catch((err) => console.warn("Sync DB error (createPoAction):", err));
 
     // Update PR linkedPoCount
     setPrs((prev) =>
@@ -1331,6 +1459,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       id: `gr-${Date.now()}`,
     };
     setGrs((prev) => [newGr, ...prev]);
+    recordGoodsReceiptAction(newGr).catch((err) => console.warn("Sync DB error (recordGoodsReceiptAction):", err));
 
     // Update PO item volumes and item status
     setPos((prev) =>
@@ -1373,6 +1502,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString().split("T")[0],
     };
     setGoodsHandovers((prev) => [newHandover, ...prev]);
+    recordGoodsHandoverAction(newHandover).catch((err) => console.warn("Sync DB error (recordGoodsHandoverAction):", err));
 
     // If handover is COMPLETED and PO receipt is 100%, we can optionally mark PO as CLOSED
     if (handoverData.status === "COMPLETED") {
@@ -1394,6 +1524,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString().split("T")[0],
     };
     setUspks((prev) => [newUspk, ...prev]);
+    createUspkAction(newUspk).catch((err) => console.warn("Sync DB error (createUspkAction):", err));
   };
 
   const updateUspkStatus = (id: string, status: USPKStatus, decidedAt?: string) => {
@@ -1407,6 +1538,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         };
       })
     );
+    updateUspkStatusAction(id, status, decidedAt).catch((err) => console.warn("Sync DB error (updateUspkStatusAction):", err));
   };
 
   const recordTechnicalEvaluation = (
@@ -1418,6 +1550,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString().split("T")[0],
     };
     setTechnicalEvaluations((prev) => [newEval, ...prev]);
+    recordTechnicalEvaluationAction(newEval).catch((err) => console.warn("Sync DB error (recordTechnicalEvaluationAction):", err));
 
     // Automatically synchronize USPK status according to evaluation recommendation
     setUspks((prev) =>
@@ -1440,12 +1573,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString().split("T")[0],
     };
     setSpkContracts((prev) => [newSpk, ...prev]);
+    createSpkAction(newSpk).catch((err) => console.warn("Sync DB error (createSpkAction):", err));
   };
 
   const updateSpkStatus = (id: string, status: SPKStatus) => {
     setSpkContracts((prev) =>
       prev.map((s) => (s.id === id ? { ...s, status } : s))
     );
+    updateSpkStatusAction(id, status).catch((err) => console.warn("Sync DB error (updateSpkStatusAction):", err));
   };
 
   const getSpkProgressSummary = (spkId: string) => {
@@ -1474,6 +1609,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       recordedAt: new Date().toLocaleString("id-ID"),
     };
     setDailyProgress((prev) => [newRec, ...prev]);
+    addDailyProgressAction(record).catch((err) => console.warn("Sync DB error (addDailyProgressAction):", err));
 
     // Update work item progress & recalculate project overall progress
     setProjects((prev) =>
@@ -1522,6 +1658,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       recordedAt: new Date().toLocaleString("id-ID"),
     };
     setWeeklyProgress((prev) => [newRec, ...prev]);
+    addWeeklyProgressAction(record).catch((err) => console.warn("Sync DB error (addWeeklyProgressAction):", err));
 
     setProjects((prev) =>
       prev.map((p) => {
@@ -1590,6 +1727,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       setAttachments((prev) => [...newAttachments, ...prev]);
     }
 
+    addCommentAction({
+      projectId,
+      content,
+      mentionedUserIds,
+    }).catch((err) => console.warn("Sync DB error (addCommentAction):", err));
+
     // Trigger toast & in-app notification if user was mentioned
     if (mentionedUserIds.length > 0) {
       const proj = projects.find((p) => p.id === projectId);
@@ -1626,6 +1769,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const deleteComment = (commentId: string) => {
     setComments((prev) => prev.filter((c) => c.id !== commentId));
     setAttachments((prev) => prev.filter((a) => a.commentId !== commentId));
+    deleteCommentAction(commentId).catch((err) => console.warn("Sync DB error (deleteCommentAction):", err));
   };
 
   const addAttachment = (
@@ -1637,11 +1781,24 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       uploadedAt: new Date().toISOString(),
     };
     setAttachments((prev) => [newAtt, ...prev]);
+    addAttachmentAction({
+      projectId: attachmentData.projectId,
+      commentId: attachmentData.commentId || undefined,
+      source: attachmentData.source || "UPLOAD",
+      fileName: attachmentData.fileName,
+      fileUrl: attachmentData.fileUrl,
+      fileSize: attachmentData.fileSize || undefined,
+      mimeType: attachmentData.mimeType || undefined,
+      category: attachmentData.category,
+      docNumber: attachmentData.docNumber,
+      googleDriveFileId: (attachmentData as any).googleDriveFileId || undefined,
+    }).catch((err) => console.warn("Sync DB error (addAttachmentAction):", err));
     return newAtt;
   };
 
   const deleteAttachment = (attachmentId: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+    deleteAttachmentAction(attachmentId).catch((err) => console.warn("Sync DB error (deleteAttachmentAction):", err));
   };
 
   // Notifications & Reminders Handlers (Gap #6 / F7)
@@ -1823,6 +1980,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       updatedAt: new Date().toISOString().split("T")[0],
     };
     setLocations((prev) => [...prev, newLoc]);
+    addMasterDataLocationAction(newLoc).catch((err) => console.warn("Sync DB error (addMasterDataLocationAction):", err));
   };
 
   const updateMasterDataLocation = (id: string, loc: Partial<EstateLocation>) => {
@@ -1853,6 +2011,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       updatedAt: new Date().toISOString().split("T")[0],
     };
     setMaterials((prev) => [...prev, newMat]);
+    addMasterDataMaterialAction(newMat).catch((err) => console.warn("Sync DB error (addMasterDataMaterialAction):", err));
   };
 
   const updateMasterDataMaterial = (id: string, mat: Partial<MaterialCatalogItem>) => {
@@ -1868,6 +2027,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       updatedAt: new Date().toISOString().split("T")[0],
     };
     setSuppliers((prev) => [...prev, newSup]);
+    addMasterDataSupplierAction(newSup).catch((err) => console.warn("Sync DB error (addMasterDataSupplierAction):", err));
   };
 
   const updateMasterDataSupplier = (id: string, sup: Partial<Supplier>) => {
@@ -1883,6 +2043,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       updatedAt: new Date().toISOString().split("T")[0],
     };
     setUsers((prev) => [...prev, newUser]);
+    addMasterDataUserAction(newUser).catch((err) => console.warn("Sync DB error (addMasterDataUserAction):", err));
   };
 
   const updateMasterDataUser = (id: string, user: Partial<AppUser>) => {
@@ -1917,6 +2078,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         } else {
           newLevels[levelIndex] = APPROVAL_LEVEL_ORDER[levelIndex];
         }
+        updateApprovalMatrixAction(tierId, newLevels).catch((err) => console.warn("Sync DB error (updateApprovalMatrixAction):", err));
         return { ...rule, levels: newLevels, updatedAt: new Date().toISOString().split("T")[0] };
       })
     );
@@ -1965,6 +2127,65 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setProcurementTypes((prev) =>
       prev.map((t) => (t.id === id ? { ...t, ...item, updatedAt: new Date().toISOString().split("T")[0] } : t))
     );
+  };
+
+  const loadDemoData = async () => {
+    const res = await loadDemoDataAction();
+    if (res.success) {
+      await refreshFromDatabase();
+      toast.success(res.message);
+    } else {
+      toast.error(res.message);
+    }
+  };
+
+  const clearDemoData = async () => {
+    const res = await clearDemoDataAction();
+    if (res.success) {
+      setProjects([]);
+      setAfces([]);
+      setPrs([]);
+      setPos([]);
+      setGrs([]);
+      setVendorEvaluations([]);
+      setGoodsHandovers([]);
+      setUspks([]);
+      setTechnicalEvaluations([]);
+      setSpkContracts([]);
+      setDailyProgress([]);
+      setWeeklyProgress([]);
+      setComments([]);
+      setAttachments([]);
+      await refreshFromDatabase();
+      toast.success(res.message);
+    } else {
+      toast.error(res.message);
+    }
+  };
+
+  const resetToEmptyProduction = async () => {
+    const res = await resetToEmptyProductionAction();
+    if (res.success) {
+      setProjects([]);
+      setAfces([]);
+      setPrs([]);
+      setPos([]);
+      setGrs([]);
+      setVendorEvaluations([]);
+      setGoodsHandovers([]);
+      setUspks([]);
+      setTechnicalEvaluations([]);
+      setSpkContracts([]);
+      setDailyProgress([]);
+      setWeeklyProgress([]);
+      setComments([]);
+      setAttachments([]);
+      setAuditLogs([]);
+      await refreshFromDatabase();
+      toast.success(res.message);
+    } else {
+      toast.error(res.message);
+    }
   };
 
   return (
@@ -2077,6 +2298,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         updateMasterDataProcurementType,
 
         resetToMockData,
+        refreshFromDatabase,
+        loadDemoData,
+        clearDemoData,
+        resetToEmptyProduction,
       }}
     >
       {children}

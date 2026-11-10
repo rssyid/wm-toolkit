@@ -95,15 +95,14 @@ export default function UnifiedExecutionHub() {
   const [quickNotes, setQuickNotes] = useState("");
   const [quickDate, setQuickDate] = useState(new Date().toISOString().split("T")[0]);
 
-  if (!project) return null;
-
   const projectDaily = dailyProgress.filter((d) => d.projectId === projectId);
   const projectWeekly = weeklyProgress.filter((w) => w.projectId === projectId);
-  const workItems = project.workItems || [];
-  const boqList = project.surveyAndBoq || [];
+  const workItems = project?.workItems || [];
+  const boqList = project?.surveyAndBoq || [];
 
   // Generate S-Curve Chart Data
   const chartData = useMemo(() => {
+    if (!project) return [];
     const sortedWeekly = [...projectWeekly].sort(
       (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
     );
@@ -122,10 +121,10 @@ export default function UnifiedExecutionHub() {
     }
 
     // Fallback simulation based on project duration & progress
-    const totalWeeks = Math.max(4, Math.ceil(project.durationDays / 7));
+    const totalWeeks = Math.max(4, Math.ceil((project.durationDays || 30) / 7));
     const currentWeekIdx = Math.min(
       totalWeeks,
-      Math.max(1, Math.round((project.progress / 100) * totalWeeks))
+      Math.max(1, Math.round(((project.progress || 0) / 100) * totalWeeks))
     );
 
     const pts = [];
@@ -138,7 +137,7 @@ export default function UnifiedExecutionHub() {
       if (w <= currentWeekIdx) {
         actualVal = Math.min(
           100,
-          Math.round((project.progress / currentWeekIdx) * w * 10) / 10
+          Math.round(((project.progress || 0) / currentWeekIdx) * w * 10) / 10
         );
       }
       pts.push({
@@ -149,7 +148,9 @@ export default function UnifiedExecutionHub() {
       });
     }
     return pts;
-  }, [projectWeekly, project.progress, project.durationDays]);
+  }, [projectWeekly, project?.progress, project?.durationDays, project]);
+
+  if (!project) return null;
 
   const handleQuickSubmit = (e: React.FormEvent) => {
     e.preventDefault();

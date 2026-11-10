@@ -71,8 +71,6 @@ export default function ProgressTab() {
   const [selectedWorkItemId, setSelectedWorkItemId] = useState<string>("all");
   const [searchKeyword, setSearchKeyword] = useState<string>("");
 
-  if (!project) return null;
-
   const projectDaily = dailyProgress.filter((d) => d.projectId === projectId);
   const projectWeekly = weeklyProgress.filter((w) => w.projectId === projectId);
   const projectSpks = spkContracts.filter((s) => s.projectId === projectId);
@@ -106,6 +104,7 @@ export default function ProgressTab() {
 
   // Dynamic S-Curve Generation based on project weekly logs & baseline
   const chartData = useMemo(() => {
+    if (!project) return [];
     const sortedWeekly = [...projectWeekly].sort(
       (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
     );
@@ -156,7 +155,9 @@ export default function ProgressTab() {
       { week: "M5", periodLabel: "Minggu 5", planned: 85, actual: cur >= 85 ? cur : null },
       { week: "M6", periodLabel: "Minggu 6 (Target)", planned: 100, actual: cur >= 100 ? 100 : null },
     ];
-  }, [projectWeekly, project.progress]);
+  }, [projectWeekly, project?.progress, project]);
+
+  if (!project) return null;
 
   // Executive KPI Metrics Calculation
   const latestWeekly = projectWeekly[0];

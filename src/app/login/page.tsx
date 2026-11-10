@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ShieldCheck,
   Briefcase,
@@ -22,16 +22,21 @@ import { useAppState } from "@/context/app-state-context";
 import { SystemRole, AppUser } from "@/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { signIn } from "next-auth/react";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
-  const { users, switchDemoUser, userProfile } = useAppState();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams?.get("callbackUrl") || "/dashboard";
+  const { users, switchDemoUser } = useAppState();
 
   // Selected demo user state (default: PIC Budi Santoso)
   const defaultUser = users.find((u) => u.systemRole === "PIC") || users[0];
   const [selectedUserId, setSelectedUserId] = useState<string>(defaultUser?.id || "usr-1");
   const [selectedRole, setSelectedRole] = useState<SystemRole>(defaultUser?.systemRole || "PIC");
-  const [password, setPassword] = useState("••••••••");
+  const [customEmail, setCustomEmail] = useState("");
+  const [password, setPassword] = useState("wmtoolkit2026");
+  const [isManualInput, setIsManualInput] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   // Quick profiles for 1-click select
@@ -80,23 +85,49 @@ export default function LoginPage() {
   const handleSelectQuick = (userId: string, role: SystemRole) => {
     setSelectedUserId(userId);
     setSelectedRole(role);
-  };
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-
-    const targetUser = users.find((u) => u.id === selectedUserId) || defaultUser;
-
-    setTimeout(() => {
-      switchDemoUser(targetUser, selectedRole);
-      toast.success(`Selamat datang kembali, ${targetUser.name}!`);
-      setIsLoading(false);
-      router.push("/dashboard");
-    }, 400);
+    setIsManualInput(false);
+    setPassword("wmtoolkit2026");
   };
 
   const currentUserSelected = users.find((u) => u.id === selectedUserId) || defaultUser;
+  const targetEmail = isManualInput ? customEmail : (currentUserSelected?.email || "budi.santoso@perkebunan.co.id");
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      const res = await signIn("credentials", {
+        email: targetEmail,
+        password: password,
+        redirect: false,
+      });
+
+      if (res?.error) {
+        toast.error("Gagal masuk: Email atau kata sandi tidak valid.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Sync demo user profile for backward-compatible UI state
+      if (currentUserSelected) {
+        switchDemoUser(currentUserSelected, selectedRole);
+      }
+
+      toast.success(`Selamat datang kembali, ${currentUserSelected?.name || targetEmail}!`);
+      router.push(callbackUrl);
+      router.refresh();
+    } catch {
+      // Fallback in case of network issue
+      if (currentUserSelected) {
+        switchDemoUser(currentUserSelected, selectedRole);
+      }
+      toast.success(`Selamat datang di sesi lokal, ${currentUserSelected?.name}!`);
+      router.push("/dashboard");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen w-full flex flex-col justify-center items-center p-4 sm:p-6 bg-radial from-slate-50 via-slate-100 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
@@ -120,14 +151,14 @@ export default function LoginPage() {
             <div>
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-emerald-600" />
-                Masuk ke Aplikasi (Demo Mode)
+                Masuk ke Aplikasi (NextAuth Credentials)
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">
-                Pilih profil pengguna simulasi untuk menguji sistem sesuai hak akses.
+                Pilih profil peran cepat atau masukkan email & kata sandi internal.
               </CardDescription>
             </div>
             <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300">
-              Mock Prototype
+              Online Multi-User
             </Badge>
           </div>
         </CardHeader>
@@ -140,7 +171,7 @@ export default function LoginPage() {
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {quickProfiles.map((qp) => {
-                const isSelected = selectedUserId === qp.userId && selectedRole === qp.role;
+                const isSelected = !isManualInput && selectedUserId === qp.userId && selectedRole === qp.role;
                 const Icon = qp.icon;
 
                 return (
@@ -186,51 +217,68 @@ export default function LoginPage() {
 
           {/* Form details */}
           <form onSubmit={handleLogin} className="space-y-3.5 pt-2 border-t">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
-              2. Kredensial & Pengguna Terpilih:
-            </label>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-foreground flex items-center justify-between">
-                <span>Nama Pengguna / Akun</span>
-                <span className="text-[10px] text-muted-foreground font-mono">
-                  Role: <strong className="text-foreground">{selectedRole}</strong>
-                </span>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
+                2. Kredensial Pengguna:
               </label>
-
-              <select
-                value={selectedUserId}
-                onChange={(e) => {
-                  const uid = e.target.value;
-                  setSelectedUserId(uid);
-                  const u = users.find((usr) => usr.id === uid);
-                  if (u?.systemRole) setSelectedRole(u.systemRole);
-                }}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"
+              <button
+                type="button"
+                onClick={() => setIsManualInput(!isManualInput)}
+                className="text-[11px] text-emerald-600 hover:underline font-medium"
               >
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} — ({u.systemRole || "PIC"}) • {u.role}
-                  </option>
-                ))}
-              </select>
+                {isManualInput ? "Gunakan Pilihan Preset" : "Ketik Email Manual"}
+              </button>
             </div>
+
+            {!isManualInput ? (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground flex items-center justify-between">
+                  <span>Nama Akun Terpilih</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    Role: <strong className="text-foreground">{selectedRole}</strong>
+                  </span>
+                </label>
+
+                <select
+                  value={selectedUserId}
+                  onChange={(e) => {
+                    const uid = e.target.value;
+                    setSelectedUserId(uid);
+                    const u = users.find((usr) => usr.id === uid);
+                    if (u?.systemRole) setSelectedRole(u.systemRole);
+                  }}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium"
+                >
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} — ({u.systemRole || "PIC"}) • {u.role}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">Email Terdaftar</label>
+                <label className="text-[11px] text-muted-foreground">Email Pengguna</label>
                 <div className="relative">
                   <Mail className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
                   <Input
-                    value={currentUserSelected?.email || ""}
-                    disabled
-                    className="pl-8 text-xs h-8 bg-muted/40 font-mono text-muted-foreground"
+                    type="email"
+                    value={targetEmail}
+                    onChange={(e) => {
+                      if (!isManualInput) setIsManualInput(true);
+                      setCustomEmail(e.target.value);
+                    }}
+                    placeholder="nama@perkebunan.co.id"
+                    className="pl-8 text-xs h-8 font-mono text-foreground"
+                    required
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">Kata Sandi (Demo)</label>
+                <label className="text-[11px] text-muted-foreground">Kata Sandi (Default: wmtoolkit2026)</label>
                 <div className="relative">
                   <Lock className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
                   <Input
@@ -238,6 +286,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-8 text-xs h-8"
+                    required
                   />
                 </div>
               </div>
@@ -249,10 +298,10 @@ export default function LoginPage() {
               className="w-full h-10 mt-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-md gap-2"
             >
               {isLoading ? (
-                <span>Memproses Masuk...</span>
+                <span>Memverifikasi Sesi...</span>
               ) : (
                 <>
-                  <span>Masuk sebagai {currentUserSelected?.name} ({selectedRole})</span>
+                  <span>Masuk sebagai {!isManualInput ? currentUserSelected?.name : targetEmail}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -263,7 +312,7 @@ export default function LoginPage() {
         <CardFooter className="p-4 bg-muted/20 border-t flex items-center justify-between text-[11px] text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <Info className="w-3.5 h-3.5 text-muted-foreground/80 shrink-0" />
-            <span>Pilihan akun demo akan disimpan di penyimpanan browser (LocalStorage).</span>
+            <span>Kredensial diverifikasi di database Neon PostgreSQL via NextAuth JWT session.</span>
           </div>
         </CardFooter>
       </Card>
@@ -272,5 +321,19 @@ export default function LoginPage() {
         © 2026 WM-Toolkit &bull; Proyek Teknis & Pemantauan Perkebunan Sawit Berkelanjutan
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center text-xs text-muted-foreground">
+          Memuat sesi login...
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

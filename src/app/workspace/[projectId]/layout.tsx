@@ -41,7 +41,7 @@ export default function ProjectDetailLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
   const params = useParams();
   const projectId = params?.projectId as string;
   const {

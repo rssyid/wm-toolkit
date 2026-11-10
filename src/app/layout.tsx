@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { SessionProvider } from "@/components/session-provider";
 import { AppStateProvider } from "@/context/app-state-context";
 import { AppLayoutShell } from "@/components/layout/app-layout-shell";
 import { Toaster } from "sonner";
@@ -19,17 +19,19 @@ export default function RootLayout({
   return (
     <html lang="id" suppressHydrationWarning>
       <body className="min-h-screen font-sans antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <AppStateProvider>
-            <AppLayoutShell>{children}</AppLayoutShell>
-            <Toaster richColors position="top-right" closeButton />
-          </AppStateProvider>
-        </ThemeProvider>
+        <SessionProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <AppStateProvider>
+              <AppLayoutShell>{children}</AppLayoutShell>
+              <Toaster richColors position="top-right" closeButton />
+            </AppStateProvider>
+          </ThemeProvider>
+        </SessionProvider>
       </body>
     </html>
   );

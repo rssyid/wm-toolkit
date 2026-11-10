@@ -7,7 +7,7 @@ import { AppTopbar } from "./app-topbar";
 
 export function AppLayoutShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
 
   // If on login page, render full screen without dashboard shell
   if (pathname === "/login") {

@@ -1,0 +1,825 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  PIC
+  APPROVER
+  VIEWER
+}
+
+enum ProjectStatus {
+  PLANNED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum AfceStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  NEED_REVISION
+}
+
+enum PrStatus {
+  DRAFT
+  RELEASED
+  CLOSED
+  CANCELLED
+}
+
+enum PoStatus {
+  DRAFT
+  RELEASED
+  CLOSED
+  CANCELLED
+}
+
+enum UspkStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum SpkStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
+enum GoodsHandoverStatus {
+  PENDING
+  COMPLETED
+}
+
+enum AuditLogAction {
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  RELEASE
+  SUBMIT
+  CLOSE
+}
+
+enum AuditEntityType {
+  PROJECT
+  AFCE
+  PR
+  PO
+  GR
+  GOODS_HANDOVER
+  VENDOR_EVALUATION
+  USPK
+  TECHNICAL_EVALUATION
+  SPK
+  PROGRESS_LOG
+  SCHEDULE_REVISION
+}
+
+// 1. Users
+model User {
+  id                   String                 @id @default(uuid())
+  name                 String
+  email                String                 @unique
+  passwordHash         String
+  role                 Role                   @default(PIC)
+  jabatan              String?
+  estateName           String?
+  isActive             Boolean                @default(true)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  projects             Project[]              @relation("ProjectPic")
+  createdProjects      Project[]              @relation("ProjectCreator")
+  createdAfces         Afce[]                 @relation("AfceCreator")
+  approvalRecords      AfceApprovalRecord[]   @relation("ApprovalRecorder")
+  createdPrs           PurchaseRequisition[]  @relation("PrCreator")
+  vendorEvaluations    VendorEvaluation[]     @relation("VendorEvaluator")
+  createdPos           PurchaseOrder[]        @relation("PoCreator")
+  goodsReceipts        GoodsReceipt[]         @relation("GrRecorder")
+  goodsHandovers       GoodsHandover[]        @relation("HandoverCreator")
+  createdUspks         Uspk[]                 @relation("UspkCreator")
+  technicalEvaluations TechnicalEvaluation[]  @relation("TechEvaluator")
+  createdSpks          Spk[]                  @relation("SpkCreator")
+  progressLogs         ProgressLog[]          @relation("ProgressRecorder")
+  comments             ProjectComment[]       @relation("CommentUser")
+  attachments          ProjectAttachment[]    @relation("AttachmentUploader")
+  notifications        Notification[]         @relation("UserNotifications")
+  notificationSettings NotificationSetting[]  @relation("UserNotificationSettings")
+  auditLogs            AuditLog[]             @relation("UserAuditLogs")
+
+  @@map("users")
+}
+
+// 2. Projects
+model Project {
+  id                   String                 @id @default(uuid())
+  projectCode          String                 @unique
+  name                 String
+  description          String?                @db.Text
+  picId                String?
+  pic                  User?                  @relation("ProjectPic", fields: [picId], references: [id])
+  status               ProjectStatus          @default(PLANNED)
+  projectType          String                 @default("Physical Work")
+  procurementType      String                 @default("Tender")
+  locationId           String?
+  locationName         String?
+  regionId             String?
+  regionName           String?
+  companyId            String?
+  companyName          String?
+  blockId              String?
+  blockCode            String?
+  projectCategoryId    String?
+  projectCategoryName  String?
+  baselineStartDate    DateTime
+  baselineEndDate      DateTime
+  targetEndDate        DateTime
+  actualStartDate      DateTime?
+  actualEndDate        DateTime?
+  durationDays         Int                    @default(0)
+  scheduleVarianceDays Int                    @default(0)
+  progressPercent      Int                    @default(0)
+  ewsStatus            String                 @default("Normal")
+  scheduleMatrix       Json?
+  createdById          String?
+  createdBy            User?                  @relation("ProjectCreator", fields: [createdById], references: [id])
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  deletedAt            DateTime?
+
+  workItems            WorkItem[]
+  boqItems             BoqItem[]
+  revisions            ScheduleRevision[]
+  afces                Afce[]
+  prs                  PurchaseRequisition[]
+  pos                  PurchaseOrder[]
+  uspks                Uspk[]
+  spks                 Spk[]
+  progressLogs         ProgressLog[]
+  comments             ProjectComment[]
+  attachments          ProjectAttachment[]
+
+  @@map("projects")
+}
+
+// 3. Work Items (WBS)
+model WorkItem {
+  id                   String                 @id @default(uuid())
+  projectId            String
+  project              Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name                 String
+  type                 String                 @default("Physical")
+  weight               Float                  @default(0)
+  startDate            DateTime
+  endDate              DateTime
+  procurementType      String                 @default("Tender")
+  progressMode         String                 @default("Daily")
+  progress             Float                  @default(0)
+  status               ProjectStatus          @default(PLANNED)
+  phase                String                 @default("Physical Execution")
+  notes                String?                @db.Text
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  prs                  PurchaseRequisition[]
+  pos                  PurchaseOrder[]
+  uspks                Uspk[]
+  spks                 Spk[]
+  progressLogs         ProgressLog[]
+
+  @@map("work_items")
+}
+
+// 4. BOQ Items
+model BoqItem {
+  id                   String                 @id @default(uuid())
+  projectId            String
+  project              Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  itemCode             String
+  name                 String
+  volume               Float
+  unit                 String
+  unitPrice            Decimal                @db.Decimal(15, 2)
+  totalPrice           Decimal                @db.Decimal(15, 2)
+  weight               Float                  @default(0)
+  status               String                 @default("Draft")
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@map("boq_items")
+}
+
+// 5. Schedule Revisions
+model ScheduleRevision {
+  id                   String                 @id @default(uuid())
+  projectId            String
+  project              Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  revisionNumber       Int
+  previousEndDate      DateTime
+  newEndDate           DateTime
+  extendedWeeks        Int
+  reason               String                 @db.Text
+  revisedAt            DateTime               @default(now())
+  approvalDate         DateTime?
+  approvedBy           String?
+  revisedBy            String
+  approvalStatus       String                 @default("Approved")
+  attachmentName       String?
+  createdAt            DateTime               @default(now())
+
+  @@map("schedule_revisions")
+}
+
+// 6. AFCE Document
+model Afce {
+  id                   String                 @id @default(uuid())
+  projectId            String
+  project              Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  afceNumber           String                 @unique
+  amount               Decimal                @db.Decimal(15, 2)
+  status               AfceStatus             @default(DRAFT)
+  sapDocNumber         String?
+  sapReference         String?
+  sapScreenshotUrl     String?
+  currentLevel         Int                    @default(1)
+  requiredLevels       Int                    @default(1)
+  currentApproverRole  String?
+  submittedAt          DateTime?
+  approvedAt           DateTime?
+  createdById          String?
+  createdBy            User?                  @relation("AfceCreator", fields: [createdById], references: [id])
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  deletedAt            DateTime?
+
+  approvalMatrixLevels AfceApprovalLevel[]
+  approvalRecords      AfceApprovalRecord[]
+  purchaseRequisitions PurchaseRequisition[]
+  uspks                Uspk[]
+
+  @@map("afce")
+}
+
+// 7. AFCE Approval Level
+model AfceApprovalLevel {
+  id                   String                 @id @default(uuid())
+  afceId               String
+  afce                 Afce                   @relation(fields: [afceId], references: [id], onDelete: Cascade)
+  level                Int
+  code                 String
+  label                String
+  isRequired           Boolean                @default(true)
+  status               String                 @default("Waiting")
+  approverName         String?
+  approverJabatan      String?
+  decidedAt            DateTime?
+  note                 String?                @db.Text
+  sapEvidenceUrl       String?
+  sapDocNumber         String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@map("afce_approval_levels")
+}
+
+// 8. AFCE Approval Records (History)
+model AfceApprovalRecord {
+  id                   String                 @id @default(uuid())
+  afceId               String
+  afce                 Afce                   @relation(fields: [afceId], references: [id], onDelete: Cascade)
+  matrixLevelId        String?
+  approverName         String
+  approverRole         String
+  approverJabatan      String?
+  action               String
+  timestamp            DateTime               @default(now())
+  approvalDate         DateTime?
+  note                 String?                @db.Text
+  previousStatus       String
+  newStatus            String
+  sapEvidenceUrl       String?
+  sapDocNumber         String?
+  recordedById         String?
+  recordedBy           User?                  @relation("ApprovalRecorder", fields: [recordedById], references: [id])
+  createdAt            DateTime               @default(now())
+
+  @@map("afce_approval_records")
+}
+
+// 9. Purchase Requisitions (Jalur Barang)
+model PurchaseRequisition {
+  id                   String                 @id @default(uuid())
+  afceId               String?
+  afce                 Afce?                  @relation(fields: [afceId], references: [id])
+  projectId            String
+  project              Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItemId           String?
+  workItem             WorkItem?              @relation(fields: [workItemId], references: [id])
+  prNumber             String                 @unique
+  sapPrNumber          String?
+  prType               String                 @default("Material")
+  description          String                 @db.Text
+  status               PrStatus               @default(DRAFT)
+  releaseDate          DateTime?
+  attachmentName       String?
+  createdById          String?
+  createdBy            User?                  @relation("PrCreator", fields: [createdById], references: [id])
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  deletedAt            DateTime?
+
+  vendorEvaluations    VendorEvaluation[]
+  purchaseOrders       PurchaseOrder[]
+
+  @@map("purchase_requisitions")
+}
+
+// 10. Vendor Evaluations
+model VendorEvaluation {
+  id                   String                 @id @default(uuid())
+  prId                 String
+  pr                   PurchaseRequisition    @relation(fields: [prId], references: [id], onDelete: Cascade)
+  projectId            String?
+  supplierId           String?
+  supplier             Supplier?              @relation(fields: [supplierId], references: [id])
+  supplierName         String
+  evaluatorId          String?
+  evaluator            User?                  @relation("VendorEvaluator", fields: [evaluatorId], references: [id])
+  evaluatorName        String
+  evaluatorJabatan     String?
+  evaluationDate       DateTime
+  result               String
+  score                Float?
+  notes                String                 @db.Text
+  attachmentName       String?
+  createdAt            DateTime               @default(now())
+
+  @@map("vendor_evaluations")
+}
+
+// 11. Purchase Orders
+model PurchaseOrder {
+  id                   String                 @id @default(uuid())
+  prId                 String?
+  pr                   PurchaseRequisition?   @relation(fields: [prId], references: [id])
+  projectId            String
+  project              Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItemId           String?
+  workItem             WorkItem?              @relation(fields: [workItemId], references: [id])
+  poNumber             String                 @unique
+  supplierId           String?
+  supplier             Supplier?              @relation(fields: [supplierId], references: [id])
+  supplierName         String
+  poDate               DateTime
+  releaseDate          DateTime?
+  poValue              Decimal                @db.Decimal(15, 2)
+  status               PoStatus               @default(DRAFT)
+  receiptProgressPercent Float                @default(0)
+  attachmentName       String?
+  createdById          String?
+  createdBy            User?                  @relation("PoCreator", fields: [createdById], references: [id])
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  deletedAt            DateTime?
+
+  items                PoItem[]
+  goodsReceipts        GoodsReceipt[]
+  goodsHandovers       GoodsHandover[]
+
+  @@map("purchase_orders")
+}
+
+// 12. PO Items
+model PoItem {
+  id                   String                 @id @default(uuid())
+  poId                 String
+  po                   PurchaseOrder          @relation(fields: [poId], references: [id], onDelete: Cascade)
+  materialName         String
+  sapMaterialCode      String?
+  volume               Float
+  unit                 String
+  unitPrice            Decimal                @db.Decimal(15, 2)
+  totalPrice           Decimal                @db.Decimal(15, 2)
+  receivedVolume       Float                  @default(0)
+  remainingVolume      Float                  @default(0)
+  status               String                 @default("Ordered")
+
+  goodsReceipts        GoodsReceipt[]
+
+  @@map("po_items")
+}
+
+// 13. Goods Receipts (GR)
+model GoodsReceipt {
+  id                   String                 @id @default(uuid())
+  grNumber             String                 @unique
+  poId                 String
+  po                   PurchaseOrder          @relation(fields: [poId], references: [id], onDelete: Cascade)
+  itemId               String?
+  item                 PoItem?                @relation(fields: [itemId], references: [id])
+  materialName         String
+  receiptDate          DateTime
+  receivedVolume       Float
+  unit                 String
+  notes                String?                @db.Text
+  attachmentName       String?
+  recordedById         String?
+  recordedBy           User?                  @relation("GrRecorder", fields: [recordedById], references: [id])
+  recordedByName       String
+  createdAt            DateTime               @default(now())
+
+  @@map("goods_receipts")
+}
+
+// 14. Goods Handovers (BAST)
+model GoodsHandover {
+  id                   String                 @id @default(uuid())
+  handoverNumber       String                 @unique
+  poId                 String
+  po                   PurchaseOrder          @relation(fields: [poId], references: [id], onDelete: Cascade)
+  projectId            String
+  supplierId           String?
+  supplierName         String
+  handoverDate         DateTime
+  receiverName         String
+  receiverJabatan      String?
+  giverName            String
+  giverCompany         String?
+  notes                String?                @db.Text
+  beritaAcaraUrl       String?
+  status               GoodsHandoverStatus    @default(PENDING)
+  attachmentName       String?
+  createdById          String?
+  createdBy            User?                  @relation("HandoverCreator", fields: [createdById], references: [id])
+  createdAt            DateTime               @default(now())
+
+  @@map("goods_handovers")
+}
+
+// 15. USPK (Jalur Jasa)
+model Uspk {
+  id                   String                 @id @default(uuid())
+  afceId               String?
+  afce                 Afce?                  @relation(fields: [afceId], references: [id])
+  projectId            String
+  project              Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItemId           String?
+  workItem             WorkItem?              @relation(fields: [workItemId], references: [id])
+  uspkNumber           String                 @unique
+  vendorName           String
+  vendorId             String?
+  scope                String                 @db.Text
+  targetVolume         Float?
+  unit                 String?
+  value                Decimal                @db.Decimal(15, 2)
+  startDate            DateTime
+  endDate              DateTime
+  status               UspkStatus             @default(DRAFT)
+  submittedAt          DateTime?
+  decidedAt            DateTime?
+  attachmentName       String?
+  createdById          String?
+  creator              User?                  @relation("UspkCreator", fields: [createdById], references: [id])
+  createdBy            String
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  deletedAt            DateTime?
+
+  technicalEvaluations TechnicalEvaluation[]
+  spk                  Spk?
+
+  @@map("uspk")
+}
+
+// 16. Technical Evaluations
+model TechnicalEvaluation {
+  id                   String                 @id @default(uuid())
+  uspkId               String
+  uspk                 Uspk                   @relation(fields: [uspkId], references: [id], onDelete: Cascade)
+  projectId            String?
+  evaluatorId          String?
+  evaluator            User?                  @relation("TechEvaluator", fields: [evaluatorId], references: [id])
+  evaluatorName        String
+  evaluatorJabatan     String?
+  evaluationDate       DateTime
+  result               String
+  score                Float?
+  rekomendasi          String?
+  notes                String                 @db.Text
+  attachmentName       String?
+  createdAt            DateTime               @default(now())
+
+  @@map("technical_evaluations")
+}
+
+// 17. SPK
+model Spk {
+  id                   String                 @id @default(uuid())
+  uspkId               String                 @unique
+  uspk                 Uspk                   @relation(fields: [uspkId], references: [id], onDelete: Cascade)
+  projectId            String
+  project              Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItemId           String?
+  workItem             WorkItem?              @relation(fields: [workItemId], references: [id])
+  spkNumber            String                 @unique
+  vendorName           String
+  vendorId             String?
+  targetVolume         Float?
+  unit                 String?
+  value                Decimal                @db.Decimal(15, 2)
+  startDate            DateTime
+  endDate              DateTime
+  status               SpkStatus              @default(DRAFT)
+  releasedAt           DateTime?
+  attachmentName       String?
+  notes                String?                @db.Text
+  createdById          String?
+  creator              User?                  @relation("SpkCreator", fields: [createdById], references: [id])
+  createdBy            String
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  deletedAt            DateTime?
+
+  progressLogs         ProgressLog[]
+
+  @@map("spk")
+}
+
+// 18. Progress Logs
+model ProgressLog {
+  id                   String                 @id @default(uuid())
+  projectId            String
+  project              Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItemId           String
+  workItem             WorkItem               @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  spkId                String?
+  spk                  Spk?                   @relation(fields: [spkId], references: [id])
+  periodType           String                 @default("DAILY")
+  logDate              DateTime
+  activity             String?                @db.Text
+  period               String?
+  startDate            DateTime?
+  endDate              DateTime?
+  plannedVolume        Float?
+  actualVolume         Float?
+  targetVolume         Float?
+  remainingVolume      Float?
+  cumulativeVolume     Float?
+  unit                 String?
+  progressPercent      Float                  @default(0)
+  plannedProgress      Float?
+  actualProgress       Float?
+  variance             Float?
+  achievement          Float?
+  manpower             Int?
+  weather              String?
+  notes                String?                @db.Text
+  photoName            String?
+  photoUrl             String?
+  reportName           String?
+  createdById          String?
+  recordedBy           User?                  @relation("ProgressRecorder", fields: [createdById], references: [id])
+  recordedAt           DateTime               @default(now())
+
+  @@map("progress_logs")
+}
+
+// 19. Comments & Discussions
+model ProjectComment {
+  id                   String                 @id @default(uuid())
+  projectId            String
+  project              Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId               String
+  user                 User                   @relation("CommentUser", fields: [userId], references: [id], onDelete: Cascade)
+  userName             String
+  userRole             String?
+  userAvatar           String?
+  content              String                 @db.Text
+  mentionedUserIds     Json?
+  createdAt            DateTime               @default(now())
+
+  attachments          ProjectAttachment[]
+
+  @@map("comments")
+}
+
+// 20. Attachments & Google Drive Metadata
+model ProjectAttachment {
+  id                   String                 @id @default(uuid())
+  projectId            String
+  project              Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  commentId            String?
+  comment              ProjectComment?        @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  source               String                 @default("UPLOAD")
+  fileName             String
+  fileUrl              String                 @db.Text
+  fileSize             String?
+  mimeType             String?
+  category             String?
+  docNumber            String?
+  googleDriveFileId    String?
+  uploadedById         String?
+  uploadedByUser       User?                  @relation("AttachmentUploader", fields: [uploadedById], references: [id])
+  uploadedBy           String
+  uploadedAt           DateTime               @default(now())
+
+  @@map("attachments")
+}
+
+// 21. Notifications & Settings
+model Notification {
+  id                   String                 @id @default(uuid())
+  userId               String
+  user                 User                   @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  type                 String
+  title                String
+  message              String                 @db.Text
+  isRead               Boolean                @default(false)
+  linkUrl              String?
+  projectId            String?
+  projectCode          String?
+  projectName          String?
+  priority             String                 @default("normal")
+  createdAt            DateTime               @default(now())
+
+  @@map("notifications")
+}
+
+model NotificationSetting {
+  id                   String                 @id @default(uuid())
+  userId               String
+  user                 User                   @relation("UserNotificationSettings", fields: [userId], references: [id], onDelete: Cascade)
+  notificationType     String
+  isEnabled            Boolean                @default(true)
+
+  @@unique([userId, notificationType])
+  @@map("notification_settings")
+}
+
+// 22. Audit Logs
+model AuditLog {
+  id                   String                 @id @default(uuid())
+  userId               String?
+  user                 User?                  @relation("UserAuditLogs", fields: [userId], references: [id])
+  userName             String
+  userRole             String?
+  userJabatan          String?
+  action               AuditLogAction
+  entityType           AuditEntityType
+  entityId             String
+  entityTitle          String?
+  projectId            String?
+  projectName          String?
+  beforeData           Json?
+  afterData            Json?
+  ipAddress            String                 @default("127.0.0.1")
+  userAgent            String?
+  notes                String?                @db.Text
+  createdAt            DateTime               @default(now())
+
+  @@map("audit_logs")
+}
+
+// 23. Master Data
+model Region {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  status      String   @default("Active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@map("regions")
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  npwp      String?
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@map("companies")
+}
+
+model EstateLocation {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  regionId  String
+  companyId String
+  district  String
+  hectares  Float    @default(0)
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@map("locations")
+}
+
+model EstateBlock {
+  id           String   @id @default(uuid())
+  estateId     String
+  code         String
+  name         String
+  afdeling     String
+  cropType     String
+  plantingYear Int
+  hectares     Float
+  status       String   @default("Active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@map("blocks")
+}
+
+model MaterialCatalogItem {
+  id            String   @id @default(uuid())
+  sapCode       String   @unique
+  name          String
+  category      String
+  unit          String
+  standardPrice Decimal  @db.Decimal(15, 2)
+  status        String   @default("Active")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@map("materials")
+}
+
+model Supplier {
+  id            String             @id @default(uuid())
+  code          String             @unique
+  name          String
+  category      String
+  contactPerson String
+  phone         String
+  npwp          String
+  rating        Float              @default(5)
+  status        String             @default("Active")
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  pos           PurchaseOrder[]
+  evaluations   VendorEvaluation[]
+  @@map("suppliers")
+}
+
+model ApprovalMatrixRule {
+  id        String   @id @default(uuid())
+  tierName  String
+  minValue  Decimal  @db.Decimal(15, 2)
+  maxValue  Decimal  @db.Decimal(15, 2)
+  levels    Json
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@map("approval_matrix_rules")
+}
+
+model ProjectCategoryItem {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  status      String   @default("Active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@map("project_categories")
+}
+
+model ProjectTypeItem {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  status      String   @default("Active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@map("project_types")
+}
+
+model ProcurementTypeItem {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  status      String   @default("Active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@map("procurement_types")
+}
