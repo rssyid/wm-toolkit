@@ -312,20 +312,17 @@ export default function DocumentsTab() {
 
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedDriveDoc(att);
-                            setDriveViewerOpen(true);
-                            setCopied(false);
-                          }}
-                          className="h-7 text-xs gap-1.5 text-blue-700 border-blue-300 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 font-medium"
-                          title="Buka dokumen dalam simulasi Google Drive"
+                        <a
+                          href={att.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center h-7 px-2.5 rounded-md text-xs gap-1.5 text-blue-700 border border-blue-300 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 font-medium transition-colors"
+                          title="Buka dokumen langsung di Google Drive"
                         >
                           <Cloud className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Open in Google Drive</span>
-                        </Button>
+                          <span>Google Drive</span>
+                          <ExternalLink className="w-3 h-3 opacity-60" />
+                        </a>
 
                         <AttachmentPreview
                           filename={att.fileName}
@@ -381,7 +378,7 @@ export default function DocumentsTab() {
                   </div>
                   <div>
                     <DialogTitle className="text-sm font-bold flex items-center gap-2">
-                      <span>Google Drive Viewer (Simulasi)</span>
+                      <span>Google Drive Cloud Document</span>
                       <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
                         {selectedDriveDoc.source === "GOOGLE_DRIVE_LINK" ? "Google Drive Link" : "Cloud Upload"}
                       </Badge>

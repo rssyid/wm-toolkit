@@ -597,6 +597,7 @@ export async function getInitialAppStateAction() {
       mimeType: att.mimeType || undefined,
       category: att.category || undefined,
       docNumber: att.docNumber || undefined,
+      googleDriveFileId: att.googleDriveFileId || undefined,
       uploadedBy: att.uploadedBy,
       uploadedAt: att.uploadedAt.toISOString(),
     }));
@@ -623,7 +624,7 @@ export async function getInitialAppStateAction() {
 
     return {
       success: true,
-      hasDbData: projects.length > 0,
+      hasDbData: true,
       data: {
         projects,
         afces,

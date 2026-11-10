@@ -445,74 +445,16 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         if (parsed.prs) setPrs(parsed.prs);
         if (parsed.pos) setPos(parsed.pos);
         if (parsed.grs) setGrs(parsed.grs);
-        if (parsed.vendorEvaluations) {
-          const existingIds = new Set(parsed.vendorEvaluations.map((v: any) => v.id));
-          const missingInitial = INITIAL_VENDOR_EVALUATIONS.filter((iv) => !existingIds.has(iv.id));
-          setVendorEvaluations([...parsed.vendorEvaluations, ...missingInitial]);
-        } else {
-          setVendorEvaluations(INITIAL_VENDOR_EVALUATIONS);
-        }
-        if (parsed.goodsHandovers) {
-          const existingIds = new Set(parsed.goodsHandovers.map((g: any) => g.id));
-          const missingInitial = INITIAL_GOODS_HANDOVERS.filter((ig) => !existingIds.has(ig.id));
-          setGoodsHandovers([...parsed.goodsHandovers, ...missingInitial]);
-        } else {
-          setGoodsHandovers(INITIAL_GOODS_HANDOVERS);
-        }
-        if (parsed.uspks) {
-          const existingIds = new Set(parsed.uspks.map((u: any) => u.id));
-          const missingInitial = INITIAL_USPKS.filter((iu) => !existingIds.has(iu.id));
-          setUspks([...parsed.uspks, ...missingInitial]);
-        } else {
-          setUspks(INITIAL_USPKS);
-        }
-        if (parsed.technicalEvaluations) {
-          const existingIds = new Set(parsed.technicalEvaluations.map((t: any) => t.id));
-          const missingInitial = INITIAL_TECHNICAL_EVALUATIONS.filter((it) => !existingIds.has(it.id));
-          setTechnicalEvaluations([...parsed.technicalEvaluations, ...missingInitial]);
-        } else {
-          setTechnicalEvaluations(INITIAL_TECHNICAL_EVALUATIONS);
-        }
-        if (parsed.spkContracts) {
-          const existingIds = new Set(parsed.spkContracts.map((s: any) => s.id));
-          const missingInitial = INITIAL_SPK_CONTRACTS.filter((is) => !existingIds.has(is.id));
-          setSpkContracts([...parsed.spkContracts, ...missingInitial]);
-        } else {
-          setSpkContracts(INITIAL_SPK_CONTRACTS);
-        }
-        if (parsed.comments) {
-          const existingIds = new Set(parsed.comments.map((c: any) => c.id));
-          const missingInitial = INITIAL_COMMENTS.filter((ic) => !existingIds.has(ic.id));
-          setComments([...parsed.comments, ...missingInitial]);
-        } else {
-          setComments(INITIAL_COMMENTS);
-        }
-        if (parsed.attachments) {
-          const existingIds = new Set(parsed.attachments.map((a: any) => a.id));
-          const missingInitial = INITIAL_ATTACHMENTS.filter((ia) => !existingIds.has(ia.id));
-          setAttachments([...parsed.attachments, ...missingInitial]);
-        } else {
-          setAttachments(INITIAL_ATTACHMENTS);
-        }
-        if (parsed.notifications) {
-          const existingIds = new Set(parsed.notifications.map((n: any) => n.id));
-          const missingInitial = INITIAL_NOTIFICATIONS.filter((inItem) => !existingIds.has(inItem.id));
-          setNotifications([...parsed.notifications, ...missingInitial]);
-        } else {
-          setNotifications(INITIAL_NOTIFICATIONS);
-        }
-        if (parsed.notificationSettings) {
-          setNotificationSettings(parsed.notificationSettings);
-        } else {
-          setNotificationSettings(INITIAL_NOTIFICATION_SETTINGS);
-        }
-        if (parsed.auditLogs) {
-          const existingIds = new Set(parsed.auditLogs.map((a: any) => a.id));
-          const missingInitial = INITIAL_AUDIT_LOGS.filter((ia) => !existingIds.has(ia.id));
-          setAuditLogs([...parsed.auditLogs, ...missingInitial]);
-        } else {
-          setAuditLogs(INITIAL_AUDIT_LOGS);
-        }
+        if (parsed.vendorEvaluations) setVendorEvaluations(parsed.vendorEvaluations);
+        if (parsed.goodsHandovers) setGoodsHandovers(parsed.goodsHandovers);
+        if (parsed.uspks) setUspks(parsed.uspks);
+        if (parsed.technicalEvaluations) setTechnicalEvaluations(parsed.technicalEvaluations);
+        if (parsed.spkContracts) setSpkContracts(parsed.spkContracts);
+        if (parsed.comments) setComments(parsed.comments);
+        if (parsed.attachments) setAttachments(parsed.attachments);
+        if (parsed.notifications) setNotifications(parsed.notifications);
+        if (parsed.notificationSettings) setNotificationSettings(parsed.notificationSettings);
+        if (parsed.auditLogs) setAuditLogs(parsed.auditLogs);
         if (parsed.dailyProgress) setDailyProgress(parsed.dailyProgress);
         if (parsed.weeklyProgress) setWeeklyProgress(parsed.weeklyProgress);
         if (parsed.regions) setRegions(parsed.regions);
@@ -573,7 +515,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     // Sync with Neon PostgreSQL
     getInitialAppStateAction()
       .then((res) => {
-        if (res.success && res.hasDbData && res.data) {
+        if (res.success && res.data) {
           applyDbData(res.data);
         }
       })
