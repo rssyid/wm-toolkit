@@ -7,6 +7,8 @@ import {
   HardHat,
   Calendar,
   CloudSun,
+  Sun,
+  CloudRain,
   Camera,
   Activity,
   Layers,
@@ -424,9 +426,24 @@ export default function UnifiedExecutionHub() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Cerah">☀️ Cerah</SelectItem>
-                            <SelectItem value="Berawan">⛅ Berawan</SelectItem>
-                            <SelectItem value="Hujan">🌧️ Hujan</SelectItem>
+                            <SelectItem value="Cerah">
+                              <span className="flex items-center gap-1.5">
+                                <Sun className="w-3.5 h-3.5 text-amber-500" />
+                                <span>Cerah</span>
+                              </span>
+                            </SelectItem>
+                            <SelectItem value="Berawan">
+                              <span className="flex items-center gap-1.5">
+                                <CloudSun className="w-3.5 h-3.5 text-sky-500" />
+                                <span>Berawan</span>
+                              </span>
+                            </SelectItem>
+                            <SelectItem value="Hujan">
+                              <span className="flex items-center gap-1.5">
+                                <CloudRain className="w-3.5 h-3.5 text-blue-500" />
+                                <span>Hujan</span>
+                              </span>
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

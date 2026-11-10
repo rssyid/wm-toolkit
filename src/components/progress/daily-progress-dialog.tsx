@@ -35,6 +35,9 @@ import {
   ArrowDownRight,
   UploadCloud,
   Loader2,
+  Sun,
+  CloudSun,
+  CloudRain,
 } from "lucide-react";
 
 interface DailyProgressDialogProps {
@@ -292,7 +295,7 @@ export function DailyProgressDialog({
                     <SelectItem key={spk.id} value={spk.id}>
                       {spk.spkNumber} &bull; {spk.vendorName}
                       {spk.targetVolume ? ` (Target: ${spk.targetVolume} ${spk.unit})` : ""}
-                      {isMatch ? " ✓ Chained WBS" : ""}
+                      {isMatch ? " [Terkait WBS]" : ""}
                     </SelectItem>
                   );
                 })}
@@ -468,9 +471,24 @@ export function DailyProgressDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Cerah">☀️ Cerah Terik</SelectItem>
-                  <SelectItem value="Berawan">⛅ Berawan / Redup</SelectItem>
-                  <SelectItem value="Hujan">🌧️ Hujan Deras</SelectItem>
+                  <SelectItem value="Cerah">
+                    <span className="flex items-center gap-1.5">
+                      <Sun className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Cerah Terik</span>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="Berawan">
+                    <span className="flex items-center gap-1.5">
+                      <CloudSun className="w-3.5 h-3.5 text-sky-500" />
+                      <span>Berawan / Redup</span>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="Hujan">
+                    <span className="flex items-center gap-1.5">
+                      <CloudRain className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Hujan Deras</span>
+                    </span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

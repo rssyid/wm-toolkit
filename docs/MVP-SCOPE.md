@@ -1,4 +1,4 @@
-# MVP Scope — WM-Toolkit
+# MVP Scope - WM-Toolkit
 
 ## Semua fitur MASUK rilis pertama:
 | Kode | Fitur | Prioritas |

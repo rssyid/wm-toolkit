@@ -199,7 +199,7 @@ function DashboardContent() {
                 </div>
                 <div>
                   <h4 className="text-sm font-semibold text-foreground">
-                    Workspace Bersih — Siap Digunakan
+                    Workspace Bersih - Siap Digunakan
                   </h4>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Saat ini belum ada proyek yang dipantau. Workspace siap digunakan untuk pencatatan dan monitoring proyek baru.

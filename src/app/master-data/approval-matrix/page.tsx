@@ -74,7 +74,7 @@ function LevelCell({ tierId, levelIndex, isActive, roleName, onToggle }: LevelCe
         <TooltipContent side="top" className="text-xs">
           {isActive ? (
             <span>
-              <strong>Level {levelIndex + 1}: {roleName}</strong> aktif — klik untuk nonaktifkan
+              <strong>Level {levelIndex + 1}: {roleName}</strong> aktif - klik untuk nonaktifkan
             </span>
           ) : (
             <span>Klik untuk aktifkan <strong>Level {levelIndex + 1}: {roleName}</strong></span>
@@ -176,11 +176,11 @@ export default function MasterDataApprovalMatrixPage() {
         <div className="space-y-1">
           <p className="font-semibold">Cara Penggunaan Matriks Persetujuan:</p>
           <p className="text-muted-foreground dark:text-emerald-400/80 leading-relaxed">
-            Klik ikon ✓ / ○ pada setiap kolom level untuk mengaktifkan atau menonaktifkan pejabat
-            penyetuju per tier nilai. Level dapat diaktifkan secara bebas tanpa harus berurutan —
+            Klik ikon centang atau lingkaran pada setiap kolom level untuk mengaktifkan atau menonaktifkan pejabat
+            penyetuju per tier nilai. Level dapat diaktifkan secara bebas tanpa harus berurutan -
             misalnya Tier tertentu bisa mengharuskan persetujuan WM, GEM, dan CFO saja. Terdapat{" "}
-            <strong>9 level hierarki</strong>: WM → EM → GEM → RH → PH → MCA → CFO → COO →
-            Chairman.
+            <strong>9 level hierarki</strong>:{" "}
+            {"WM -> EM -> GEM -> RH -> PH -> MCA -> CFO -> COO -> Chairman."}
           </p>
         </div>
       </div>
@@ -341,7 +341,7 @@ export default function MasterDataApprovalMatrixPage() {
         </CardContent>
       </Card>
 
-      {/* Add / Edit Tier Dialog — only name + range */}
+      {/* Add / Edit Tier Dialog - only name + range */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -393,7 +393,7 @@ export default function MasterDataApprovalMatrixPage() {
 
             {minValue > 0 && maxValue > 0 && (
               <div className="rounded bg-muted/50 px-3 py-2 text-muted-foreground font-mono text-[11px]">
-                {formatIDR(minValue)} — {maxValue > 10000000000 ? "Tak Terbatas" : formatIDR(maxValue)}
+                {formatIDR(minValue)} - {maxValue > 10000000000 ? "Tak Terbatas" : formatIDR(maxValue)}
               </div>
             )}
           </div>

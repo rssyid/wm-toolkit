@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   CheckCircle2,
+  Check,
   Calendar,
 } from "lucide-react";
 import { Project } from "@/types";
@@ -470,7 +471,7 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                       </Link>
                     </div>
 
-                    {/* Timeline bar area — spans seluruh kolom minggu */}
+                    {/* Timeline bar area - spans seluruh kolom minggu */}
                     <div
                       className="relative h-8 flex items-center"
                       style={{ gridColumn: `2 / -1` }}
@@ -527,7 +528,7 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                                   : ""}
                               </div>
 
-                              {/* Bagian baseline yang belum progress (abu-abu) — sudah jadi background bar */}
+                              {/* Bagian baseline yang belum progress (abu-abu) - sudah jadi background bar */}
 
                               {/* Revision segment (kuning/amber) */}
                               {hasRevision && (
@@ -663,9 +664,11 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                                       style={{ width: `${wi.progress}%` }}
                                     >
                                       {wi.progress > 20
-                                        ? isComplete
-                                          ? "✓"
-                                          : `${wi.progress}%`
+                                        ? isComplete ? (
+                                            <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                          ) : (
+                                            `${wi.progress}%`
+                                          )
                                         : ""}
                                     </div>
                                   </div>

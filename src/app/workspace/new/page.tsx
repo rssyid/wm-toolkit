@@ -23,6 +23,10 @@ import {
   CheckCircle2,
   ShieldCheck,
   Sparkles,
+  Construction,
+  Droplets,
+  Sprout,
+  Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -194,7 +198,7 @@ export default function AddProjectWizard() {
     {
       id: "road-bridge",
       title: "Jalan & Jembatan Kebun",
-      icon: "🛣️",
+      icon: Construction,
       categoryName: "Infrastruktur",
       projectType: "Physical Work" as ProjectType,
       defaultName: "Pembangunan Jalan Poros & Jembatan Plat Kebun",
@@ -266,7 +270,7 @@ export default function AddProjectWizard() {
     {
       id: "water-management",
       title: "Pintu Air & Tanggul Banjir",
-      icon: "🌊",
+      icon: Droplets,
       categoryName: "Water Management",
       projectType: "Physical Work" as ProjectType,
       defaultName: "Pembangunan Pintu Klep Otomatis & Tanggul Pasang Surut",
@@ -338,7 +342,7 @@ export default function AddProjectWizard() {
     {
       id: "replanting",
       title: "Replanting & Land Clearing",
-      icon: "🌱",
+      icon: Sprout,
       categoryName: "Agronomi",
       projectType: "Physical Work" as ProjectType,
       defaultName: "Peremajaan Sawit (Replanting) & Tanam Baru",
@@ -410,7 +414,7 @@ export default function AddProjectWizard() {
     {
       id: "procurement-only",
       title: "Pengadaan Material Sipil",
-      icon: "⚙️",
+      icon: Wrench,
       categoryName: "Pengadaan Barang",
       projectType: "Material Purchase" as ProjectType,
       defaultName: "Pengadaan Material Konstruksi Gorong-gorong & Batu",
@@ -921,7 +925,7 @@ export default function AddProjectWizard() {
                       )}
                     >
                       <div className="flex items-center gap-1.5">
-                        <span className="text-base">{tmpl.icon}</span>
+                        <tmpl.icon className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
                         <span className="font-semibold text-[11px] leading-tight line-clamp-2">
                           {tmpl.title}
                         </span>

@@ -28,6 +28,8 @@ import {
   XCircle,
   UploadCloud,
   FileText,
+  Check,
+  X,
   UserCheck,
   Calendar,
 } from "lucide-react";
@@ -171,10 +173,16 @@ export function TechnicalEvaluationDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="RECOMMENDED" className="text-emerald-700 font-semibold">
-                    ✓ DIREKOMENDASIKAN (Memenuhi Syarat)
+                    <span className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>DIREKOMENDASIKAN (Memenuhi Syarat)</span>
+                    </span>
                   </SelectItem>
                   <SelectItem value="NOT_RECOMMENDED" className="text-rose-700 font-semibold">
-                    ✕ TIDAK DIREKOMENDASIKAN (Gugur Teknis)
+                    <span className="flex items-center gap-1.5">
+                      <X className="w-3.5 h-3.5" />
+                      <span>TIDAK DIREKOMENDASIKAN (Gugur Teknis)</span>
+                    </span>
                   </SelectItem>
                 </SelectContent>
               </Select>

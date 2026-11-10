@@ -235,7 +235,7 @@ export function WeeklyProgressDialog({
                   return (
                     <SelectItem key={spk.id} value={spk.id}>
                       {spk.spkNumber} &bull; {spk.vendorName}
-                      {isMatch ? " ✓ Chained WBS" : ""}
+                      {isMatch ? " [Terkait WBS]" : ""}
                     </SelectItem>
                   );
                 })}

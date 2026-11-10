@@ -2117,7 +2117,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       prev.map((rule) => {
         if (rule.id !== tierId) return rule;
         const newLevels = [...rule.levels] as (ApprovalLevel | null)[];
-        // Simple toggle — no sequential enforcement, no cascade
+        // Simple toggle - no sequential enforcement, no cascade
         if (newLevels[levelIndex] !== null) {
           newLevels[levelIndex] = null;
         } else {

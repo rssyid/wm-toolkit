@@ -23,7 +23,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAppState } from "@/context/app-state-context";
 import { Project, PurchaseRequisition, VendorEvaluationResult } from "@/types";
 import { toast } from "sonner";
-import { CheckCircle2, ClipboardCheck, UploadCloud, Building2, AlertCircle } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, UploadCloud, Building2, AlertCircle, Check, X } from "lucide-react";
 
 interface VendorEvaluationDialogProps {
   open: boolean;
@@ -142,7 +142,7 @@ export function VendorEvaluationDialog({
               options={suppliers.map((s) => ({
                 value: s.id,
                 label: `${s.name} (${s.category})`,
-                description: `NPWP: ${s.npwp} • Rating: ${s.rating}★`,
+                description: `NPWP: ${s.npwp} • Rating: ${s.rating}/5`,
               }))}
               value={supplierId}
               onValueChange={setSupplierId}
@@ -177,10 +177,16 @@ export function VendorEvaluationDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="RECOMMENDED" className="text-emerald-700 font-semibold">
-                    ✓ RECOMMENDED (Direkomendasikan)
+                    <span className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>RECOMMENDED (Direkomendasikan)</span>
+                    </span>
                   </SelectItem>
                   <SelectItem value="NOT_RECOMMENDED" className="text-rose-700 font-semibold">
-                    ✕ NOT RECOMMENDED (Gugur / Tidak Layak)
+                    <span className="flex items-center gap-1.5">
+                      <X className="w-3.5 h-3.5" />
+                      <span>NOT RECOMMENDED (Gugur / Tidak Layak)</span>
+                    </span>
                   </SelectItem>
                 </SelectContent>
               </Select>

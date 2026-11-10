@@ -215,7 +215,7 @@ export function SPKCreateDialog({
                   const isRec = recommendedUspkIds.has(u.id) || u.status === "APPROVED";
                   return (
                     <SelectItem key={u.id} value={u.id} className="text-xs">
-                      {u.uspkNumber} — {u.vendorName} ({formatIDR(u.value)}) {isRec ? "✓ Lolos Evaluasi" : "— Belum Direkomendasikan"}
+                      {u.uspkNumber} - {u.vendorName} ({formatIDR(u.value)}) {isRec ? "[Lolos Evaluasi]" : "[Belum Direkomendasikan]"}
                     </SelectItem>
                   );
                 })}

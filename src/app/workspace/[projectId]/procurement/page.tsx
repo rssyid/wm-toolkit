@@ -17,6 +17,7 @@ import {
   FileCheck2,
   FileText,
   BadgeCheck,
+  Check,
   Package,
   AlertTriangle,
   ArrowRight,
@@ -378,9 +379,14 @@ export default function UnifiedProcurementHub() {
                                         : "bg-rose-50 text-rose-800 border-rose-300"
                                     )}
                                   >
-                                    {recommendedEval
-                                      ? `✓ ${recommendedEval.supplierName}`
-                                      : `${prEvals.length} Evaluasi`}
+                                    {recommendedEval ? (
+                                      <span className="flex items-center gap-1">
+                                        <Check className="w-3 h-3 stroke-[2.5]" />
+                                        <span>{recommendedEval.supplierName}</span>
+                                      </span>
+                                    ) : (
+                                      `${prEvals.length} Evaluasi`
+                                    )}
                                   </Badge>
                                 </div>
                               ) : (

@@ -1,4 +1,4 @@
-# Workflow — Alur Proses WM-Toolkit (Pencatatan Manual Berbasis SAP)
+# Workflow - Alur Proses WM-Toolkit (Pencatatan Manual Berbasis SAP)
 
 ## Konsep
 WM-Toolkit adalah aplikasi PENCATATAN. Approval AFCE dicatat manual berdasarkan SAP.

@@ -165,7 +165,7 @@ export function AuditLogDetailDialog({
                   </pre>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center py-6 text-muted-foreground italic text-xs">
-                    <span>— Tidak Ada Data Sebelumnya —</span>
+                    <span>- Tidak Ada Data Sebelumnya -</span>
                     <span className="text-[10px] mt-0.5">(Objek Baru Dibuat)</span>
                   </div>
                 )}
@@ -187,7 +187,7 @@ export function AuditLogDetailDialog({
                   </pre>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center py-6 text-muted-foreground italic text-xs">
-                    <span>— Data Dihapus —</span>
+                    <span>- Data Dihapus -</span>
                     <span className="text-[10px] mt-0.5">(Entitas Dinonaktifkan/Soft Delete)</span>
                   </div>
                 )}

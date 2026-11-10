@@ -1,4 +1,4 @@
-# PRD — Product Requirements Document
+# PRD - Product Requirements Document
 
 ## 1. Tujuan
 Membangun WM-Toolkit untuk mencatat & memonitor proyek teknis perkebunan sawit. Setelah AFCE disetujui, alur bercabang menjadi jalur Barang dan jalur Jasa.

@@ -524,7 +524,7 @@ export default function ProjectDetailLayout({
 
           <div className="p-3 rounded-lg border bg-rose-50/50 dark:bg-rose-950/20 text-xs space-y-1">
             <p className="font-bold text-foreground">
-              {project.code} — {project.name}
+              {project.code} - {project.name}
             </p>
             <p className="text-muted-foreground">
               Lokasi: {project.locationName} &bull; Nilai: {formatIDR(project.afceValue)}
@@ -577,7 +577,7 @@ export default function ProjectDetailLayout({
 
           <div className="p-3 rounded-lg border border-rose-200 bg-rose-50/70 dark:bg-rose-950/40 text-xs space-y-1">
             <p className="font-bold text-foreground">
-              {project.code} — {project.name}
+              {project.code} - {project.name}
             </p>
             <p className="text-muted-foreground">
               Lokasi: {project.locationName} &bull; Nilai AFCE: {formatIDR(project.afceValue)}

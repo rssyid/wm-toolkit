@@ -22,7 +22,7 @@ import {
 import { useAppState } from "@/context/app-state-context";
 import { Project, PurchaseOrder, GoodsHandoverStatus } from "@/types";
 import { toast } from "sonner";
-import { FileCheck, UploadCloud, CheckCircle2 } from "lucide-react";
+import { FileCheck, UploadCloud, CheckCircle2, Check, Clock } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 
 interface GoodsHandoverDialogProps {
@@ -245,10 +245,16 @@ export function GoodsHandoverDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="COMPLETED" className="text-emerald-700 font-semibold">
-                  ✓ COMPLETED (Diserahterimakan Penuh & Diterima Baik)
+                  <span className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5" />
+                    <span>COMPLETED (Diserahterimakan Penuh & Diterima Baik)</span>
+                  </span>
                 </SelectItem>
                 <SelectItem value="PENDING" className="text-amber-700 font-semibold">
-                  ⏳ PENDING (Dalam Masa Uji Coba Lapangan / Penyesuaian)
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>PENDING (Dalam Masa Uji Coba Lapangan / Penyesuaian)</span>
+                  </span>
                 </SelectItem>
               </SelectContent>
             </Select>

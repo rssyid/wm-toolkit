@@ -63,7 +63,7 @@ Hasil kompilasi build produksi Next.js mencatat **33 rute App Router aktif**, de
 | 33 | `/workspace/[projectId]/comments` | Dynamic | `src/app/workspace/[projectId]/comments/page.tsx` | Sub-rute diskusi dan komentar tim proyek dengan deteksi mention `@user`. |
 
 > **Catatan Arsitektur Layout Proyek:**
-> Layout `src/app/workspace/[projectId]/layout.tsx` membungkus header proyek permanen, status badge, tombol aksi cepat, banner soft delete / pulihkan proyek, tombol pemicu laci geser `CollaborationDrawer` (*Berkas & Diskusi*), serta strip navigasi **4 Primary Integrated Tabs**. Sub-rute granular nomor 22–33 tetap dipertahankan agar tautan lama, riwayat peramban, maupun deep-linking langsung tidak mengalami error 404.
+> Layout `src/app/workspace/[projectId]/layout.tsx` membungkus header proyek permanen, status badge, tombol aksi cepat, banner soft delete / pulihkan proyek, tombol pemicu laci geser `CollaborationDrawer` (*Berkas & Diskusi*), serta strip navigasi **4 Primary Integrated Tabs**. Sub-rute granular nomor 22-33 tetap dipertahankan agar tautan lama, riwayat peramban, maupun deep-linking langsung tidak mengalami error 404.
 
 ---
 

@@ -746,7 +746,7 @@ export default function ServicesAndSPKTab() {
                             {/* Masa Berlaku */}
                             <TableCell className="text-[11px] font-mono">
                               <span className="text-foreground block font-medium">
-                                {formatIDDate(spk.startDate)} — {formatIDDate(spk.endDate)}
+                                {formatIDDate(spk.startDate)} - {formatIDDate(spk.endDate)}
                               </span>
                               <span className="text-muted-foreground text-[10px]">
                                 Durasi: {durationDays} Hari Kalender

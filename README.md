@@ -1,13 +1,13 @@
-# WM-Toolkit — Estate Civil & Technical Project Monitoring (UI Mockup)
+# WM-Toolkit - Estate Civil & Technical Project Monitoring (UI Mockup)
 
 A modern, high-density, interactive internal operations tool built with **Next.js App Router (TypeScript)**, **Tailwind CSS**, and **shadcn/ui** components for monitoring technical estate work in agricultural/estate engineering (civil infrastructure, water gates, drainage channels, road maintenance, and material procurement).
 
 ---
 
-## 🌟 Key Features
+## Key Features
 
 1. **End-to-End Estate Project Lifecycle**:
-   - **AFCE Initiation & Tiered Approval Matrix** (Estate Manager $\le$ 100M, Area Manager 100–500M, Head Office $>$ 500M).
+   - **AFCE Initiation & Tiered Approval Matrix** (Estate Manager $\le$ 100M, Area Manager 100-500M, Head Office $>$ 500M).
    - **PR (Purchase Requisition) Tracking** with SAP doc references.
    - **Multi-PO Generation from PRs** linked to registered vendors.
    - **Material Receipt (Goods Receipt / GR)** with automatic partial/full quantity deductions and item status transitions (`Ordered` $\rightarrow$ `Partially Received` $\rightarrow$ `Received`).
@@ -40,7 +40,7 @@ A modern, high-density, interactive internal operations tool built with **Next.j
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -74,28 +74,28 @@ pnpm start
 
 ---
 
-## 📂 Application Structure
+## Application Structure
 
-- `/dashboard` — 7 KPI metric cards, Unified multi-project Gantt timeline, 5 operational status widgets.
-- `/workspace` — Project portfolio table with dense filters, search, EWS status, and pagination.
-- `/workspace/new` — 4-Step stepper wizard (Basic Info, Baseline Schedule, Work Items & 100% Weight check, Review & Save).
-- `/workspace/[projectId]` — Project Detail shell with 10 interactive tabs:
-  - `Overview` — Executive summary, AFCE & schedule status, latest logs.
-  - `Work Items` — WBS table with add/edit work item modal.
-  - `Schedule` — Baseline vs revised schedule bars, revision history, and Revise Schedule modal.
-  - `Survey & BOQ` — Topography survey data and Bill of Quantities table.
-  - `AFCE Approval` — AFCE tiered matrix, SAP screenshot mock, approve/revise/reject actions with mandatory notes.
-  - `PR Tracking` — PR release recording form and linked PO counter.
-  - `PO & Materials` — Multi-line material items, partial/full Goods Receipt (GR) modal with auto-deduction.
-  - `Progress` — Plan vs Actual S-Curve chart (Recharts) and daily/weekly logs.
-  - `Documents` — Central document repository with attachment preview modal.
-  - `History & Audit` — Chronological audit trail of all project events.
-- `/master-data/*` — CRUD management for locations, materials, suppliers, users, and approval matrix.
-- `/settings` — Preferences, table density, notifications, SAP validations, and demo reset.
+- `/dashboard` - 7 KPI metric cards, Unified multi-project Gantt timeline, 5 operational status widgets.
+- `/workspace` - Project portfolio table with dense filters, search, EWS status, and pagination.
+- `/workspace/new` - 4-Step stepper wizard (Basic Info, Baseline Schedule, Work Items & 100% Weight check, Review & Save).
+- `/workspace/[projectId]` - Project Detail shell with 10 interactive tabs:
+  - `Overview` - Executive summary, AFCE & schedule status, latest logs.
+  - `Work Items` - WBS table with add/edit work item modal.
+  - `Schedule` - Baseline vs revised schedule bars, revision history, and Revise Schedule modal.
+  - `Survey & BOQ` - Topography survey data and Bill of Quantities table.
+  - `AFCE Approval` - AFCE tiered matrix, SAP screenshot mock, approve/revise/reject actions with mandatory notes.
+  - `PR Tracking` - PR release recording form and linked PO counter.
+  - `PO & Materials` - Multi-line material items, partial/full Goods Receipt (GR) modal with auto-deduction.
+  - `Progress` - Plan vs Actual S-Curve chart (Recharts) and daily/weekly logs.
+  - `Documents` - Central document repository with attachment preview modal.
+  - `History & Audit` - Chronological audit trail of all project events.
+- `/master-data/*` - CRUD management for locations, materials, suppliers, users, and approval matrix.
+- `/settings` - Preferences, table density, notifications, SAP validations, and demo reset.
 
 ---
 
-## 🧪 Interactive Testing Scenarios
+## Interactive Testing Scenarios
 
 1. **Create a Project**:
    - Click `+ Tambah Proyek` in the top right.

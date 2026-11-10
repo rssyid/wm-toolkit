@@ -1,4 +1,4 @@
-# Architecture — Arsitektur WM-Toolkit
+# Architecture - Arsitektur WM-Toolkit
 
 ## High-Level
 ```

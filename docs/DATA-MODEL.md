@@ -1,4 +1,4 @@
-# Data Model — Skema Database WM-Toolkit
+# Data Model - Skema Database WM-Toolkit
 
 ## Konsep
 - Approval AFCE dicatat manual berdasarkan SAP.
@@ -44,7 +44,7 @@ id UUID PK, afce_id FK, level Int, jabatan String, is_required Boolean
 ### approval_records
 id UUID PK, afce_id FK, matrix_level_id FK, approver_name, approver_jabatan, action Enum(APPROVED,REJECTED), decided_at, notes nullable, sap_evidence_url nullable, recorded_by FK, created_at
 
-### purchase_requisitions (PR) — jalur barang
+### purchase_requisitions (PR) - jalur barang
 id UUID PK, afce_id FK, pr_number, sap_number nullable, status Enum(DRAFT,RELEASED,CLOSED), released_at, created_by FK, deleted_at nullable
 
 ### vendor_evaluations
@@ -59,7 +59,7 @@ id UUID PK, po_id FK, item_name, quantity Int, unit, price Decimal, total Decima
 ### goods_handovers (Serah Terima Barang)
 id UUID PK, po_id FK unique, handover_date, receiver_name, giver_name, berita_acara_url nullable, status Enum(PENDING,COMPLETED), created_by FK, created_at
 
-### uspk (Usulan SPK) — jalur jasa
+### uspk (Usulan SPK) - jalur jasa
 id UUID PK, afce_id FK, work_item_id FK nullable, uspk_number, vendor_name, scope Text, target_volume Decimal, uom String, value Decimal, start_date, end_date, status Enum(DRAFT,SUBMITTED,APPROVED,REJECTED), submitted_at, decided_at, created_by FK, deleted_at nullable
 
 ### technical_evaluations

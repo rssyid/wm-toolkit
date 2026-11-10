@@ -17,6 +17,7 @@ import {
   Layers,
   Sparkles,
   PackageCheck,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -348,7 +349,7 @@ export function SmartActionStepper({
                         : "bg-muted-foreground/30 text-foreground"
                     )}
                   >
-                    {isDone ? "✓" : idx + 1}
+                    {isDone ? <Check className="w-2.5 h-2.5 stroke-[3]" /> : idx + 1}
                   </span>
                   <span className="truncate">{st.title}</span>
                 </div>

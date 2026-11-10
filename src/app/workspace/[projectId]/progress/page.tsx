@@ -7,6 +7,8 @@ import {
   HardHat,
   Calendar,
   CloudSun,
+  Sun,
+  CloudRain,
   Camera,
   Activity,
   FileSpreadsheet,
@@ -536,10 +538,12 @@ export default function ProgressTab() {
                               d.weather === "Hujan" && "bg-blue-100 text-blue-800"
                             )}
                           >
-                            {d.weather === "Cerah" && "☀️ "}
-                            {d.weather === "Berawan" && "⛅ "}
-                            {d.weather === "Hujan" && "🌧️ "}
-                            {d.weather}
+                            <span className="inline-flex items-center gap-1">
+                              {d.weather === "Cerah" && <Sun className="w-3 h-3 text-amber-600 inline shrink-0" />}
+                              {d.weather === "Berawan" && <CloudSun className="w-3 h-3 text-slate-600 inline shrink-0" />}
+                              {d.weather === "Hujan" && <CloudRain className="w-3 h-3 text-blue-600 inline shrink-0" />}
+                              <span>{d.weather}</span>
+                            </span>
                           </span>
                         </TableCell>
                         <TableCell className="text-muted-foreground text-[11px] whitespace-nowrap">

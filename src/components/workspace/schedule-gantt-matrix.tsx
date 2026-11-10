@@ -589,9 +589,7 @@ export function ScheduleGanttMatrix({
                                     <span className="font-bold text-xs select-none">#</span>
                                   )}
                                   {cell?.symbol === "✓" && (
-                                    <span className="font-extrabold text-sm text-emerald-950 dark:text-emerald-950 select-none">
-                                      ✓
-                                    </span>
+                                    <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-950 dark:text-emerald-950" />
                                   )}
                                 </div>
                               </TooltipTrigger>
@@ -679,10 +677,10 @@ export function ScheduleGanttMatrix({
               <span className="text-foreground">Progress</span>
             </div>
 
-            {/* ✓ Completed */}
+            {/* Completed */}
             <div className="flex items-center gap-1.5">
-              <span className="w-6 h-5 rounded-none border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center justify-center font-extrabold text-sm text-emerald-700 dark:text-emerald-400">
-                ✓
+              <span className="w-6 h-5 rounded-none border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center justify-center text-emerald-700 dark:text-emerald-400">
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
               </span>
               <span className="text-foreground">Completed</span>
             </div>
@@ -750,7 +748,7 @@ export function ScheduleGanttMatrix({
                     options={[
                       { value: "none", label: "Tanpa Simbol (Hanya Blok Warna)" },
                       { value: "#", label: "# (Progress - Sedang Dikerjakan)" },
-                      { value: "✓", label: "✓ (Completed - Pekerjaan Selesai)" },
+                      { value: "✓", label: "[✓] Selesai (Completed - Pekerjaan Selesai)" },
                     ]}
                   />
                 </div>

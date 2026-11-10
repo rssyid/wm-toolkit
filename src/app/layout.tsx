@@ -7,7 +7,7 @@ import { AppLayoutShell } from "@/components/layout/app-layout-shell";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
-  title: "WM-Toolkit — Estate Civil & Tech Project Monitoring",
+  title: "WM-Toolkit - Estate Civil & Tech Project Monitoring",
   description: "Internal operations tool for estate technical project monitoring, AFCE, PR, PO, goods receipt, and Gantt tracking.",
 };
 

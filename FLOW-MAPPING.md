@@ -2,7 +2,7 @@
 
 > **Dokumen Referensi:** `AUDIT.md`, `docs/WORKFLOW.md`, `docs/PRD.md`, `docs/DATA-MODEL.md`, `docs/MVP-SCOPE.md`, `CONTEXT.md`  
 > **Tanggal Pembaruan:** 9 November 2026  
-> **Status:** 100% Terimplementasi (UI Ready) — Seluruh alur end-to-end telah memiliki antarmuka pengguna interaktif pada mock state.
+> **Status:** 100% Terimplementasi (UI Ready) - Seluruh alur end-to-end telah memiliki antarmuka pengguna interaktif pada mock state.
 
 ---
 
@@ -47,7 +47,7 @@ flowchart TD
 
 ## 2. Arsitektur Terpadu Workspace Proyek
 
-Menjawab kebutuhan penyederhanaan antarmuka agar pengguna tidak kewalahan berpindah 11–15 tab terpisah, detail proyek pada `/workspace/[projectId]` diorganisasikan ke dalam **4 Primary Integrated Tabs** ditambah **Universal Collaboration Drawer**:
+Menjawab kebutuhan penyederhanaan antarmuka agar pengguna tidak kewalahan berpindah 11-15 tab terpisah, detail proyek pada `/workspace/[projectId]` diorganisasikan ke dalam **4 Primary Integrated Tabs** ditambah **Universal Collaboration Drawer**:
 
 ### A. 4 Primary Integrated Tabs
 1. **Ringkasan Proyek (`/workspace/[projectId]`):**

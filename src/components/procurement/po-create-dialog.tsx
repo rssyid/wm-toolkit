@@ -22,7 +22,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAppState } from "@/context/app-state-context";
 import { Project, POMaterialItem, PurchaseRequisition } from "@/types";
 import { toast } from "sonner";
-import { ShoppingCart, Plus, Trash2, UploadCloud } from "lucide-react";
+import { ShoppingCart, Plus, Trash2, UploadCloud, Check } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 
 interface POCreateDialogProps {
@@ -243,14 +243,15 @@ export function POCreateDialog({
                   const isRec = recommendedSupplierIds.has(sup.id);
                   return {
                     value: sup.id,
-                    label: isRec ? `★ ${sup.name}` : sup.name,
+                    label: isRec ? `[Rekomendasi] ${sup.name}` : sup.name,
                     subLabel: `${isRec ? "[DIREKOMENDASIKAN] " : ""}${sup.category} • NPWP: ${sup.npwp || "-"}`,
                   };
                 })}
               />
               {recommendedSupplierIds.has(supplierId) && (
                 <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
-                  ✓ Vendor terverifikasi dari Evaluasi Rekanan PR
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Vendor terverifikasi dari Evaluasi Rekanan PR</span>
                 </p>
               )}
             </div>

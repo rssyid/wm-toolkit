@@ -1,4 +1,4 @@
-# CONTEXT.md — Konteks Proyek WM-Toolkit
+# CONTEXT.md - Konteks Proyek WM-Toolkit
 
 ## Deskripsi
 WM-Toolkit: aplikasi web untuk MENCATATAN dan memonitor proyek teknis perkebunan sawit. Setelah AFCE disetujui, alur bercabang menjadi dua jalur paralel:
@@ -18,7 +18,7 @@ Semua bisa lihat semua data; semua bisa edit; audit log aktif; unlimited users.
 
 ## Skala
 - Pengguna aktif: < 20
-- Proyek aktif: 50–200
+- Proyek aktif: 50-200
 
 ## Keputusan Penting
 - Validasi: field wajib (*), error inline, konfirmasi hapus, soft delete + restore

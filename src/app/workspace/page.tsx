@@ -223,7 +223,7 @@ function ProjectExpandedRow({
                       <div className="flex items-center justify-between pt-1 text-[11px] text-muted-foreground border-t border-border/40">
                         <div className="flex items-center gap-1 font-mono">
                           <Calendar className="w-3 h-3 text-muted-foreground/70" />
-                          <span>{formatIDDate(wi.startDate)} – {formatIDDate(wi.endDate)}</span>
+                          <span>{formatIDDate(wi.startDate)} - {formatIDDate(wi.endDate)}</span>
                         </div>
                         {wi.phase && (
                           <span className="text-[10px] text-muted-foreground truncate max-w-[100px]" title={wi.phase}>
@@ -1209,7 +1209,7 @@ function WorkspaceContent() {
                         <Layers className="w-8 h-8 opacity-80 text-emerald-600" />
                       </div>
                       <h4 className="text-sm font-semibold tracking-tight text-foreground mb-1">
-                        Workspace Bersih — Siap Digunakan
+                        Workspace Bersih - Siap Digunakan
                       </h4>
                       <p className="text-xs text-muted-foreground max-w-sm mb-4 leading-relaxed">
                         Workspace Anda bersih dan siap digunakan. Mulai pencatatan proyek perkebunan Anda dengan membuat proyek baru.
@@ -1532,7 +1532,7 @@ function WorkspaceContent() {
 
             <div className="p-3 rounded-lg border bg-rose-50/50 dark:bg-rose-950/20 text-xs space-y-1">
               <p className="font-bold text-foreground">
-                {projectToDelete.code} — {projectToDelete.name}
+                {projectToDelete.code} - {projectToDelete.name}
               </p>
               <p className="text-muted-foreground">
                 Lokasi: {projectToDelete.locationName} &bull; Nilai: {formatIDR(projectToDelete.afceValue)}
@@ -1587,7 +1587,7 @@ function WorkspaceContent() {
 
             <div className="p-3 rounded-lg border border-rose-200 bg-rose-50/70 dark:bg-rose-950/40 text-xs space-y-1">
               <p className="font-bold text-foreground">
-                {projectToHardDelete.code} — {projectToHardDelete.name}
+                {projectToHardDelete.code} - {projectToHardDelete.name}
               </p>
               <p className="text-muted-foreground">
                 Lokasi: {projectToHardDelete.locationName} &bull; Nilai AFCE: {formatIDR(projectToHardDelete.afceValue)}

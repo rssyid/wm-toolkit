@@ -1,4 +1,4 @@
-# Design — Spesifikasi UI/UX WM-Toolkit
+# Design - Spesifikasi UI/UX WM-Toolkit
 
 ## Design System
 shadcn/ui, Tailwind CSS, tema hijau perkebunan sawit (Emerald/Forest Green), Light/Dark Mode, Geist font, Lucide icons.
