@@ -34,7 +34,17 @@ export const authConfig: NextAuthConfig = {
       ];
       const isProtected = protectedPaths.some((p) => nextUrl.pathname.startsWith(p));
       if (isProtected) {
-        return isLoggedIn;
+        if (!isLoggedIn) return false;
+
+        // RBAC: Hanya role ADMIN yang diizinkan mengakses /master-data
+        if (nextUrl.pathname.startsWith("/master-data")) {
+          const userRole = (auth?.user as any)?.role;
+          if (userRole !== "ADMIN") {
+            return Response.redirect(new URL("/dashboard", nextUrl));
+          }
+        }
+
+        return true;
       }
       return true;
     },

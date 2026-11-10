@@ -133,63 +133,60 @@ export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
           );
         })}
 
-        {/* Master Data Menu */}
-        <div>
-          <button
-            type="button"
-            onClick={() => setMasterDataOpen(!masterDataOpen)}
-            className={cn(
-              "flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-medium transition-colors",
-              pathname.startsWith("/master-data")
-                ? "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 font-semibold"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-            title={collapsed ? "Master Data" : undefined}
-          >
-            <div className="flex items-center gap-3">
-              <Database className="h-4 w-4 shrink-0" />
-              {!collapsed && (
-                <div className="flex items-center gap-1.5">
-                  <span>Master Data</span>
-                  {!canManageSystem && (
-                    <span title="Kelola khusus Admin">
-                      <Lock className="w-3 h-3 text-muted-foreground/60" />
-                    </span>
-                  )}
-                </div>
+        {/* Master Data Menu (Admin Only) */}
+        {canManageSystem && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setMasterDataOpen(!masterDataOpen)}
+              className={cn(
+                "flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-medium transition-colors",
+                pathname.startsWith("/master-data")
+                  ? "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 font-semibold"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
-            </div>
-            {!collapsed && (
-              <ChevronDown
-                className={cn("h-3.5 w-3.5 transition-transform duration-200", masterDataOpen && "rotate-180")}
-              />
-            )}
-          </button>
+              title={collapsed ? "Master Data" : undefined}
+            >
+              <div className="flex items-center gap-3">
+                <Database className="h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400" />
+                {!collapsed && (
+                  <div className="flex items-center gap-1.5">
+                    <span>Master Data</span>
+                  </div>
+                )}
+              </div>
+              {!collapsed && (
+                <ChevronDown
+                  className={cn("h-3.5 w-3.5 transition-transform duration-200", masterDataOpen && "rotate-180")}
+                />
+              )}
+            </button>
 
-          {!collapsed && masterDataOpen && (
-            <div className="mt-1 ml-4 pl-3 border-l border-border/80 space-y-1">
-              {masterDataSubItems.map((sub) => {
-                const SubIcon = sub.icon;
-                const isSubActive = pathname === sub.href;
-                return (
-                  <Link
-                    key={sub.href}
-                    href={sub.href}
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors",
-                      isSubActive
-                        ? "text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-500/10"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
-                    )}
-                  >
-                    <SubIcon className="h-3 w-3 shrink-0" />
-                    <span>{sub.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
+            {!collapsed && masterDataOpen && (
+              <div className="mt-1 ml-4 pl-3 border-l border-border/80 space-y-1">
+                {masterDataSubItems.map((sub) => {
+                  const SubIcon = sub.icon;
+                  const isSubActive = pathname === sub.href;
+                  return (
+                    <Link
+                      key={sub.href}
+                      href={sub.href}
+                      className={cn(
+                        "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors",
+                        isSubActive
+                          ? "text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-500/10"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                      )}
+                    >
+                      <SubIcon className="h-3 w-3 shrink-0" />
+                      <span>{sub.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Settings */}
         <Link
@@ -205,12 +202,7 @@ export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
           <Settings className="h-4 w-4 shrink-0" />
           {!collapsed && (
             <div className="flex items-center justify-between flex-1">
-              <span>Settings</span>
-              {!canManageSystem && (
-                <span title="Kelola khusus Admin">
-                  <Lock className="w-3 h-3 text-muted-foreground/60" />
-                </span>
-              )}
+              <span>Pengaturan</span>
             </div>
           )}
         </Link>

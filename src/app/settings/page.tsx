@@ -15,10 +15,19 @@ import { ProfileTab } from "@/components/settings/profile-tab";
 import { AppearanceScheduleTab } from "@/components/settings/appearance-schedule-tab";
 import { NotificationsTab } from "@/components/settings/notifications-tab";
 import { MaintenanceDangerTab } from "@/components/settings/maintenance-danger-tab";
+import { useAppState } from "@/context/app-state-context";
 
 export default function SettingsPage() {
+  const { canManageSystem } = useAppState();
   const [activeTab, setActiveTab] = useState("profile");
   const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  // If tab was maintenance but user lacks permission, reset to profile
+  React.useEffect(() => {
+    if (activeTab === "maintenance" && !canManageSystem) {
+      setActiveTab("profile");
+    }
+  }, [activeTab, canManageSystem]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -70,13 +79,15 @@ export default function SettingsPage() {
                 <span>Parameter Proyek & EWS</span>
               </TabsTrigger>
 
-              <TabsTrigger
-                value="maintenance"
-                className="w-full justify-start gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none hover:bg-muted/50 hover:text-foreground text-left"
-              >
-                <Database className="w-4 h-4 shrink-0" />
-                <span>Pemeliharaan & Cadangan</span>
-              </TabsTrigger>
+              {canManageSystem && (
+                <TabsTrigger
+                  value="maintenance"
+                  className="w-full justify-start gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none hover:bg-muted/50 hover:text-foreground text-left text-amber-700 dark:text-amber-400"
+                >
+                  <Database className="w-4 h-4 shrink-0" />
+                  <span>Pemeliharaan & Cadangan</span>
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
         </aside>
@@ -136,9 +147,11 @@ export default function SettingsPage() {
             <NotificationsTab />
           </TabsContent>
 
-          <TabsContent value="maintenance" className="mt-0 outline-none">
-            <MaintenanceDangerTab />
-          </TabsContent>
+          {canManageSystem && (
+            <TabsContent value="maintenance" className="mt-0 outline-none">
+              <MaintenanceDangerTab />
+            </TabsContent>
+          )}
         </main>
       </Tabs>
     </div>

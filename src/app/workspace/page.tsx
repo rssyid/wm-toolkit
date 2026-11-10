@@ -355,6 +355,7 @@ function WorkspaceContent() {
     setTableDensity,
     deleteProject,
     restoreProject,
+    canEditProjects,
     isViewerOnly,
   } = useAppState();
 
@@ -590,7 +591,7 @@ function WorkspaceContent() {
           </p>
         </div>
 
-        {!isViewerOnly && (
+        {canEditProjects && (
           <div className="flex items-center gap-2">
             <Link href="/workspace/new">
               <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs">
@@ -1375,7 +1376,7 @@ function WorkspaceContent() {
                                 </Button>
                               </Link>
 
-                              {!isViewerOnly && (
+                              {canEditProjects && (
                                 <Button
                                   size="sm"
                                   variant="ghost"

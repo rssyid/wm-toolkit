@@ -33,7 +33,7 @@ export function AFCEActionDialog({
   targetLevelItem,
   initialAction = "Approve",
 }: AFCEActionDialogProps) {
-  const { processAfceAction } = useAppState();
+  const { processAfceAction, userProfile } = useAppState();
 
   // Find active level
   const activeLevelItem =
@@ -48,7 +48,7 @@ export function AFCEActionDialog({
   const [action, setAction] = useState<"Approve" | "Revise" | "Reject">(initialAction);
   const [approvalDate, setApprovalDate] = useState(new Date().toISOString().split("T")[0]);
   const [note, setNote] = useState("");
-  const [approverName, setApproverName] = useState("Budi Santoso, S.T.");
+  const [approverName, setApproverName] = useState(userProfile?.fullName || "Pejabat Otorisasi");
   const [approverRole, setApproverRole] = useState(defaultRole);
   const [sapDocNumber, setSapDocNumber] = useState(afce.sapDocNumber || "");
   const [sapEvidenceUrl, setSapEvidenceUrl] = useState(
@@ -66,8 +66,10 @@ export function AFCEActionDialog({
       const targetRole = activeLevelItem ? activeLevelItem.label : afce.currentApproverRole;
       setApproverRole(targetRole);
 
-      // Set sensible mock approver names based on role
-      if (targetRole.includes("Water Management") || targetRole === "WM") {
+      // Default approver name to the authenticated user's name
+      if (userProfile?.fullName) {
+        setApproverName(userProfile.fullName);
+      } else if (targetRole.includes("Water Management") || targetRole === "WM") {
         setApproverName("Dedi Setiawan, S.T.");
       } else if (targetRole.includes("Estate Manager") || targetRole === "EM") {
         setApproverName("Budi Santoso, S.T.");
@@ -86,13 +88,13 @@ export function AFCEActionDialog({
       } else if (targetRole.includes("Chairman") || targetRole.includes("Dewan Direksi")) {
         setApproverName("Dewan Direksi PTPN IV");
       } else {
-        setApproverName("Budi Santoso, S.T.");
+        setApproverName("Pejabat Otorisasi");
       }
 
       setSapDocNumber(afce.sapDocNumber || `AFCE-SAP-REL-L${levelNum}`);
       setSapEvidenceUrl(afce.sapScreenshotPlaceholder || `SAP_AFCE_L${levelNum}_Evidence.png`);
     }
-  }, [open, initialAction, activeLevelItem, afce, levelNum]);
+  }, [open, initialAction, activeLevelItem, afce, levelNum, userProfile?.fullName]);
 
   const handleSubmit = () => {
     if (!approvalDate) {

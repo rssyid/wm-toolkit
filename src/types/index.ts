@@ -503,7 +503,7 @@ export interface Supplier {
   updatedAt: string;
 }
 
-export type SystemRole = "ADMIN" | "PIC" | "VIEWER";
+export type SystemRole = "ADMIN" | "PIC" | "APPROVER" | "VIEWER";
 
 export interface AppUser {
   id: string;

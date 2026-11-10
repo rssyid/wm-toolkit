@@ -6,7 +6,6 @@ import {
   Sun,
   Moon,
   Bell,
-  RefreshCw,
   CheckCircle2,
   AlertTriangle,
   FileClock,
@@ -16,9 +15,6 @@ import {
   CheckCheck,
   ArrowRight,
   LogOut,
-  ShieldCheck,
-  Eye,
-  UserCheck,
   Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -51,12 +47,8 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
     unreadNotificationCount,
     markNotificationAsRead,
     markAllNotificationsAsRead,
-    resetToMockData,
     userProfile,
     activeRole,
-    setActiveRole,
-    switchDemoUser,
-    users,
   } = useAppState();
 
   const handleLogout = async () => {
@@ -120,21 +112,6 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
 
       <div className="flex items-center gap-2.5">
         <GlobalSearch />
-
-        {/* Reset Mock Data Action */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs text-muted-foreground hover:text-foreground hidden md:flex items-center gap-1.5"
-          onClick={() => {
-            resetToMockData();
-            toast.success("Data berhasil direset ke kondisi awal demo");
-          }}
-          title="Kembalikan semua data ke seed awal"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span className="hidden lg:inline">Reset Mock</span>
-        </Button>
 
         {/* Notifications Dropdown */}
         <DropdownMenu>
@@ -247,11 +224,12 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
         </Button>
 
         {/* Active User Profile & Role Switcher */}
+        {/* Active User Profile (Immutable Session) */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               className="flex items-center gap-2 pl-2 border-l hover:opacity-85 transition-opacity text-left cursor-pointer outline-none select-none"
-              title="Profil Pengguna & Ganti Peran Demo"
+              title="Profil Pengguna & Sesi Aktif"
             >
               <Avatar className="h-8 w-8 border shrink-0">
                 <AvatarFallback
@@ -261,6 +239,8 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
                       ? "bg-purple-600"
                       : activeRole === "PIC"
                       ? "bg-emerald-600"
+                      : activeRole === "APPROVER"
+                      ? "bg-amber-600"
                       : "bg-blue-600"
                   )}
                 >
@@ -270,8 +250,8 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
 
               <div className="hidden lg:flex flex-col">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold text-foreground leading-tight truncate max-w-[120px]">
-                    {userProfile?.fullName || "Budi Santoso, S.T."}
+                  <span className="text-xs font-semibold text-foreground leading-tight truncate max-w-[130px]">
+                    {userProfile?.fullName || "Pengguna Sesi"}
                   </span>
                   <Badge
                     variant="outline"
@@ -281,6 +261,8 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
                         ? "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border-purple-300"
                         : activeRole === "PIC"
                         ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300"
+                        : activeRole === "APPROVER"
+                        ? "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border-amber-300"
                         : "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-300"
                     )}
                   >
@@ -288,7 +270,7 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
                   </Badge>
                 </div>
                 <span className="text-[10px] text-muted-foreground truncate max-w-[150px]">
-                  {userProfile?.role || "Manager Estate"}
+                  {userProfile?.role || "Operasional Lapangan"}
                 </span>
               </div>
             </button>
@@ -297,7 +279,7 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
           <DropdownMenuContent align="end" className="w-64 p-1.5">
             <DropdownMenuLabel className="p-2 pb-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-foreground">Pengguna Demo Aktif</span>
+                <span className="text-xs font-bold text-foreground">Sesi Terautentikasi</span>
                 <Badge
                   className={cn(
                     "text-[9px] font-bold",
@@ -305,6 +287,8 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
                       ? "bg-purple-600 text-white"
                       : activeRole === "PIC"
                       ? "bg-emerald-600 text-white"
+                      : activeRole === "APPROVER"
+                      ? "bg-amber-600 text-white"
                       : "bg-blue-600 text-white"
                   )}
                 >
@@ -313,61 +297,19 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
               </div>
               <p className="text-xs font-medium text-foreground mt-1">{userProfile?.fullName}</p>
               <p className="text-[11px] text-muted-foreground truncate">{userProfile?.email}</p>
+              {userProfile?.selectedLocation && (
+                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
+                  Unit: {userProfile.selectedLocation}
+                </p>
+              )}
             </DropdownMenuLabel>
-
-            <DropdownMenuSeparator />
-
-            {/* Quick Role Switcher */}
-            <div className="p-1">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase px-1.5 mb-1 block">
-                Beralih Peran Demo:
-              </span>
-              <div className="grid grid-cols-3 gap-1">
-                <button
-                  type="button"
-                  onClick={() => setActiveRole("ADMIN")}
-                  className={cn(
-                    "px-1.5 py-1 rounded text-[11px] font-medium border text-center transition-colors",
-                    activeRole === "ADMIN"
-                      ? "bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950 dark:text-purple-300 font-bold"
-                      : "hover:bg-muted text-muted-foreground"
-                  )}
-                >
-                  Admin
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveRole("PIC")}
-                  className={cn(
-                    "px-1.5 py-1 rounded text-[11px] font-medium border text-center transition-colors",
-                    activeRole === "PIC"
-                      ? "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 font-bold"
-                      : "hover:bg-muted text-muted-foreground"
-                  )}
-                >
-                  PIC
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveRole("VIEWER")}
-                  className={cn(
-                    "px-1.5 py-1 rounded text-[11px] font-medium border text-center transition-colors",
-                    activeRole === "VIEWER"
-                      ? "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-300 font-bold"
-                      : "hover:bg-muted text-muted-foreground"
-                  )}
-                >
-                  Viewer
-                </button>
-              </div>
-            </div>
 
             <DropdownMenuSeparator />
 
             <DropdownMenuItem asChild>
               <Link href="/settings" className="flex items-center gap-2 cursor-pointer text-xs">
                 <Settings className="w-3.5 h-3.5 text-muted-foreground" />
-                <span>Pengaturan Profil & Sistem</span>
+                <span>Pengaturan Akun & Profil</span>
               </Link>
             </DropdownMenuItem>
 
@@ -376,7 +318,7 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
               className="flex items-center gap-2 cursor-pointer text-xs text-rose-600 dark:text-rose-400 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span>Ganti Akun Demo / Keluar</span>
+              <span>Keluar dari Sistem</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

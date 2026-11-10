@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
   Project,
@@ -182,7 +183,12 @@ interface AppStateContextType {
   activeRole: SystemRole;
   setActiveRole: (role: SystemRole) => void;
   switchDemoUser: (user: AppUser, systemRole?: SystemRole) => void;
+  isAdmin: boolean;
+  isPic: boolean;
+  isApprover: boolean;
+  isViewer: boolean;
   canEditProjects: boolean;
+  canApproveAfce: boolean;
   canManageSystem: boolean;
   isViewerOnly: boolean;
 
@@ -346,28 +352,43 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setSystemSettings((prev) => ({ ...prev, ...updates }));
   };
 
-  const activeRole: SystemRole = userProfile.systemRole || "PIC";
+  const { data: session } = useSession();
 
-  const setActiveRole = (role: SystemRole) => {
-    setUserProfile((prev) => ({ ...prev, systemRole: role }));
-    toast.info(`Peran pengguna aktif diubah menjadi: ${role}`);
+  // Synchronize profile and role with active NextAuth session
+  useEffect(() => {
+    if (session?.user) {
+      const u = session.user as any;
+      const userRole = (u.role as SystemRole) || "VIEWER";
+      setUserProfile((prev) => ({
+        ...prev,
+        fullName: u.name || prev.fullName,
+        email: u.email || prev.email,
+        username: u.id || prev.username,
+        role: u.jabatan || prev.role,
+        systemRole: userRole,
+        selectedLocation: u.estateName || prev.selectedLocation,
+      }));
+    }
+  }, [session]);
+
+  const activeRole: SystemRole = (session?.user as any)?.role || userProfile.systemRole || "VIEWER";
+
+  const setActiveRole = (_role: SystemRole) => {
+    // Roles are strictly governed by server session and cannot be spoofed client-side
+    console.warn("Peran pengguna ditentukan oleh sesi autentikasi dan tidak dapat dimodifikasi di browser.");
   };
 
-  const switchDemoUser = (user: AppUser, targetRole?: SystemRole) => {
-    const assignedRole: SystemRole = targetRole || user.systemRole || "PIC";
-    setUserProfile((prev) => ({
-      ...prev,
-      fullName: user.name,
-      email: user.email,
-      username: user.id,
-      role: user.role,
-      systemRole: assignedRole,
-      selectedLocation: user.estateName || prev.selectedLocation,
-    }));
-    toast.success(`Berhasil beralih ke akun demo: ${user.name} (${assignedRole})`);
+  const switchDemoUser = (_user: AppUser, _targetRole?: SystemRole) => {
+    // Role/user switching is disabled in production mode
+    console.warn("Peralihan demo dinonaktifkan. Silakan login kembali dengan kredensial akun yang bersangkutan.");
   };
 
+  const isAdmin = activeRole === "ADMIN";
+  const isPic = activeRole === "PIC";
+  const isApprover = activeRole === "APPROVER";
+  const isViewer = activeRole === "VIEWER";
   const canEditProjects = activeRole === "PIC" || activeRole === "ADMIN";
+  const canApproveAfce = activeRole === "APPROVER" || activeRole === "ADMIN";
   const canManageSystem = activeRole === "ADMIN";
   const isViewerOnly = activeRole === "VIEWER";
 
@@ -2173,7 +2194,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         activeRole,
         setActiveRole,
         switchDemoUser,
+        isAdmin,
+        isPic,
+        isApprover,
+        isViewer,
         canEditProjects,
+        canApproveAfce,
         canManageSystem,
         isViewerOnly,
 

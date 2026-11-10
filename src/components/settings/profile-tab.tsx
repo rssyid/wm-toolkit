@@ -18,9 +18,10 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAppState } from "@/context/app-state-context";
 import { AFCEApprovalRole } from "@/types";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 export function ProfileTab() {
-  const { locations, userProfile, updateUserProfile } = useAppState();
+  const { locations, userProfile, updateUserProfile, activeRole } = useAppState();
 
   const [fullName, setFullName] = useState(userProfile.fullName);
   const [email, setEmail] = useState(userProfile.email);
@@ -207,29 +208,41 @@ export function ProfileTab() {
           </div>
           <div className="md:w-2/3 space-y-3.5 max-w-lg">
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] font-medium text-muted-foreground block">
-                  Peran & Jabatan Approval (Persona Simulator)
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[11px] font-semibold text-foreground block">
+                  Peran Sistem & Hak Akses (RBAC)
                 </label>
-                <Badge variant="outline" className="text-[10px] font-normal text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 py-0">
-                  Wewenang Aktif
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-[10px] font-bold py-0.5 px-2 border",
+                    activeRole === "ADMIN"
+                      ? "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border-purple-300"
+                      : activeRole === "PIC"
+                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300"
+                      : activeRole === "APPROVER"
+                      ? "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border-amber-300"
+                      : "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-300"
+                  )}
+                >
+                  {activeRole}
                 </Badge>
               </div>
-              <SearchableSelect
-                value={role}
-                onValueChange={(val) => setRole(val as any)}
-                placeholder="Pilih Peran"
-                searchPlaceholder="Cari peran..."
-                triggerClassName="h-9 text-xs"
-                options={[
-                  { value: "Manager Estate", label: "Manager Estate (Tingkat 1 - ≤ 100 Juta)" },
-                  { value: "Manager Area", label: "Manager Area (Tingkat 2 - 100 s.d 500 Juta)" },
-                  { value: "Head Office", label: "Head Office / Direksi (Tingkat 3 - > 500 Juta)" },
-                  { value: "Procurement Officer", label: "Procurement Officer (Rilis PR/PO & Vendor)" },
-                ]}
-              />
-              <p className="text-[10px] text-muted-foreground mt-1">
-                Peran ini menentukan wewenang simulasi approval Anda pada alur dokumen AFCE di Workspace.
+
+              <div className="p-3 rounded-lg border bg-muted/40 space-y-1">
+                <div className="flex items-center justify-between text-xs font-medium">
+                  <span className="text-muted-foreground">Jabatan Kedinasan:</span>
+                  <span className="text-foreground font-semibold">{userProfile?.role || "Operasional Lapangan"}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs font-medium">
+                  <span className="text-muted-foreground">Status Wewenang:</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Terdaftar di Sistem
+                  </span>
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
+                Peran dan otorisasi ditentukan oleh akun resmi Anda dan dikelola oleh Administrator melalui modul Master Data Pengguna.
               </p>
             </div>
 

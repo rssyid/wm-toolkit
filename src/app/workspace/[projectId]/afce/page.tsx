@@ -52,6 +52,8 @@ export default function AFCEApprovalTab() {
     submitAfceApproval,
     syncAfceWithMatrix,
     approvalMatrix,
+    canEditProjects,
+    canApproveAfce,
   } = useAppState();
 
   const project = projects.find((p) => p.id === projectId);
@@ -182,7 +184,7 @@ export default function AFCEApprovalTab() {
               <FileEdit className="w-3.5 h-3.5" /> Ubah Dokumen AFCE
             </Button>
 
-            {afce?.status === "Draft" && (
+            {afce?.status === "Draft" && canEditProjects && (
               <Button
                 size="sm"
                 onClick={handleRequestApproval}
@@ -192,7 +194,7 @@ export default function AFCEApprovalTab() {
               </Button>
             )}
 
-            {afce?.status === "Need Revision" && (
+            {afce?.status === "Need Revision" && canEditProjects && (
               <Button
                 size="sm"
                 onClick={() => {
@@ -205,7 +207,7 @@ export default function AFCEApprovalTab() {
               </Button>
             )}
 
-            {afce?.status === "Pending Approval" && (
+            {afce?.status === "Pending Approval" && canApproveAfce && (
               <>
                 <Button
                   size="sm"
@@ -231,6 +233,13 @@ export default function AFCEApprovalTab() {
                   Tolak
                 </Button>
               </>
+            )}
+
+            {afce?.status === "Pending Approval" && !canApproveAfce && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-xs font-medium">
+                <FileText className="w-3.5 h-3.5 text-amber-600" />
+                <span>Menunggu Persetujuan: <strong>{afce.currentApproverRole || "Reviewer"}</strong></span>
+              </div>
             )}
 
             {afce?.status === "Approved" && (

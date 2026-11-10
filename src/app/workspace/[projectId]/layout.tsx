@@ -49,6 +49,7 @@ export default function ProjectDetailLayout({
     afces,
     submitAfceApproval,
     canEditProjects,
+    canApproveAfce,
     isViewerOnly,
     restoreProject,
     comments,
@@ -278,7 +279,7 @@ export default function ProjectDetailLayout({
                 </div>
               ) : (
                 <>
-                  {project.afceStatus === "Pending Approval" && (
+                  {canApproveAfce && project.afceStatus === "Pending Approval" && (
                     <Button
                       size="sm"
                       onClick={() => {
@@ -294,7 +295,7 @@ export default function ProjectDetailLayout({
                     </Button>
                   )}
 
-                  {project.afceStatus === "Draft" && (
+                  {canEditProjects && project.afceStatus === "Draft" && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -312,7 +313,7 @@ export default function ProjectDetailLayout({
                     </Button>
                   )}
 
-                  {project.afceStatus === "Need Revision" && (
+                  {canApproveAfce && project.afceStatus === "Need Revision" && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -333,31 +334,35 @@ export default function ProjectDetailLayout({
                     </span>
                   )}
 
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setPrDialogOpen(true)}
-                    className="h-8 text-xs gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Tambah PR
-                  </Button>
+                  {canEditProjects && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPrDialogOpen(true)}
+                        className="h-8 text-xs gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Tambah PR
+                      </Button>
 
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setPoDialogOpen(true)}
-                    className="h-8 text-xs gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Buat PO
-                  </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPoDialogOpen(true)}
+                        className="h-8 text-xs gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Buat PO
+                      </Button>
 
-                  <Button
-                    size="sm"
-                    onClick={() => setProgressDialogOpen(true)}
-                    className="h-8 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                  >
-                    <TrendingUp className="w-3.5 h-3.5" /> Input Progress
-                  </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => setProgressDialogOpen(true)}
+                        className="h-8 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        <TrendingUp className="w-3.5 h-3.5" /> Input Progress
+                      </Button>
+                    </>
+                  )}
                 </>
               )}
 
