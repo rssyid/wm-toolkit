@@ -63,6 +63,7 @@ export async function clearDemoDataAction() {
     await db.projectComment.deleteMany();
     await db.project.deleteMany();
     await db.notification.deleteMany();
+    await db.auditLog.deleteMany();
 
     await recordServerAuditLog({
       action: "DELETE",
@@ -112,6 +113,7 @@ export async function resetToEmptyProductionAction() {
     await db.projectComment.deleteMany();
     await db.project.deleteMany();
     await db.notification.deleteMany();
+    await db.auditLog.deleteMany();
 
     await recordServerAuditLog({
       action: "DELETE",
