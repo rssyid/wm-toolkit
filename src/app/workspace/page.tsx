@@ -355,7 +355,11 @@ function WorkspaceContent() {
     setTableDensity,
     deleteProject,
     restoreProject,
+    hardDeleteProject,
+    emptyRecycleBin,
+    loadDemoData,
     canEditProjects,
+    canManageSystem,
     isViewerOnly,
   } = useAppState();
 
@@ -363,6 +367,12 @@ function WorkspaceContent() {
   const [viewMode, setViewMode] = useState<"ACTIVE" | "RECYCLE_BIN">("ACTIVE");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [hardDeleteDialogOpen, setHardDeleteDialogOpen] = useState(false);
+  const [projectToHardDelete, setProjectToHardDelete] = useState<Project | null>(null);
+  const [emptyRecycleDialogOpen, setEmptyRecycleDialogOpen] = useState(false);
+  const [isHardDeleting, setIsHardDeleting] = useState(false);
+  const [isEmptyingRecycle, setIsEmptyingRecycle] = useState(false);
+  const [isLoadingDemo, setIsLoadingDemo] = useState(false);
 
   // Search & Filter state
   const [search, setSearch] = useState("");
@@ -647,9 +657,22 @@ function WorkspaceContent() {
         </div>
 
         {viewMode === "RECYCLE_BIN" && (
-          <span className="text-xs text-rose-600 dark:text-rose-400 font-medium hidden sm:inline">
-            Proyek di Recycle Bin dapat dipulihkan sewaktu-waktu.
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-rose-600 dark:text-rose-400 font-medium hidden sm:inline">
+              Proyek di Recycle Bin dapat dipulihkan sewaktu-waktu.
+            </span>
+            {canManageSystem && deletedProjects.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setEmptyRecycleDialogOpen(true)}
+                className="h-7 text-xs text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950/50 gap-1.5 font-medium"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Kosongkan Recycle Bin</span>
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
@@ -1175,13 +1198,62 @@ function WorkspaceContent() {
           <TableBody>
             {paginatedProjects.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="h-48 text-center p-0">
-                  <EmptyState
-                    title="Tidak ada proyek yang cocok dengan filter"
-                    description="Cobalah mengatur ulang filter atau gunakan kata kunci pencarian yang lebih umum."
-                    actionLabel="Reset Semua Filter"
-                    onAction={resetFilters}
-                  />
+                <TableCell colSpan={9} className="h-56 text-center p-0">
+                  {viewMode === "RECYCLE_BIN" ? (
+                    <EmptyState
+                      title="Recycle Bin Kosong"
+                      description="Tidak ada proyek yang sedang berada di dalam keranjang sampah."
+                      icon={<Trash2 className="w-8 h-8 opacity-40 text-muted-foreground" />}
+                    />
+                  ) : activeProjects.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center p-8 text-center rounded-lg border border-dashed border-border/70 bg-card/40 my-4 max-w-lg mx-auto">
+                      <div className="p-3 bg-muted/60 rounded-full text-muted-foreground mb-3">
+                        <Layers className="w-8 h-8 opacity-80 text-emerald-600" />
+                      </div>
+                      <h4 className="text-sm font-semibold tracking-tight text-foreground mb-1">
+                        Workspace Bersih — Belum Ada Proyek Aktif
+                      </h4>
+                      <p className="text-xs text-muted-foreground max-w-sm mb-4 leading-relaxed">
+                        Workspace Anda saat ini tidak memiliki proyek aktif. Buat proyek baru atau muat kembali dataset percontohan proyek perkebunan.
+                      </p>
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        {canEditProjects && (
+                          <Link href="/workspace/new">
+                            <Button size="sm" className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium">
+                              <PlusCircle className="w-3.5 h-3.5" />
+                              <span>+ Buat Proyek Baru</span>
+                            </Button>
+                          </Link>
+                        )}
+                        {canManageSystem && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isLoadingDemo}
+                            onClick={async () => {
+                              setIsLoadingDemo(true);
+                              try {
+                                await loadDemoData();
+                              } finally {
+                                setIsLoadingDemo(false);
+                              }
+                            }}
+                            className="h-8 text-xs gap-1.5"
+                          >
+                            <RotateCcw className={cn("w-3.5 h-3.5", isLoadingDemo && "animate-spin")} />
+                            <span>{isLoadingDemo ? "Memuat Data..." : "Muat Dataset Demo"}</span>
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <EmptyState
+                      title="Tidak ada proyek yang cocok dengan filter"
+                      description="Cobalah mengatur ulang filter atau gunakan kata kunci pencarian yang lebih umum."
+                      actionLabel="Reset Semua Filter"
+                      onAction={resetFilters}
+                    />
+                  )}
                 </TableCell>
               </TableRow>
             ) : (
@@ -1351,16 +1423,34 @@ function WorkspaceContent() {
                       <TableCell className="py-2 text-right pr-4">
                         <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                           {viewMode === "RECYCLE_BIN" ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => restoreProject(p.id)}
-                              className="h-7 text-xs px-2.5 gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 font-semibold"
-                              title="Pulihkan proyek dari Recycle Bin"
-                            >
-                              <RotateCcw className="w-3 h-3" />
-                              <span>Pulihkan</span>
-                            </Button>
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => restoreProject(p.id)}
+                                className="h-7 text-xs px-2.5 gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 font-semibold"
+                                title="Pulihkan proyek dari Recycle Bin"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                <span>Pulihkan</span>
+                              </Button>
+
+                              {canManageSystem && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setProjectToHardDelete(p);
+                                    setHardDeleteDialogOpen(true);
+                                  }}
+                                  className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950 font-medium gap-1"
+                                  title="Hapus proyek secara permanen dari basis data"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  <span className="hidden sm:inline">Hapus Permanen</span>
+                                </Button>
+                              )}
+                            </div>
                           ) : (
                             <>
                               <Link
@@ -1499,6 +1589,130 @@ function WorkspaceContent() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Hard Delete Confirmation Dialog */}
+      {projectToHardDelete && (
+        <Dialog open={hardDeleteDialogOpen} onOpenChange={setHardDeleteDialogOpen}>
+          <DialogContent className="max-w-md border-rose-300 dark:border-rose-900">
+            <DialogHeader>
+              <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+                <DialogTitle className="text-base font-bold text-rose-600 dark:text-rose-400">
+                  Hapus Proyek Secara Permanen
+                </DialogTitle>
+              </div>
+              <DialogDescription className="text-xs pt-1">
+                Tindakan ini bersifat destruktif dan <strong>tidak dapat dibatalkan</strong>.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="p-3 rounded-lg border border-rose-200 bg-rose-50/70 dark:bg-rose-950/40 text-xs space-y-1">
+              <p className="font-bold text-foreground">
+                {projectToHardDelete.code} — {projectToHardDelete.name}
+              </p>
+              <p className="text-muted-foreground">
+                Lokasi: {projectToHardDelete.locationName} &bull; Nilai AFCE: {formatIDR(projectToHardDelete.afceValue)}
+              </p>
+            </div>
+
+            <div className="rounded-md bg-muted/60 p-3 text-[11px] text-muted-foreground space-y-1.5 leading-relaxed">
+              <p className="font-semibold text-foreground">Data yang akan dihapus permanen dari database:</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                <li>Struktur Rincian Kerja (WBS) & Bobot Fisik</li>
+                <li>Rencana Anggaran Biaya (BOQ) & Estimasi Item</li>
+                <li>Dokumen AFCE & Riwayat Otorisasi Berjenjang</li>
+                <li>Seluruh transaksi PR, PO, USPK, SPK, dan BAST</li>
+                <li>Jurnal harian/mingguan dan seluruh berkas lampiran</li>
+              </ul>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isHardDeleting}
+                onClick={() => {
+                  setHardDeleteDialogOpen(false);
+                  setProjectToHardDelete(null);
+                }}
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={isHardDeleting}
+                onClick={async () => {
+                  setIsHardDeleting(true);
+                  try {
+                    await hardDeleteProject(projectToHardDelete.id);
+                    setHardDeleteDialogOpen(false);
+                    setProjectToHardDelete(null);
+                  } finally {
+                    setIsHardDeleting(false);
+                  }
+                }}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-semibold gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isHardDeleting ? "Menghapus..." : "Ya, Hapus Permanen"}</span>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Empty Recycle Bin Dialog */}
+      <Dialog open={emptyRecycleDialogOpen} onOpenChange={setEmptyRecycleDialogOpen}>
+        <DialogContent className="max-w-md border-rose-300 dark:border-rose-900">
+          <DialogHeader>
+            <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
+              <AlertTriangle className="w-5 h-5 text-rose-600" />
+              <DialogTitle className="text-base font-bold text-rose-600 dark:text-rose-400">
+                Kosongkan Seluruh Recycle Bin
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs pt-1">
+              Apakah Anda yakin ingin menghapus permanen semua ({deletedProjects.length}) proyek yang ada di tempat sampah?
+            </DialogDescription>
+          </DialogHeader>
+
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Seluruh data transaksi dan berkas yang terhubung dengan <strong>{deletedProjects.length} proyek</strong> ini akan dibersihkan selamanya dari database Neon PostgreSQL. Tindakan ini tidak dapat dibatalkan.
+          </p>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isEmptyingRecycle}
+              onClick={() => setEmptyRecycleDialogOpen(false)}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isEmptyingRecycle}
+              onClick={async () => {
+                setIsEmptyingRecycle(true);
+                try {
+                  await emptyRecycleBin();
+                  setEmptyRecycleDialogOpen(false);
+                } finally {
+                  setIsEmptyingRecycle(false);
+                }
+              }}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-semibold gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{isEmptyingRecycle ? "Mengosongkan..." : "Ya, Kosongkan Recycle Bin"}</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   LayoutDashboard,
   CheckCircle2,
+  RotateCcw,
 } from "lucide-react";
 import { KPICard } from "@/components/dashboard/kpi-card";
 import { UnifiedGantt } from "@/components/dashboard/unified-gantt";
@@ -26,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useAppState } from "@/context/app-state-context";
-import { formatIDR } from "@/lib/utils";
+import { formatIDR, cn } from "@/lib/utils";
 
 function formatCompactIDR(amount: number): string {
   if (isNaN(amount) || amount === 0) return "Rp 0";
@@ -64,7 +65,11 @@ function DashboardContent() {
     technicalEvaluations,
     locations,
     auditLogs,
+    loadDemoData,
+    canManageSystem,
   } = useAppState();
+
+  const [isLoadingDemo, setIsLoadingDemo] = useState(false);
 
   useEffect(() => {
     if (tabParam === "audit-log") {
@@ -190,6 +195,51 @@ function DashboardContent() {
 
         {/* Tab 1: Overview Operasional */}
         <TabsContent value="overview" className="space-y-6 mt-0">
+          {/* Empty Workspace Notification Banner */}
+          {projects.filter((p) => !p.deletedAt).length === 0 && (
+            <div className="rounded-xl border border-dashed border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-lg bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+                  <FolderGit2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground">
+                    Workspace Bersih — Belum Ada Proyek Aktif
+                  </h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Saat ini tidak ada proyek yang dipantau. Anda dapat membuat proyek baru atau memuat kembali 8 dataset percontohan kelapa sawit.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                <Link href="/workspace/new">
+                  <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium">
+                    + Buat Proyek
+                  </Button>
+                </Link>
+                {canManageSystem && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isLoadingDemo}
+                    onClick={async () => {
+                      setIsLoadingDemo(true);
+                      try {
+                        await loadDemoData();
+                      } finally {
+                        setIsLoadingDemo(false);
+                      }
+                    }}
+                    className="h-8 text-xs gap-1.5"
+                  >
+                    <RotateCcw className={cn("w-3.5 h-3.5", isLoadingDemo && "animate-spin")} />
+                    <span>{isLoadingDemo ? "Memuat..." : "Muat Data Demo"}</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Quick Filter Bar */}
           <DashboardFilterBar
             filters={filters}

@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { usePathname, useParams } from "next/navigation";
+import { usePathname, useParams, useRouter } from "next/navigation";
 import {
   ChevronLeft,
   Calendar,
@@ -22,11 +22,20 @@ import {
   ShieldCheck,
   RotateCcw,
   Eye,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { useAppState } from "@/context/app-state-context";
-import { formatIDDate, cn } from "@/lib/utils";
+import { formatIDDate, formatIDR, cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { AFCEActionDialog } from "@/components/afce/afce-action-dialog";
 import { PRRecordDialog } from "@/components/procurement/pr-record-dialog";
 import { POCreateDialog } from "@/components/procurement/po-create-dialog";
@@ -43,6 +52,7 @@ export default function ProjectDetailLayout({
 }) {
   const pathname = usePathname() || "";
   const params = useParams();
+  const router = useRouter();
   const projectId = params?.projectId as string;
   const {
     projects,
@@ -50,8 +60,11 @@ export default function ProjectDetailLayout({
     submitAfceApproval,
     canEditProjects,
     canApproveAfce,
+    canManageSystem,
     isViewerOnly,
     restoreProject,
+    deleteProject,
+    hardDeleteProject,
     comments,
     attachments,
   } = useAppState();
@@ -65,6 +78,9 @@ export default function ProjectDetailLayout({
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [progressDialogOpen, setProgressDialogOpen] = useState(false);
   const [collabDrawerOpen, setCollabDrawerOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [hardDeleteDialogOpen, setHardDeleteDialogOpen] = useState(false);
+  const [isHardDeleting, setIsHardDeleting] = useState(false);
 
   const projectCommentsCount = comments.filter((c) => c.projectId === projectId).length;
   const projectAttachmentsCount = attachments.filter((a) => a.projectId === projectId).length;
@@ -189,6 +205,40 @@ export default function ProjectDetailLayout({
       </div>
 
       {/* Prominent Project Sticky Header */}
+      {project.deletedAt && (
+        <div className="rounded-lg border border-rose-300 bg-rose-50/80 dark:bg-rose-950/40 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5 text-rose-800 dark:text-rose-200">
+            <Trash2 className="w-4 h-4 shrink-0 text-rose-600" />
+            <div>
+              <span className="font-bold">Proyek ini berada di dalam Recycle Bin</span>
+              <span className="hidden sm:inline"> (dihapus sementara pada {formatIDDate(project.deletedAt)}).</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                restoreProject(project.id);
+                toast.success("Proyek berhasil dipulihkan!");
+              }}
+              className="h-7 text-xs gap-1 border-emerald-400 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 font-semibold"
+            >
+              <RotateCcw className="w-3 h-3" /> Pulihkan Proyek
+            </Button>
+            {canManageSystem && (
+              <Button
+                size="sm"
+                onClick={() => setHardDeleteDialogOpen(true)}
+                className="h-7 text-xs gap-1 bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+              >
+                <Trash2 className="w-3 h-3" /> Hapus Permanen
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="rounded-lg border bg-card p-4 shadow-xs space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -361,6 +411,18 @@ export default function ProjectDetailLayout({
                       >
                         <TrendingUp className="w-3.5 h-3.5" /> Input Progress
                       </Button>
+
+                      {!project.deletedAt && canEditProjects && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDeleteDialogOpen(true)}
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950"
+                          title="Pindahkan proyek ke Recycle Bin"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                     </>
                   )}
                 </>
@@ -446,6 +508,127 @@ export default function ProjectDetailLayout({
         onOpenChange={setProgressDialogOpen}
         project={project}
       />
+
+      {/* Soft Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-2 text-rose-600">
+              <Trash2 className="w-5 h-5" />
+              <DialogTitle className="text-base font-bold">Pindahkan Proyek ke Recycle Bin</DialogTitle>
+            </div>
+            <DialogDescription className="text-xs pt-1">
+              Apakah Anda yakin ingin memindahkan proyek ini ke Recycle Bin?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3 rounded-lg border bg-rose-50/50 dark:bg-rose-950/20 text-xs space-y-1">
+            <p className="font-bold text-foreground">
+              {project.code} — {project.name}
+            </p>
+            <p className="text-muted-foreground">
+              Lokasi: {project.locationName} &bull; Nilai: {formatIDR(project.afceValue)}
+            </p>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Proyek ini tidak akan dihapus permanen. Anda dapat memulihkannya kapan saja melalui tab <strong>Recycle Bin</strong> di halaman Workspace.
+          </p>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                deleteProject(project.id);
+                setDeleteDialogOpen(false);
+                router.push("/workspace");
+              }}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+            >
+              Pindahkan ke Recycle Bin
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hard Delete Confirmation Dialog */}
+      <Dialog open={hardDeleteDialogOpen} onOpenChange={setHardDeleteDialogOpen}>
+        <DialogContent className="max-w-md border-rose-300 dark:border-rose-900">
+          <DialogHeader>
+            <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
+              <AlertTriangle className="w-5 h-5 text-rose-600" />
+              <DialogTitle className="text-base font-bold text-rose-600 dark:text-rose-400">
+                Hapus Proyek Secara Permanen
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs pt-1">
+              Tindakan ini bersifat destruktif dan <strong>tidak dapat dibatalkan</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3 rounded-lg border border-rose-200 bg-rose-50/70 dark:bg-rose-950/40 text-xs space-y-1">
+            <p className="font-bold text-foreground">
+              {project.code} — {project.name}
+            </p>
+            <p className="text-muted-foreground">
+              Lokasi: {project.locationName} &bull; Nilai AFCE: {formatIDR(project.afceValue)}
+            </p>
+          </div>
+
+          <div className="rounded-md bg-muted/60 p-3 text-[11px] text-muted-foreground space-y-1.5 leading-relaxed">
+            <p className="font-semibold text-foreground">Data yang akan dihapus permanen dari database:</p>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>Struktur Rincian Kerja (WBS) & Bobot Fisik</li>
+              <li>Rencana Anggaran Biaya (BOQ) & Estimasi Item</li>
+              <li>Dokumen AFCE & Riwayat Otorisasi Berjenjang</li>
+              <li>Seluruh transaksi PR, PO, USPK, SPK, dan BAST</li>
+              <li>Jurnal harian/mingguan dan seluruh berkas lampiran</li>
+            </ul>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isHardDeleting}
+              onClick={() => setHardDeleteDialogOpen(false)}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={isHardDeleting}
+              onClick={async () => {
+                setIsHardDeleting(true);
+                try {
+                  const success = await hardDeleteProject(project.id);
+                  if (success) {
+                    setHardDeleteDialogOpen(false);
+                    router.push("/workspace");
+                  }
+                } finally {
+                  setIsHardDeleting(false);
+                }
+              }}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-semibold gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{isHardDeleting ? "Menghapus..." : "Ya, Hapus Permanen"}</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

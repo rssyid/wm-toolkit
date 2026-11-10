@@ -93,6 +93,8 @@ import {
   updateProjectAction,
   deleteProjectAction,
   restoreProjectAction,
+  hardDeleteProjectAction,
+  emptyRecycleBinAction,
   reviseScheduleAction,
 } from "@/server/actions/projects";
 import {
@@ -204,6 +206,8 @@ interface AppStateContextType {
   updateProject: (id: string, updates: Partial<Project>) => void;
   deleteProject: (projectId: string) => void;
   restoreProject: (projectId: string) => void;
+  hardDeleteProject: (projectId: string) => Promise<boolean>;
+  emptyRecycleBin: () => Promise<boolean>;
   reviseProjectSchedule: (projectId: string, revision: Omit<ScheduleRevision, "id">) => void;
   updateAfceDocument: (afceId: string, updates: Partial<AFCEDocument>) => void;
   syncAfceWithMatrix: (afceId: string) => void;
@@ -964,6 +968,94 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       notes: `Proyek ${project.code} (${project.name}) dipulihkan dari Recycle Bin`,
     });
     toast.success(`Proyek ${project.code} berhasil dipulihkan dari Recycle Bin.`);
+  };
+
+  const hardDeleteProject = async (projectId: string): Promise<boolean> => {
+    const project = projects.find((p) => p.id === projectId);
+    const projectCode = project?.code || projectId;
+    const projectName = project?.name || "";
+
+    try {
+      const res = await hardDeleteProjectAction(projectId);
+      if (!res.success) {
+        toast.error("Gagal menghapus proyek secara permanen.");
+        return false;
+      }
+
+      // Remove project from state
+      setProjects((prev) => prev.filter((p) => p.id !== projectId));
+
+      // Cascade remove dependent entities from state
+      const targetPoIds = new Set(pos.filter((po) => po.projectId === projectId).map((po) => po.id));
+      setAfces((prev) => prev.filter((a) => a.projectId !== projectId));
+      setPrs((prev) => prev.filter((pr) => pr.projectId !== projectId));
+      setPos((prev) => prev.filter((po) => po.projectId !== projectId));
+      setGrs((prev) => prev.filter((gr) => !targetPoIds.has(gr.poId)));
+      setGoodsHandovers((prev) => prev.filter((gh) => gh.projectId !== projectId));
+      setUspks((prev) => prev.filter((u) => u.projectId !== projectId));
+      setSpkContracts((prev) => prev.filter((spk) => spk.projectId !== projectId));
+      setDailyProgress((prev) => prev.filter((dp) => dp.projectId !== projectId));
+      setWeeklyProgress((prev) => prev.filter((wp) => wp.projectId !== projectId));
+      setComments((prev) => prev.filter((c) => c.projectId !== projectId));
+      setAttachments((prev) => prev.filter((a) => a.projectId !== projectId));
+
+      addAuditLog({
+        action: "DELETE",
+        entityType: "PROJECT",
+        entityId: projectId,
+        entityTitle: `Proyek ${projectCode}`,
+        projectId: projectId,
+        projectName: projectName,
+        beforeData: project || null,
+        afterData: null,
+        notes: `Proyek ${projectCode} (${projectName}) dihapus permanen dari sistem.`,
+      });
+
+      toast.success(`Proyek ${projectCode} berhasil dihapus permanen dari sistem.`);
+      return true;
+    } catch (err: any) {
+      console.error("Error in hardDeleteProject:", err);
+      toast.error(err.message || "Gagal menghapus proyek permanen.");
+      return false;
+    }
+  };
+
+  const emptyRecycleBin = async (): Promise<boolean> => {
+    try {
+      const res = await emptyRecycleBinAction();
+      if (!res.success) {
+        toast.error("Gagal mengosongkan Recycle Bin.");
+        return false;
+      }
+
+      const deletedProjectIds = new Set(
+        projects.filter((p) => !!p.deletedAt).map((p) => p.id)
+      );
+
+      // Remove all deleted projects
+      setProjects((prev) => prev.filter((p) => !p.deletedAt));
+
+      // Remove dependent records
+      const deletedPoIds = new Set(pos.filter((po) => deletedProjectIds.has(po.projectId)).map((po) => po.id));
+      setAfces((prev) => prev.filter((a) => !deletedProjectIds.has(a.projectId)));
+      setPrs((prev) => prev.filter((pr) => !deletedProjectIds.has(pr.projectId)));
+      setPos((prev) => prev.filter((po) => !deletedProjectIds.has(po.projectId)));
+      setGrs((prev) => prev.filter((gr) => !deletedPoIds.has(gr.poId)));
+      setGoodsHandovers((prev) => prev.filter((gh) => !deletedProjectIds.has(gh.projectId)));
+      setUspks((prev) => prev.filter((u) => !deletedProjectIds.has(u.projectId)));
+      setSpkContracts((prev) => prev.filter((spk) => !deletedProjectIds.has(spk.projectId)));
+      setDailyProgress((prev) => prev.filter((dp) => !deletedProjectIds.has(dp.projectId)));
+      setWeeklyProgress((prev) => prev.filter((wp) => !deletedProjectIds.has(wp.projectId)));
+      setComments((prev) => prev.filter((c) => !deletedProjectIds.has(c.projectId)));
+      setAttachments((prev) => prev.filter((a) => !deletedProjectIds.has(a.projectId)));
+
+      toast.success(`Recycle Bin berhasil dikosongkan (${res.count || 0} proyek dihapus permanen).`);
+      return true;
+    } catch (err: any) {
+      console.error("Error in emptyRecycleBin:", err);
+      toast.error(err.message || "Gagal mengosongkan Recycle Bin.");
+      return false;
+    }
   };
 
   const reviseProjectSchedule = (
@@ -2239,6 +2331,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         updateProject,
         deleteProject,
         restoreProject,
+        hardDeleteProject,
+        emptyRecycleBin,
         reviseProjectSchedule,
         updateAfceDocument,
         syncAfceWithMatrix,
