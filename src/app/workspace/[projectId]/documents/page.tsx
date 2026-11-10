@@ -16,6 +16,8 @@ import {
   Cloud,
   Copy,
   Check,
+  Download,
+  Eye,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -316,20 +318,39 @@ export default function DocumentsTab() {
                           href={att.fileUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center h-7 px-2.5 rounded-md text-xs gap-1.5 text-blue-700 border border-blue-300 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 font-medium transition-colors"
+                          className="inline-flex items-center justify-center h-7 px-2.5 rounded-md text-xs gap-1 text-blue-700 border border-blue-300 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 font-medium transition-colors"
                           title="Buka dokumen langsung di Google Drive"
                         >
                           <Cloud className="w-3.5 h-3.5 text-blue-600" />
-                          <span>Google Drive</span>
+                          <span className="hidden sm:inline">Drive</span>
                           <ExternalLink className="w-3 h-3 opacity-60" />
                         </a>
 
                         <AttachmentPreview
                           filename={att.fileName}
+                          fileUrl={att.fileUrl}
+                          fileId={att.googleDriveFileId || undefined}
+                          mimeType={att.mimeType}
                           title={att.fileName}
-                          description={`Kategori: ${att.category || "Dokumen"} • No: ${att.docNumber || "-"}`}
+                          category={att.category}
+                          docNumber={att.docNumber}
+                          uploadedBy={att.uploadedBy}
+                          uploadedAt={att.uploadedAt}
                           size={att.fileSize}
+                          variant="button"
                         />
+
+                        <a
+                          href={`/api/files/${encodeURIComponent(att.googleDriveFileId || att.id)}/download?name=${encodeURIComponent(att.fileName)}`}
+                          download={att.fileName}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center h-7 px-2.5 rounded-md text-xs gap-1 text-emerald-700 border border-emerald-300 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 font-medium transition-colors"
+                          title="Unduh berkas ke komputer"
+                        >
+                          <Download className="w-3 h-3 text-emerald-600" />
+                          <span>Unduh</span>
+                        </a>
 
                         {!isViewerOnly && (
                           <Button

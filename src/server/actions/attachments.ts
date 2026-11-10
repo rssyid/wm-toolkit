@@ -18,6 +18,17 @@ export async function addAttachmentAction(data: {
 }) {
   const user = await requireAuth();
 
+  // Pastikan proyek terdaftar di database sebelum foreign key constraint
+  const projectExists = await db.project.findUnique({
+    where: { id: data.projectId },
+    select: { id: true },
+  });
+
+  if (!projectExists) {
+    console.warn(`Proyek [${data.projectId}] belum tercatat di DB Neon. Metadata berkas disimpan pada status lokal.`);
+    return { success: true, isMemoryOnly: true };
+  }
+
   const attachment = await db.projectAttachment.create({
     data: {
       projectId: data.projectId,

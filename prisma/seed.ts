@@ -1054,7 +1054,10 @@ export async function seedDatabase() {
         fileName: att.fileName,
         fileUrl: att.fileUrl,
         fileSize: att.fileSize,
+        mimeType: att.mimeType,
         category: att.category,
+        docNumber: att.docNumber,
+        googleDriveFileId: (att as any).googleDriveFileId,
         uploadedBy: att.uploadedBy,
       },
       create: {
@@ -1065,7 +1068,10 @@ export async function seedDatabase() {
         fileName: att.fileName,
         fileUrl: att.fileUrl,
         fileSize: att.fileSize,
+        mimeType: att.mimeType,
         category: att.category,
+        docNumber: att.docNumber,
+        googleDriveFileId: (att as any).googleDriveFileId,
         uploadedBy: att.uploadedBy,
       },
     });

@@ -33,6 +33,8 @@ import {
   CheckCircle2,
   Layers,
   ArrowDownRight,
+  UploadCloud,
+  Loader2,
 } from "lucide-react";
 
 interface DailyProgressDialogProps {
@@ -65,7 +67,39 @@ export function DailyProgressDialog({
   const [weather, setWeather] = useState<"Cerah" | "Hujan" | "Berawan">("Cerah");
   const [notes, setNotes] = useState("");
   const [photoName, setPhotoName] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [createdBy, setCreatedBy] = useState("Budi Santoso, S.T. (Site Supervisor)");
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", project.id);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Gagal mengunggah foto lapangan");
+      }
+
+      setPhotoName(json.data.fileName);
+      setPhotoUrl(json.data.webViewLink);
+      toast.success(`Foto "${json.data.fileName}" berhasil diunggah ke Google Drive!`);
+    } catch (err: any) {
+      toast.error(err.message || "Gagal mengunggah foto");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   // Sync initial state when dialog opens
   useEffect(() => {
@@ -192,7 +226,7 @@ export function DailyProgressDialog({
       weather,
       notes: notes.trim(),
       photoName: photoName || `Dokumentasi_Lapangan_${date}.jpg`,
-      photoUrl: `/attachments/${photoName || `Dokumentasi_Lapangan_${date}.jpg`}`,
+      photoUrl: photoUrl || `/attachments/${photoName || `Dokumentasi_Lapangan_${date}.jpg`}`,
       createdBy: createdBy.trim() || "Site Supervisor",
     });
 
@@ -485,8 +519,13 @@ export function DailyProgressDialog({
 
           {/* Row 9: Foto Dokumentasi */}
           <div>
-            <label className="font-semibold text-foreground block mb-1">
-              Foto Lapangan / Dokumentasi Fisik
+            <label className="font-semibold text-foreground flex items-center justify-between mb-1">
+              <span>Foto Lapangan / Dokumentasi Fisik</span>
+              {uploadingPhoto && (
+                <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-normal">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Mengunggah ke Drive...
+                </span>
+              )}
             </label>
             <div className="flex items-center gap-2">
               <Input
@@ -495,6 +534,16 @@ export function DailyProgressDialog({
                 placeholder="Foto_Dokumentasi_Progress.jpg"
                 className="text-xs"
               />
+              <label className="h-9 px-2.5 rounded-md border border-input hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 text-foreground transition-colors gap-1.5">
+                <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="hidden sm:inline">Pilih Foto</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                />
+              </label>
               <Button
                 type="button"
                 variant="outline"
@@ -505,7 +554,7 @@ export function DailyProgressDialog({
                   toast.info("Foto dokumentasi terlampir");
                 }}
               >
-                <Camera className="w-3.5 h-3.5 mr-1" /> Mock Foto
+                <Camera className="w-3.5 h-3.5 mr-1" /> Mock
               </Button>
             </div>
           </div>

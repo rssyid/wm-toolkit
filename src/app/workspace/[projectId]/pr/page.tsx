@@ -259,8 +259,12 @@ export default function PRTrackingTab() {
                           <TableCell>
                             <AttachmentPreview
                               filename={pr.attachmentName || `SAP_PR_${pr.sapPrNumber}.pdf`}
+                              fileId="1gJw1MBAxo_SAR5XIYrER11u51yKWJ2Pb"
+                              fileUrl="https://drive.google.com/file/d/1gJw1MBAxo_SAR5XIYrER11u51yKWJ2Pb/view?usp=sharing"
+                              mimeType="application/pdf"
                               title={`Dokumen PR SAP No. ${pr.sapPrNumber}`}
                               description={pr.description}
+                              docNumber={pr.sapPrNumber}
                             />
                           </TableCell>
                           <TableCell className="text-right">

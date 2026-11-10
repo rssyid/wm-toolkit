@@ -16,7 +16,7 @@ import { useAppState } from "@/context/app-state-context";
 import { AFCEApprovalLevelItem, AFCEDocument } from "@/types";
 import { formatIDDate } from "@/lib/utils";
 import { toast } from "sonner";
-import { ShieldCheck, Calendar, AlertTriangle, FileText, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, Calendar, AlertTriangle, FileText, CheckCircle2, UploadCloud, Loader2 } from "lucide-react";
 
 interface AFCEActionDialogProps {
   open: boolean;
@@ -54,7 +54,37 @@ export function AFCEActionDialog({
   const [sapEvidenceUrl, setSapEvidenceUrl] = useState(
     afce.sapScreenshotPlaceholder || "SAP_AFCE_Authorization_Released.png"
   );
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingEvidence(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", afce.projectId);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Gagal mengunggah berkas");
+      }
+
+      setSapEvidenceUrl(json.data.fileName);
+      toast.success(`Berkas "${json.data.fileName}" berhasil diunggah langsung ke Google Drive!`);
+    } catch (err: any) {
+      toast.error(err.message || "Gagal mengunggah berkas ke Google Drive");
+    } finally {
+      setUploadingEvidence(false);
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -287,15 +317,32 @@ export function AFCEActionDialog({
               />
             </div>
             <div>
-              <label className="font-semibold text-foreground block mb-1">
-                Nama Berkas Bukti SAP
+              <label className="font-semibold text-foreground flex items-center justify-between mb-1">
+                <span>Bukti Otorisasi SAP</span>
+                {uploadingEvidence && (
+                  <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-normal">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Uploading...
+                  </span>
+                )}
               </label>
-              <Input
-                value={sapEvidenceUrl}
-                onChange={(e) => setSapEvidenceUrl(e.target.value)}
-                placeholder="Bukti_Otorisasi_SAP.png"
-                className="h-8 text-xs font-mono"
-              />
+              <div className="flex items-center gap-1.5">
+                <Input
+                  value={sapEvidenceUrl}
+                  onChange={(e) => setSapEvidenceUrl(e.target.value)}
+                  placeholder="Bukti_Otorisasi_SAP.png"
+                  className="h-8 text-xs font-mono flex-1"
+                />
+                <label className="h-8 px-2 rounded border border-input hover:bg-muted text-[11px] font-medium flex items-center justify-center cursor-pointer shrink-0 text-foreground transition-colors gap-1">
+                  <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="hidden sm:inline">Pilih Berkas</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*,application/pdf"
+                    onChange={handleFileUpload}
+                  />
+                </label>
+              </div>
             </div>
           </div>
 

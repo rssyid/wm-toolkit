@@ -201,6 +201,13 @@ export function CollaborationDrawer({
                         <div className="min-w-0">
                           <AttachmentPreview
                             filename={att.fileName}
+                            fileUrl={att.fileUrl}
+                            fileId={att.googleDriveFileId || undefined}
+                            mimeType={att.mimeType}
+                            size={att.fileSize}
+                            category={att.category}
+                            docNumber={att.docNumber}
+                            uploadedBy={att.uploadedBy}
                             title={att.fileName}
                           />
                           <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">

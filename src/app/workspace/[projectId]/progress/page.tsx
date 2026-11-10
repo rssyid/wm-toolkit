@@ -548,8 +548,13 @@ export default function ProgressTab() {
                         <TableCell className="text-right">
                           <AttachmentPreview
                             filename={d.photoName || `Foto_${d.date}.jpg`}
+                            fileId="1Okq_fiax2-H9RY_2TDTJ_Xj47hgdB4DC"
+                            fileUrl="https://drive.google.com/file/d/1Okq_fiax2-H9RY_2TDTJ_Xj47hgdB4DC/view?usp=sharing"
+                            mimeType="image/png"
                             title={`Dokumentasi Fisik Lapangan - ${formatIDDate(d.date)}`}
                             description={d.activity}
+                            uploadedBy={d.createdBy}
+                            category="Dokumentasi Foto Lapangan"
                           />
                         </TableCell>
                       </TableRow>
@@ -636,8 +641,13 @@ export default function ProgressTab() {
                         <TableCell className="text-right">
                           <AttachmentPreview
                             filename={w.reportName || `Laporan_${w.period.slice(0, 8)}.pdf`}
+                            fileId="1yDJdgVHfgWwTq21_XyXUkagtm8_Zsdv7"
+                            fileUrl="https://drive.google.com/file/d/1yDJdgVHfgWwTq21_XyXUkagtm8_Zsdv7/view?usp=sharing"
+                            mimeType="application/pdf"
                             title={`Laporan Mingguan Resmi ${w.period}`}
                             description={w.notes}
+                            uploadedBy={w.createdBy}
+                            category="Laporan Progres Mingguan"
                           />
                         </TableCell>
                       </TableRow>

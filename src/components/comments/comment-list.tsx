@@ -258,9 +258,15 @@ export function CommentList({ projectId }: CommentListProps) {
                             <div className="flex items-center gap-1 shrink-0">
                               <AttachmentPreview
                                 filename={att.fileName}
+                                fileUrl={att.fileUrl}
+                                fileId={att.googleDriveFileId || undefined}
+                                mimeType={att.mimeType}
                                 title={att.fileName}
                                 description={`Sumber: Google Drive • ${att.category || "Dokumen Proyek"}`}
                                 size={att.fileSize}
+                                category={att.category}
+                                docNumber={att.docNumber}
+                                uploadedBy={att.uploadedBy}
                               />
 
                               <a

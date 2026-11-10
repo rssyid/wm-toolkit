@@ -30,6 +30,7 @@ import {
   UserCheck,
   CheckCircle2,
   Layers,
+  Loader2,
 } from "lucide-react";
 
 interface WeeklyProgressDialogProps {
@@ -60,7 +61,39 @@ export function WeeklyProgressDialog({
   const [plannedProgress, setPlannedProgress] = useState<number>(85);
   const [notes, setNotes] = useState("");
   const [reportName, setReportName] = useState("");
+  const [reportUrl, setReportUrl] = useState("");
+  const [uploadingReport, setUploadingReport] = useState(false);
   const [createdBy, setCreatedBy] = useState("Ahmad Fauzi (Project Manager)");
+
+  const handleReportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingReport(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", project.id);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Gagal mengunggah laporan mingguan");
+      }
+
+      setReportName(json.data.fileName);
+      setReportUrl(json.data.webViewLink);
+      toast.success(`Laporan "${json.data.fileName}" berhasil diunggah ke Google Drive!`);
+    } catch (err: any) {
+      toast.error(err.message || "Gagal mengunggah laporan");
+    } finally {
+      setUploadingReport(false);
+    }
+  };
 
   // Initial chaining sync when dialog opens
   useEffect(() => {
@@ -137,7 +170,7 @@ export function WeeklyProgressDialog({
       achievement,
       notes: notes.trim() || `Laporan kemajuan mingguan ${period}`,
       reportName: reportName || `Laporan_Mingguan_${project.code}_${period.slice(0, 9)}.pdf`,
-      photoUrl: `/reports/${reportName || `Laporan_Mingguan_${project.code}_${period.slice(0, 9)}.pdf`}`,
+      photoUrl: reportUrl || `/reports/${reportName || `Laporan_Mingguan_${project.code}_${period.slice(0, 9)}.pdf`}`,
       createdBy: createdBy.trim() || "Project Manager",
     });
 
@@ -330,8 +363,13 @@ export function WeeklyProgressDialog({
           </div>
 
           <div>
-            <label className="font-semibold text-foreground block mb-1">
-              Lampiran Laporan Mingguan Resmi (PDF)
+            <label className="font-semibold text-foreground flex items-center justify-between mb-1">
+              <span>Lampiran Laporan Mingguan Resmi (PDF)</span>
+              {uploadingReport && (
+                <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-normal">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Mengunggah ke Drive...
+                </span>
+              )}
             </label>
             <div className="flex items-center gap-2">
               <Input
@@ -340,6 +378,16 @@ export function WeeklyProgressDialog({
                 placeholder="Laporan_Mingguan_M14.pdf"
                 className="text-xs"
               />
+              <label className="h-9 px-2.5 rounded-md border border-input hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 text-foreground transition-colors gap-1.5">
+                <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="hidden sm:inline">Pilih PDF</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="application/pdf"
+                  onChange={handleReportUpload}
+                />
+              </label>
               <Button
                 type="button"
                 variant="outline"
@@ -350,7 +398,7 @@ export function WeeklyProgressDialog({
                   toast.info("Laporan mingguan terlampir");
                 }}
               >
-                <UploadCloud className="w-3.5 h-3.5 mr-1" /> Mock PDF
+                <UploadCloud className="w-3.5 h-3.5 mr-1" /> Mock
               </Button>
             </div>
           </div>

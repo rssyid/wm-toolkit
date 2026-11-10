@@ -1,4 +1,4 @@
-import { google } from "googleapis";
+import { google, drive_v3 } from "googleapis";
 import { Readable } from "stream";
 
 export interface UploadResult {
@@ -12,10 +12,43 @@ export interface UploadResult {
 }
 
 /**
+ * Ekstrak Google Drive File ID dari berbagai format string/URL
+ */
+export function extractGoogleDriveFileId(input?: string | null): string | null {
+  if (!input) return null;
+  const str = input.trim();
+
+  // Jika input sudah merupakan Google Drive ID murni (alfanumerik 25-45 karakter)
+  if (/^[a-zA-Z0-9_-]{25,50}$/.test(str)) {
+    return str;
+  }
+
+  // Format 1: https://drive.google.com/file/d/{id}/view...
+  const fileDMatch = str.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (fileDMatch && fileDMatch[1]) {
+    return fileDMatch[1];
+  }
+
+  // Format 2: https://drive.google.com/open?id={id} atau uc?id={id}
+  const idParamMatch = str.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idParamMatch && idParamMatch[1]) {
+    return idParamMatch[1];
+  }
+
+  // Format 3: /folders/{id}
+  const folderMatch = str.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (folderMatch && folderMatch[1]) {
+    return folderMatch[1];
+  }
+
+  return null;
+}
+
+/**
  * Inisialisasi client Google Drive API
  * Mendukung Google Service Account (rekomendasi) atau OAuth 2.0
  */
-function getGoogleDriveClient() {
+export function getGoogleDriveClient(): drive_v3.Drive | null {
   const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   let privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
 
@@ -63,8 +96,9 @@ export async function uploadFileToGoogleDrive({
   const drive = getGoogleDriveClient();
   const targetFolderId = folderId || process.env.GOOGLE_DRIVE_FOLDER_ID;
 
-  // Jika kredensial belum dikonfigurasi, gunakan Graceful Mock Link Fallback
+  // Jika kredensial belum dikonfigurasi sama sekali, gunakan Graceful Mock Link Fallback
   if (!drive) {
+    console.warn("Google Drive API client tidak terkonfigurasi. Menggunakan mock link fallback.");
     const mockFileId = `drive-mock-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const sizeKb = Math.round(buffer.length / 1024) || 120;
     return {
@@ -79,17 +113,16 @@ export async function uploadFileToGoogleDrive({
   }
 
   try {
-    const stream = new Readable();
-    stream.push(buffer);
-    stream.push(null);
+    // Gunakan Readable.from untuk stream buffer yang stabil di Node.js
+    const stream = Readable.from(buffer);
 
-    const fileMetadata: any = {
+    const fileMetadata: drive_v3.Schema$File = {
       name: fileName,
       parents: targetFolderId ? [targetFolderId] : undefined,
     };
 
     const media = {
-      mimeType,
+      mimeType: mimeType || "application/octet-stream",
       body: stream,
     };
 
@@ -102,44 +135,107 @@ export async function uploadFileToGoogleDrive({
 
     const file = res.data;
 
-    // Set permission agar berkas dapat dibuka (read-only) oleh siapa saja yang memiliki tautan
-    if (file.id) {
-      try {
-        await drive.permissions.create({
-          fileId: file.id,
-          requestBody: {
-            role: "reader",
-            type: "anyone",
-          },
-          supportsAllDrives: true,
-        });
-      } catch (permError) {
-        console.warn("Peringatan izin file Google Drive:", permError);
-      }
+    if (!file.id) {
+      throw new Error("Google Drive API tidak mengembalikan ID berkas.");
     }
 
-    const sizeKb = file.size ? Math.round(Number(file.size) / 1024) : 100;
+    // Set permission agar berkas dapat diakses/dilihat (read-only) oleh siapa saja yang memiliki tautan
+    try {
+      await drive.permissions.create({
+        fileId: file.id,
+        requestBody: {
+          role: "reader",
+          type: "anyone",
+        },
+        supportsAllDrives: true,
+      });
+    } catch (permError) {
+      console.warn("Peringatan izin file Google Drive:", permError);
+    }
+
+    const sizeKb = file.size
+      ? Math.round(Number(file.size) / 1024)
+      : Math.round(buffer.length / 1024);
 
     return {
-      fileId: file.id || "",
+      fileId: file.id,
       fileName: file.name || fileName,
       webViewLink: file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`,
-      webContentLink: file.webContentLink || undefined,
+      webContentLink: file.webContentLink || `https://drive.google.com/uc?id=${file.id}&export=download`,
       mimeType: file.mimeType || mimeType,
       fileSize: `${sizeKb} KB`,
       isMock: false,
     };
   } catch (error: any) {
     console.error("Gagal mengunggah berkas ke Google Drive API:", error);
-    // Fallback darurat agar proses transaksi proyek tidak macet
-    const fallbackId = `err-fallback-${Date.now()}`;
+    throw new Error(
+      `Gagal mengunggah berkas ke Google Drive: ${error?.message || "Kesalahan API Google Drive"}`
+    );
+  }
+}
+
+/**
+ * Ambil metadata berkas dari Google Drive API
+ */
+export async function getGoogleDriveFileMetadata(fileId: string) {
+  const drive = getGoogleDriveClient();
+  if (!drive) return null;
+
+  try {
+    const res = await drive.files.get({
+      fileId,
+      fields: "id, name, mimeType, size, webViewLink, webContentLink, iconLink, thumbnailLink",
+      supportsAllDrives: true,
+    });
+    return res.data;
+  } catch (err: any) {
+    console.warn(`Gagal mengambil metadata file Drive [${fileId}]:`, err?.message);
+    return null;
+  }
+}
+
+/**
+ * Ambil binary stream berkas dari Google Drive API untuk download / streaming
+ */
+export async function downloadFileFromGoogleDrive(fileId: string): Promise<{
+  stream: NodeJS.ReadableStream;
+  name: string;
+  mimeType: string;
+  size?: number;
+} | null> {
+  const drive = getGoogleDriveClient();
+  if (!drive) return null;
+
+  try {
+    // 1. Ambil metadata nama & tipe
+    const meta = await drive.files.get({
+      fileId,
+      fields: "id, name, mimeType, size",
+      supportsAllDrives: true,
+    });
+
+    const fileName = meta.data.name || `dokumen-${fileId}.pdf`;
+    const mimeType = meta.data.mimeType || "application/octet-stream";
+    const size = meta.data.size ? Number(meta.data.size) : undefined;
+
+    // 2. Ambil media stream
+    const mediaRes = await drive.files.get(
+      {
+        fileId,
+        alt: "media",
+        supportsAllDrives: true,
+      },
+      { responseType: "stream" }
+    );
+
     return {
-      fileId: fallbackId,
-      fileName,
-      webViewLink: `https://drive.google.com/file/d/${fallbackId}/view`,
+      stream: mediaRes.data as NodeJS.ReadableStream,
+      name: fileName,
       mimeType,
-      fileSize: "1.0 MB",
-      isMock: true,
+      size,
     };
+  } catch (err: any) {
+    console.error(`Gagal streaming download dari Google Drive [${fileId}]:`, err?.message);
+    return null;
   }
 }

@@ -253,8 +253,12 @@ export default function POAndMaterialsTab() {
                                 </span>
                                 <AttachmentPreview
                                   filename={po.attachmentName || `SAP_PO_${po.poNumber}.pdf`}
+                                  fileId="1d7o2uaicE5rZvaarhze4BhRmWXw4oPhJ"
+                                  fileUrl="https://drive.google.com/file/d/1d7o2uaicE5rZvaarhze4BhRmWXw4oPhJ/view?usp=sharing"
+                                  mimeType="application/pdf"
                                   title={`Kontrak PO SAP No. ${po.poNumber}`}
                                   description={`Rekanan: ${po.supplierName} • Nilai: ${formatIDR(po.poValue)}`}
+                                  docNumber={po.poNumber}
                                 />
                               </div>
 
@@ -389,8 +393,12 @@ export default function POAndMaterialsTab() {
                     <TableCell className="text-right">
                       <AttachmentPreview
                         filename={gr.attachmentName || `SuratJalan_${gr.grNumber}.pdf`}
+                        fileId="1d7o2uaicE5rZvaarhze4BhRmWXw4oPhJ"
+                        fileUrl="https://drive.google.com/file/d/1d7o2uaicE5rZvaarhze4BhRmWXw4oPhJ/view?usp=sharing"
+                        mimeType="application/pdf"
                         title={`Surat Jalan / BAST Material GR No. ${gr.grNumber}`}
                         description={gr.notes}
+                        docNumber={gr.grNumber}
                       />
                     </TableCell>
                   </TableRow>
@@ -494,8 +502,12 @@ export default function POAndMaterialsTab() {
                     <TableCell className="text-right">
                       <AttachmentPreview
                         filename={gh.attachmentName || `BAST_${gh.handoverNumber}_Signed.pdf`}
+                        fileId="1d7o2uaicE5rZvaarhze4BhRmWXw4oPhJ"
+                        fileUrl="https://drive.google.com/file/d/1d7o2uaicE5rZvaarhze4BhRmWXw4oPhJ/view?usp=sharing"
+                        mimeType="application/pdf"
                         title={`Berita Acara Serah Terima No. ${gh.handoverNumber}`}
                         description={`PO: ${gh.poNumber} • Rekanan: ${gh.supplierName}`}
+                        docNumber={gh.handoverNumber}
                       />
                     </TableCell>
                   </TableRow>

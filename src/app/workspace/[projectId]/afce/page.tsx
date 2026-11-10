@@ -530,9 +530,13 @@ export default function AFCEApprovalTab() {
               </p>
               <div className="pt-1">
                 <AttachmentPreview
-                  filename={afce?.sapScreenshotPlaceholder || "SAP_AFCE_Authorization_420M.png"}
+                  filename={afce?.sapScreenshotPlaceholder || "Dokumentasi_Foto_Pintu_Air_Sei_Silau.png"}
+                  fileUrl="https://drive.google.com/file/d/1Okq_fiax2-H9RY_2TDTJ_Xj47hgdB4DC/view?usp=sharing"
+                  fileId="1Okq_fiax2-H9RY_2TDTJ_Xj47hgdB4DC"
+                  mimeType="image/png"
                   title="Otorisasi AFCE Sistem SAP ERP Holding"
                   description="Dokumentasi persetujuan anggaran modal perkebunan tahun 2026."
+                  docNumber={afce?.sapDocNumber || "AFCE-SAP-REF"}
                 />
               </div>
             </div>
