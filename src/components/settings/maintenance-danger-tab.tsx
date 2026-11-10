@@ -25,7 +25,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogClose,
 } from "@/components/ui/dialog";
 import { useAppState } from "@/context/app-state-context";
@@ -51,16 +50,12 @@ export function MaintenanceDangerTab() {
     userProfile,
     systemSettings,
     canManageSystem,
-    loadDemoData,
     clearDemoData,
     resetToEmptyProduction,
-    resetToMockData,
     restoreBackupFromJson,
   } = useAppState();
 
-  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false);
-  const [isLoadDemoOpen, setIsLoadDemoOpen] = useState(false);
   const [isClearDemoOpen, setIsClearDemoOpen] = useState(false);
   const [isResetEmptyOpen, setIsResetEmptyOpen] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -149,26 +144,8 @@ export function MaintenanceDangerTab() {
     }
   };
 
-  const handleConfirmReset = () => {
-    resetToMockData();
-    setIsResetDialogOpen(false);
-    toast.success("Database lokal berhasil direset kembali ke kondisi dataset demo awal!");
-  };
-
   const handleFlushCache = () => {
     toast.success("Cache sementara sesi antarmuka berhasil dibersihkan!");
-  };
-
-  const handleLoadDemo = async () => {
-    setLoadingAction("loadDemo");
-    try {
-      await loadDemoData();
-      setIsLoadDemoOpen(false);
-    } catch {
-      toast.error("Gagal memuat ulang data demo ke database.");
-    } finally {
-      setLoadingAction(null);
-    }
   };
 
   const handleClearDemo = async () => {
@@ -403,7 +380,7 @@ export function MaintenanceDangerTab() {
               Operasi Basis Data Cloud (Neon PostgreSQL)
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Kendali data operasional terpusat: muat data demo untuk pelatihan, bersihkan transaksi demo, atau siapkan basis data kosong untuk produksi (Go-Live).
+              Operasi pembersihan data transaksi proyek dan penyiapan basis data kosong untuk produksi (Go-Live). Master data dan akun pengguna tetap terlindungi.
             </p>
           </div>
           {!canManageSystem && (
@@ -414,45 +391,15 @@ export function MaintenanceDangerTab() {
         </div>
 
         <div className="divide-y text-xs">
-          {/* Action 1: Load Demo Data */}
-          <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="md:w-2/3">
-              <span className="font-medium text-foreground block text-xs flex items-center gap-1.5">
-                <RefreshCw className="w-3.5 h-3.5 text-blue-600" />
-                Muat Ulang Data Demo Lengkap (Load Demo Data)
-              </span>
-              <span className="text-[11px] text-muted-foreground">
-                Mengimpor dataset standar holding (8 proyek, dokumen AFCE dengan evidence SAP, PR, PO, GR, SPK, dan log progres fisik) ke dalam database Neon PostgreSQL.
-              </span>
-            </div>
-            <div className="md:w-1/3 flex md:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!canManageSystem || !!loadingAction}
-                onClick={() => setIsLoadDemoOpen(true)}
-                className="h-8 text-xs gap-1.5 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20 hover:bg-blue-100/50"
-              >
-                {loadingAction === "loadDemo" ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Database className="w-3.5 h-3.5 text-blue-600" />
-                )}
-                Muat Data Demo
-              </Button>
-            </div>
-          </div>
-
-          {/* Action 2: Clear Demo Data */}
+          {/* Action 1: Clear Demo / All Project Transactions */}
           <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="md:w-2/3">
               <span className="font-medium text-foreground block text-xs flex items-center gap-1.5">
                 <Trash2 className="w-3.5 h-3.5 text-amber-600" />
-                Bersihkan Data Transaksi Demo (Clear Demo Data)
+                Kosongkan Seluruh Data Transaksi Proyek (Purge Transactions)
               </span>
               <span className="text-[11px] text-muted-foreground">
-                Menghapus semua entitas operasional transaksi (proyek, AFCE, PR, PO, GR, progress, lampiran) tanpa menghapus Master Data (kebun, material, rekanan, dan akun pengguna).
+                Menghapus seluruh entitas transaksi operasional (proyek, dokumen AFCE, PR, PO, GR, SPK, progres fisik, komentar, dan lampiran) tanpa menghapus Master Data (kebun, material, rekanan, dan akun pengguna).
               </span>
             </div>
             <div className="md:w-1/3 flex md:justify-end">
@@ -469,12 +416,12 @@ export function MaintenanceDangerTab() {
                 ) : (
                   <Trash2 className="w-3.5 h-3.5 text-amber-600" />
                 )}
-                Bersihkan Data Demo
+                Kosongkan Transaksi
               </Button>
             </div>
           </div>
 
-          {/* Action 3: Reset to Empty Production Data */}
+          {/* Action 2: Reset to Empty Production Data */}
           <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="md:w-2/3">
               <span className="font-medium text-rose-700 dark:text-rose-400 block text-xs flex items-center gap-1.5">
@@ -509,49 +456,16 @@ export function MaintenanceDangerTab() {
         </div>
       </div>
 
-      {/* Confirmation Dialog: Load Demo Data */}
-      <Dialog open={isLoadDemoOpen} onOpenChange={setIsLoadDemoOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-semibold flex items-center gap-2 text-blue-600 dark:text-blue-400">
-              <Database className="w-4 h-4 text-blue-600" />
-              Konfirmasi Muat Ulang Data Demo
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground pt-2">
-              Sistem akan mengimpor kembali 8 proyek demo standar perkebunan kelapa sawit lengkap dengan dokumen AFCE, bukti SAP, PR, PO, GR, evaluasi rekanan, dan kurva-S progres ke Neon PostgreSQL.
-              Apakah Anda ingin melanjutkan?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0 pt-2">
-            <DialogClose asChild>
-              <Button type="button" variant="outline" size="sm" className="h-8 text-xs">
-                Batal
-              </Button>
-            </DialogClose>
-            <Button
-              type="button"
-              size="sm"
-              disabled={loadingAction === "loadDemo"}
-              onClick={handleLoadDemo}
-              className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
-            >
-              {loadingAction === "loadDemo" && <Loader2 className="w-3 h-3 animate-spin" />}
-              Ya, Muat Data Demo
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirmation Dialog: Clear Demo Data */}
+      {/* Confirmation Dialog: Clear Project Transactions */}
       <Dialog open={isClearDemoOpen} onOpenChange={setIsClearDemoOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-sm font-semibold flex items-center gap-2 text-amber-600 dark:text-amber-400">
               <Trash2 className="w-4 h-4 text-amber-600" />
-              Konfirmasi Pembersihan Data Demo
+              Konfirmasi Pengosongan Transaksi Proyek
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground pt-2">
-              Apakah Anda yakin ingin membersihkan data operasional demo? Semua proyek, dokumen AFCE, PR, PO, dan progres fisik akan dihapus dari server database. Master data lokasi, material, rekanan, dan pengguna tidak akan terhapus.
+              Apakah Anda yakin ingin mengosongkan seluruh data transaksi proyek? Seluruh proyek, dokumen AFCE, PR, PO, GR, SPK, dan progres fisik akan dihapus dari server database Neon. Master data lokasi, material, rekanan, dan akun pengguna tidak akan terhapus.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0 pt-2">
@@ -568,7 +482,7 @@ export function MaintenanceDangerTab() {
               className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
             >
               {loadingAction === "clearDemo" && <Loader2 className="w-3 h-3 animate-spin" />}
-              Ya, Bersihkan Data Demo
+              Ya, Kosongkan Transaksi
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -620,74 +534,6 @@ export function MaintenanceDangerTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Card 3: Zona Bahaya Lokal (Penyimpanan Browser / Mockup Fallback) */}
-      <div className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/20 dark:bg-rose-950/10 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-rose-200 dark:border-rose-900/60 flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-rose-700 dark:text-rose-400 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-              Penyimpanan Lokal: Reset Cache Mockup Browser
-            </h3>
-            <p className="text-xs text-rose-600/80 dark:text-rose-400/80 mt-0.5">
-              Reset salinan data sementara di browser LocalStorage kembali ke nilai bawaan kode klien.
-            </p>
-          </div>
-          <Badge variant="outline" className="text-[10px] text-rose-700 border-rose-300 dark:border-rose-800">
-            Klien Browser
-          </Badge>
-        </div>
-
-        <div className="p-5 text-xs text-muted-foreground space-y-4">
-          <p>
-            Jika Anda mengalami ketidaksesuaian tampilan pada peramban tertentu atau ingin menghapus berkas penyimpanan peramban lokal (LocalStorage), Anda dapat melakukan reset dataset mockup peramban.
-          </p>
-
-          <div className="flex items-center justify-end pt-2">
-            <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs gap-1.5 shadow-xs text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/20"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Reset Cache Mockup Browser
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="text-sm font-semibold flex items-center gap-2 text-rose-600 dark:text-rose-400">
-                    <AlertTriangle className="w-4 h-4 text-rose-600" />
-                    Konfirmasi Reset Mockup Browser
-                  </DialogTitle>
-                  <DialogDescription className="text-xs text-muted-foreground pt-2">
-                    Apakah Anda yakin ingin mengatur ulang cache browser lokal? Data tersimpan di memori browser Anda akan dipulihkan ke default.
-                  </DialogDescription>
-                </DialogHeader>
-
-                <DialogFooter className="gap-2 sm:gap-0 pt-2">
-                  <DialogClose asChild>
-                    <Button type="button" variant="outline" size="sm" className="h-8 text-xs">
-                      Batal
-                    </Button>
-                  </DialogClose>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleConfirmReset}
-                    className="h-8 text-xs"
-                  >
-                    Ya, Reset Cache Browser
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

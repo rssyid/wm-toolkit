@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   LayoutDashboard,
   CheckCircle2,
-  RotateCcw,
 } from "lucide-react";
 import { KPICard } from "@/components/dashboard/kpi-card";
 import { UnifiedGantt } from "@/components/dashboard/unified-gantt";
@@ -65,11 +64,7 @@ function DashboardContent() {
     technicalEvaluations,
     locations,
     auditLogs,
-    loadDemoData,
-    canManageSystem,
   } = useAppState();
-
-  const [isLoadingDemo, setIsLoadingDemo] = useState(false);
 
   useEffect(() => {
     if (tabParam === "audit-log") {
@@ -204,10 +199,10 @@ function DashboardContent() {
                 </div>
                 <div>
                   <h4 className="text-sm font-semibold text-foreground">
-                    Workspace Bersih — Belum Ada Proyek Aktif
+                    Workspace Bersih — Siap Digunakan
                   </h4>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Saat ini tidak ada proyek yang dipantau. Anda dapat membuat proyek baru atau memuat kembali 8 dataset percontohan kelapa sawit.
+                    Saat ini belum ada proyek yang dipantau. Workspace siap digunakan untuk pencatatan dan monitoring proyek baru.
                   </p>
                 </div>
               </div>
@@ -217,25 +212,6 @@ function DashboardContent() {
                     + Buat Proyek
                   </Button>
                 </Link>
-                {canManageSystem && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={isLoadingDemo}
-                    onClick={async () => {
-                      setIsLoadingDemo(true);
-                      try {
-                        await loadDemoData();
-                      } finally {
-                        setIsLoadingDemo(false);
-                      }
-                    }}
-                    className="h-8 text-xs gap-1.5"
-                  >
-                    <RotateCcw className={cn("w-3.5 h-3.5", isLoadingDemo && "animate-spin")} />
-                    <span>{isLoadingDemo ? "Memuat..." : "Muat Data Demo"}</span>
-                  </Button>
-                )}
               </div>
             </div>
           )}

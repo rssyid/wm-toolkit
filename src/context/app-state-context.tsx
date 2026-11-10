@@ -50,24 +50,7 @@ import {
   AuditEntityType,
   SystemRole,
 } from "@/types";
-import { INITIAL_PROJECTS } from "@/lib/mock-data/projects";
-import { INITIAL_AFCES } from "@/lib/mock-data/afce";
-import {
-  INITIAL_PRS,
-  INITIAL_POS,
-  INITIAL_GRS,
-  INITIAL_VENDOR_EVALUATIONS,
-  INITIAL_GOODS_HANDOVERS,
-} from "@/lib/mock-data/procurement";
-import {
-  INITIAL_USPKS,
-  INITIAL_TECHNICAL_EVALUATIONS,
-  INITIAL_SPK_CONTRACTS,
-} from "@/lib/mock-data/services";
-import { INITIAL_COMMENTS, INITIAL_ATTACHMENTS } from "@/lib/mock-data/comments";
-import { INITIAL_NOTIFICATIONS, INITIAL_NOTIFICATION_SETTINGS } from "@/lib/mock-data/notifications";
-import { INITIAL_AUDIT_LOGS } from "@/lib/mock-data/audit-logs";
-import { INITIAL_DAILY_PROGRESS, INITIAL_WEEKLY_PROGRESS } from "@/lib/mock-data/progress";
+import { INITIAL_NOTIFICATION_SETTINGS } from "@/lib/mock-data/notifications";
 import {
   INITIAL_REGIONS,
   INITIAL_COMPANIES,
@@ -129,7 +112,6 @@ import {
   deleteAttachmentAction,
 } from "@/server/actions/attachments";
 import {
-  loadDemoDataAction,
   clearDemoDataAction,
   resetToEmptyProductionAction,
 } from "@/server/actions/admin";
@@ -309,7 +291,6 @@ interface AppStateContextType {
 
   resetToMockData: () => void;
   refreshFromDatabase: () => Promise<void>;
-  loadDemoData: () => Promise<void>;
   clearDemoData: () => Promise<void>;
   resetToEmptyProduction: () => Promise<void>;
 }
@@ -322,23 +303,23 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [tableDensity, setTableDensity] = useState<"comfortable" | "compact">("comfortable");
 
-  const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
-  const [afces, setAfces] = useState<AFCEDocument[]>(INITIAL_AFCES);
-  const [prs, setPrs] = useState<PurchaseRequisition[]>(INITIAL_PRS);
-  const [pos, setPos] = useState<PurchaseOrder[]>(INITIAL_POS);
-  const [grs, setGrs] = useState<GoodsReceipt[]>(INITIAL_GRS);
-  const [vendorEvaluations, setVendorEvaluations] = useState<VendorEvaluation[]>(INITIAL_VENDOR_EVALUATIONS);
-  const [goodsHandovers, setGoodsHandovers] = useState<GoodsHandover[]>(INITIAL_GOODS_HANDOVERS);
-  const [uspks, setUspks] = useState<USPKItem[]>(INITIAL_USPKS);
-  const [technicalEvaluations, setTechnicalEvaluations] = useState<TechnicalEvaluation[]>(INITIAL_TECHNICAL_EVALUATIONS);
-  const [spkContracts, setSpkContracts] = useState<SPKContract[]>(INITIAL_SPK_CONTRACTS);
-  const [comments, setComments] = useState<ProjectComment[]>(INITIAL_COMMENTS);
-  const [attachments, setAttachments] = useState<ProjectAttachment[]>(INITIAL_ATTACHMENTS);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [afces, setAfces] = useState<AFCEDocument[]>([]);
+  const [prs, setPrs] = useState<PurchaseRequisition[]>([]);
+  const [pos, setPos] = useState<PurchaseOrder[]>([]);
+  const [grs, setGrs] = useState<GoodsReceipt[]>([]);
+  const [vendorEvaluations, setVendorEvaluations] = useState<VendorEvaluation[]>([]);
+  const [goodsHandovers, setGoodsHandovers] = useState<GoodsHandover[]>([]);
+  const [uspks, setUspks] = useState<USPKItem[]>([]);
+  const [technicalEvaluations, setTechnicalEvaluations] = useState<TechnicalEvaluation[]>([]);
+  const [spkContracts, setSpkContracts] = useState<SPKContract[]>([]);
+  const [comments, setComments] = useState<ProjectComment[]>([]);
+  const [attachments, setAttachments] = useState<ProjectAttachment[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSetting[]>(INITIAL_NOTIFICATION_SETTINGS);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
-  const [dailyProgress, setDailyProgress] = useState<DailyProgressRecord[]>(INITIAL_DAILY_PROGRESS);
-  const [weeklyProgress, setWeeklyProgress] = useState<WeeklyProgressRecord[]>(INITIAL_WEEKLY_PROGRESS);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [dailyProgress, setDailyProgress] = useState<DailyProgressRecord[]>([]);
+  const [weeklyProgress, setWeeklyProgress] = useState<WeeklyProgressRecord[]>([]);
   const [regions, setRegions] = useState<Region[]>(INITIAL_REGIONS);
   const [companies, setCompanies] = useState<Company[]>(INITIAL_COMPANIES);
   const [locations, setLocations] = useState<EstateLocation[]>(INITIAL_LOCATIONS);
@@ -451,29 +432,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.projects) {
-          const mergedProjects = parsed.projects.map((p: Project) => {
-            const initP = INITIAL_PROJECTS.find((ip) => ip.id === p.id);
-            if (!initP) return p;
-            return {
-              ...p,
-              baselineEndDate: initP.baselineEndDate || p.baselineEndDate,
-              targetEndDate: initP.targetEndDate || p.targetEndDate,
-              scheduleVarianceDays:
-                initP.scheduleVarianceDays !== undefined
-                  ? initP.scheduleVarianceDays
-                  : p.scheduleVarianceDays ?? 0,
-              revisions:
-                p.revisions && p.revisions.length > 0
-                  ? p.revisions
-                  : initP.revisions || [],
-              scheduleMatrix:
-                initP.scheduleMatrix && initP.scheduleMatrix.length > 0
-                  ? initP.scheduleMatrix
-                  : p.scheduleMatrix,
-            };
-          });
-          setProjects(mergedProjects);
+        if (parsed.projects && Array.isArray(parsed.projects)) {
+          setProjects(parsed.projects);
         }
         if (parsed.afces) setAfces(parsed.afces);
         if (parsed.prs) setPrs(parsed.prs);
@@ -718,23 +678,23 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetToMockData = () => {
-    setProjects(INITIAL_PROJECTS);
-    setAfces(INITIAL_AFCES);
-    setPrs(INITIAL_PRS);
-    setPos(INITIAL_POS);
-    setGrs(INITIAL_GRS);
-    setVendorEvaluations(INITIAL_VENDOR_EVALUATIONS);
-    setGoodsHandovers(INITIAL_GOODS_HANDOVERS);
-    setUspks(INITIAL_USPKS);
-    setTechnicalEvaluations(INITIAL_TECHNICAL_EVALUATIONS);
-    setSpkContracts(INITIAL_SPK_CONTRACTS);
-    setComments(INITIAL_COMMENTS);
-    setAttachments(INITIAL_ATTACHMENTS);
-    setNotifications(INITIAL_NOTIFICATIONS);
+    setProjects([]);
+    setAfces([]);
+    setPrs([]);
+    setPos([]);
+    setGrs([]);
+    setVendorEvaluations([]);
+    setGoodsHandovers([]);
+    setUspks([]);
+    setTechnicalEvaluations([]);
+    setSpkContracts([]);
+    setComments([]);
+    setAttachments([]);
+    setNotifications([]);
     setNotificationSettings(INITIAL_NOTIFICATION_SETTINGS);
-    setAuditLogs(INITIAL_AUDIT_LOGS);
-    setDailyProgress(INITIAL_DAILY_PROGRESS);
-    setWeeklyProgress(INITIAL_WEEKLY_PROGRESS);
+    setAuditLogs([]);
+    setDailyProgress([]);
+    setWeeklyProgress([]);
     setRegions(INITIAL_REGIONS);
     setCompanies(INITIAL_COMPANIES);
     setLocations(INITIAL_LOCATIONS);
@@ -2214,16 +2174,6 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  const loadDemoData = async () => {
-    const res = await loadDemoDataAction();
-    if (res.success) {
-      await refreshFromDatabase();
-      toast.success(res.message);
-    } else {
-      toast.error(res.message);
-    }
-  };
-
   const clearDemoData = async () => {
     const res = await clearDemoDataAction();
     if (res.success) {
@@ -2393,7 +2343,6 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
         resetToMockData,
         refreshFromDatabase,
-        loadDemoData,
         clearDemoData,
         resetToEmptyProduction,
       }}

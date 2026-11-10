@@ -7,30 +7,30 @@ import { seedDatabase } from "../../../prisma/seed";
 import { revalidatePath } from "next/cache";
 
 /**
- * 1. Load Demo Data: Mengisi ulang seluruh dataset 8 proyek demo dan alur persetujuan ke Neon DB.
+ * 1. Seed Master Data: Memastikan seluruh master data (kebun, PT, blok, material, vendor, matriks approval, pengguna) terisi di basis data.
  */
-export async function loadDemoDataAction() {
+export async function seedMasterDataAction() {
   const user = await requireRole(["ADMIN"]);
 
   try {
     await seedDatabase();
 
     await recordServerAuditLog({
-      action: "CREATE",
+      action: "UPDATE",
       entityType: "PROJECT",
-      entityId: "system-seed",
-      entityTitle: "Pemuatan Ulang Dataset Demo",
-      notes: `Admin ${user.name} memuat ulang 8 dataset proyek demo percontohan ke basis data`,
+      entityId: "master-data-seed",
+      entityTitle: "Sinkronisasi Master Data",
+      notes: `Admin ${user.name} melakukan sinkronisasi Master Data standar ke basis data`,
     });
 
     revalidatePath("/dashboard");
     revalidatePath("/workspace");
     revalidatePath("/settings");
     revalidatePath("/notifications");
-    return { success: true, message: "Dataset demo berhasil dimuat ulang ke Neon PostgreSQL!" };
+    return { success: true, message: "Master Data berhasil disinkronkan ke Neon PostgreSQL!" };
   } catch (error: any) {
-    console.error("Gagal memuat dataset demo:", error);
-    return { success: false, message: error.message || "Gagal memuat dataset demo." };
+    console.error("Gagal sinkronisasi master data:", error);
+    return { success: false, message: error.message || "Gagal sinkronisasi master data." };
   }
 }
 

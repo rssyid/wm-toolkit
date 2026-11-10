@@ -357,7 +357,6 @@ function WorkspaceContent() {
     restoreProject,
     hardDeleteProject,
     emptyRecycleBin,
-    loadDemoData,
     canEditProjects,
     canManageSystem,
     isViewerOnly,
@@ -372,7 +371,6 @@ function WorkspaceContent() {
   const [emptyRecycleDialogOpen, setEmptyRecycleDialogOpen] = useState(false);
   const [isHardDeleting, setIsHardDeleting] = useState(false);
   const [isEmptyingRecycle, setIsEmptyingRecycle] = useState(false);
-  const [isLoadingDemo, setIsLoadingDemo] = useState(false);
 
   // Search & Filter state
   const [search, setSearch] = useState("");
@@ -1211,10 +1209,10 @@ function WorkspaceContent() {
                         <Layers className="w-8 h-8 opacity-80 text-emerald-600" />
                       </div>
                       <h4 className="text-sm font-semibold tracking-tight text-foreground mb-1">
-                        Workspace Bersih — Belum Ada Proyek Aktif
+                        Workspace Bersih — Siap Digunakan
                       </h4>
                       <p className="text-xs text-muted-foreground max-w-sm mb-4 leading-relaxed">
-                        Workspace Anda saat ini tidak memiliki proyek aktif. Buat proyek baru atau muat kembali dataset percontohan proyek perkebunan.
+                        Workspace Anda bersih dan siap digunakan. Mulai pencatatan proyek perkebunan Anda dengan membuat proyek baru.
                       </p>
                       <div className="flex flex-wrap items-center justify-center gap-2">
                         {canEditProjects && (
@@ -1224,25 +1222,6 @@ function WorkspaceContent() {
                               <span>+ Buat Proyek Baru</span>
                             </Button>
                           </Link>
-                        )}
-                        {canManageSystem && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={isLoadingDemo}
-                            onClick={async () => {
-                              setIsLoadingDemo(true);
-                              try {
-                                await loadDemoData();
-                              } finally {
-                                setIsLoadingDemo(false);
-                              }
-                            }}
-                            className="h-8 text-xs gap-1.5"
-                          >
-                            <RotateCcw className={cn("w-3.5 h-3.5", isLoadingDemo && "animate-spin")} />
-                            <span>{isLoadingDemo ? "Memuat Data..." : "Muat Dataset Demo"}</span>
-                          </Button>
                         )}
                       </div>
                     </div>
