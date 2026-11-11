@@ -33,17 +33,25 @@ const prisma = new PrismaClient({ adapter });
  * TIDAK menginjeksi proyek demo percontohan, sehingga aplikasi siap dipakai bersih (0 proyek).
  */
 export async function seedDatabase() {
-  console.log("🌱 Mulai seeding Master Data Neon PostgreSQL (Clean Production Mode)...");
+  console.log("[SEED] Mulai seeding Master Data Neon PostgreSQL (Clean Production Mode)...");
   const defaultPasswordHash = bcrypt.hashSync("wmtoolkit2026", 10);
 
   // 1. Master Data: Regions
   console.log("-> Seeding Regions...");
   for (const r of INITIAL_REGIONS) {
-    await prisma.region.upsert({
-      where: { code: r.code },
-      update: { name: r.name, description: r.description, status: r.status },
-      create: { id: r.id, code: r.code, name: r.name, description: r.description, status: r.status },
+    const existing = await prisma.region.findFirst({
+      where: { OR: [{ code: r.code }, { id: r.id }] },
     });
+    if (existing) {
+      await prisma.region.update({
+        where: { id: existing.id },
+        data: { name: r.name, description: r.description, status: r.status },
+      });
+    } else {
+      await prisma.region.create({
+        data: { id: r.id, code: r.code, name: r.name, description: r.description, status: r.status },
+      });
+    }
   }
 
   // 2. Master Data: Companies
@@ -295,15 +303,23 @@ export async function seedDatabase() {
     });
   }
 
-  console.log("✅ Seeding Master Data selesai 100%! Sistem siap digunakan untuk produksi (clean production-ready, 0 demo projects).");
+  console.log("Seeding Master Data selesai 100%! Sistem siap digunakan untuk produksi (clean production-ready, 0 demo projects).");
 }
 
-seedDatabase()
-  .catch((e) => {
-    console.error("❌ Error saat seeding:", e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-    await pool.end();
-  });
+const isDirectExecution =
+  typeof process !== "undefined" &&
+  process.argv[1] &&
+  (process.argv[1].replace(/\\/g, "/").endsWith("prisma/seed.ts") ||
+    process.argv[1].replace(/\\/g, "/").endsWith("seed.ts"));
+
+if (isDirectExecution) {
+  seedDatabase()
+    .catch((e) => {
+      console.error("Error saat seeding:", e);
+      process.exit(1);
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+      await pool.end();
+    });
+}

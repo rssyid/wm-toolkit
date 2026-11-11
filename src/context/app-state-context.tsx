@@ -340,7 +340,7 @@ interface AppStateContextType {
 
 const AppStateContext = createContext<AppStateContextType | undefined>(undefined);
 
-const STORAGE_KEY = "wm_toolkit_state_v1";
+const STORAGE_KEY = "wm_toolkit_prefs_v2";
 
 export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
@@ -472,173 +472,52 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Load from LocalStorage
+  // Load preferences from LocalStorage & Clean Legacy Keys
   useEffect(() => {
     try {
+      // Bersihkan cache usang versi 1 yang menyimpan data proyek demo/uji coba di peramban
+      localStorage.removeItem("wm_toolkit_state_v1");
+      localStorage.removeItem("wm_toolkit_state");
+
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.projects && Array.isArray(parsed.projects)) {
-          setProjects(parsed.projects);
-        }
-        if (parsed.afces) setAfces(parsed.afces);
-        if (parsed.prs) setPrs(parsed.prs);
-        if (parsed.pos) setPos(parsed.pos);
-        if (parsed.grs) setGrs(parsed.grs);
-        if (parsed.vendorEvaluations) setVendorEvaluations(parsed.vendorEvaluations);
-        if (parsed.goodsHandovers) setGoodsHandovers(parsed.goodsHandovers);
-        if (parsed.uspks) setUspks(parsed.uspks);
-        if (parsed.technicalEvaluations) setTechnicalEvaluations(parsed.technicalEvaluations);
-        if (parsed.spkContracts) setSpkContracts(parsed.spkContracts);
-        if (parsed.comments) setComments(parsed.comments);
-        if (parsed.attachments) setAttachments(parsed.attachments);
-        if (parsed.notifications) {
-          if (parsed.projects && Array.isArray(parsed.projects) && parsed.projects.length === 0) {
-            setNotifications([]);
-          } else {
-            setNotifications(parsed.notifications);
-          }
-        }
-        if (parsed.notificationSettings) setNotificationSettings(parsed.notificationSettings);
-        if (parsed.auditLogs) setAuditLogs(parsed.auditLogs);
-        if (parsed.dailyProgress) setDailyProgress(parsed.dailyProgress);
-        if (parsed.weeklyProgress) setWeeklyProgress(parsed.weeklyProgress);
-        if (parsed.regions) setRegions(parsed.regions);
-        if (parsed.companies) setCompanies(parsed.companies);
-        if (parsed.locations) {
-          const mergedLocations = parsed.locations.map((loc: any) => {
-            const initL = INITIAL_LOCATIONS.find((il) => il.id === loc.id);
-            return {
-              ...loc,
-              regionId: loc.regionId || initL?.regionId || (loc.region?.includes("Riau") ? "reg-2" : loc.region?.includes("Kalimantan") ? "reg-3" : "reg-1"),
-              companyId: loc.companyId || initL?.companyId || "cmp-1",
-            };
-          });
-          setLocations(mergedLocations);
-        }
-        if (parsed.blocks) {
-          const existingIds = new Set(parsed.blocks.map((b: any) => b.id));
-          const missingInitialBlocks = INITIAL_BLOCKS.filter((ib) => !existingIds.has(ib.id));
-          const mergedBlocks = [
-            ...parsed.blocks.map((blk: any) => {
-              const initB = INITIAL_BLOCKS.find((ib) => ib.id === blk.id);
-              return {
-                ...blk,
-                estateId: blk.estateId || initB?.estateId || "loc-1",
-              };
-            }),
-            ...missingInitialBlocks,
-          ];
-          setBlocks(mergedBlocks);
-        }
-        if (parsed.materials) setMaterials(parsed.materials);
-        if (parsed.suppliers) setSuppliers(parsed.suppliers);
-        if (parsed.users) setUsers(parsed.users);
-          if (parsed.approvalMatrix) {
-            // Migrate from old format (level1Role/level2Role/level3Role) → new levels[]
-            const migrated = parsed.approvalMatrix.map((r: any) => {
-              if (Array.isArray(r.levels)) return r;
-              const levels: (ApprovalLevel | null)[] = Array(9).fill(null);
-              if (r.level1Role) levels[0] = "WM";
-              if (r.level2Role && r.level2Role !== "-") levels[1] = "EM";
-              if (r.level3Role && r.level3Role !== "-") levels[2] = "GEM";
-              return { id: r.id, tierName: r.tierName, minValue: r.minValue, maxValue: r.maxValue, levels, active: r.active, updatedAt: r.updatedAt };
-            });
-            setApprovalMatrix(migrated);
-          }
-        if (parsed.projectCategories) setProjectCategories(parsed.projectCategories);
-        if (parsed.projectTypes) setProjectTypes(parsed.projectTypes);
-        if (parsed.procurementTypes) setProcurementTypes(parsed.procurementTypes);
         if (parsed.tableDensity) setTableDensity(parsed.tableDensity);
         if (parsed.userProfile) setUserProfile((prev) => ({ ...prev, ...parsed.userProfile }));
         if (parsed.systemSettings) setSystemSettings((prev) => ({ ...prev, ...parsed.systemSettings }));
       }
     } catch {
-      // Fallback to initial mock data
+      // Abaikan jika localStorage tidak diizinkan oleh peramban
     }
     setMounted(true);
 
-    // Sync with Neon PostgreSQL
+    // Sync authoritative state directly with Neon PostgreSQL
     getInitialAppStateAction()
       .then((res) => {
         if (res.success && res.data) {
           applyDbData(res.data);
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn("Gagal sinkronisasi data awal dari database:", err);
+      });
   }, []);
 
-  // Save to LocalStorage
+  // Save UI Preferences to LocalStorage (hanya preferensi antarmuka, bukan transaksi proyek)
   useEffect(() => {
     if (!mounted) return;
     try {
       const stateToSave = {
-        projects,
-        afces,
-        prs,
-        pos,
-        grs,
-        vendorEvaluations,
-        goodsHandovers,
-        uspks,
-        technicalEvaluations,
-        spkContracts,
-        comments,
-        attachments,
-        notifications,
-        notificationSettings,
-        auditLogs,
-        dailyProgress,
-        weeklyProgress,
-        regions,
-        companies,
-        locations,
-        blocks,
-        materials,
-        suppliers,
-        users,
-        approvalMatrix,
-        projectCategories,
-        projectTypes,
-        procurementTypes,
         tableDensity,
         userProfile,
         systemSettings,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
     } catch {
-      // Ignore storage quota
+      // Abaikan kuota penyimpanan
     }
   }, [
     mounted,
-    projects,
-    afces,
-    prs,
-    pos,
-    grs,
-    vendorEvaluations,
-    goodsHandovers,
-    uspks,
-    technicalEvaluations,
-    spkContracts,
-    comments,
-    attachments,
-    notifications,
-    notificationSettings,
-    dailyProgress,
-    weeklyProgress,
-    regions,
-    companies,
-    locations,
-    blocks,
-    materials,
-    suppliers,
-    users,
-    approvalMatrix,
-    projectCategories,
-    projectTypes,
-    procurementTypes,
-    auditLogs,
     tableDensity,
     userProfile,
     systemSettings,
@@ -2077,8 +1956,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
               : r
           )
         );
+        return true;
+      } else {
+        setRegions((prev) => prev.filter((r) => r.id !== tempId));
+        toast.error(res.error || "Gagal menyimpan wilayah ke server");
+        return false;
       }
-      return true;
     } catch (err: any) {
       setRegions((prev) => prev.filter((r) => r.id !== tempId));
       toast.error(err.message || "Gagal menyimpan wilayah ke server");
@@ -2098,7 +1981,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await updateMasterDataRegionAction(id, reg);
+      const res = await updateMasterDataRegionAction(id, reg);
+      if (!res.success) {
+        if (original) {
+          setRegions((prev) => prev.map((r) => (r.id === id ? original! : r)));
+        }
+        toast.error(res.error || "Gagal memperbarui data wilayah");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2117,7 +2007,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await deleteMasterDataRegionAction(id);
+      const res = await deleteMasterDataRegionAction(id);
+      if (!res.success) {
+        if (original) {
+          setRegions((prev) => [...prev, original!]);
+        }
+        toast.error(res.error || "Gagal menghapus wilayah");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2153,8 +2050,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
               : c
           )
         );
+        return true;
+      } else {
+        setCompanies((prev) => prev.filter((c) => c.id !== tempId));
+        toast.error(res.error || "Gagal menyimpan perusahaan ke server");
+        return false;
       }
-      return true;
     } catch (err: any) {
       setCompanies((prev) => prev.filter((c) => c.id !== tempId));
       toast.error(err.message || "Gagal menyimpan perusahaan ke server");
@@ -2174,7 +2075,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await updateMasterDataCompanyAction(id, cmp);
+      const res = await updateMasterDataCompanyAction(id, cmp);
+      if (!res.success) {
+        if (original) {
+          setCompanies((prev) => prev.map((c) => (c.id === id ? original! : c)));
+        }
+        toast.error(res.error || "Gagal memperbarui data perusahaan");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2193,7 +2101,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await deleteMasterDataCompanyAction(id);
+      const res = await deleteMasterDataCompanyAction(id);
+      if (!res.success) {
+        if (original) {
+          setCompanies((prev) => [...prev, original!]);
+        }
+        toast.error(res.error || "Gagal menghapus perusahaan");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2229,8 +2144,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
               : l
           )
         );
+        return true;
+      } else {
+        setLocations((prev) => prev.filter((l) => l.id !== tempId));
+        toast.error(res.error || "Gagal menyimpan kebun ke server");
+        return false;
       }
-      return true;
     } catch (err: any) {
       setLocations((prev) => prev.filter((l) => l.id !== tempId));
       toast.error(err.message || "Gagal menyimpan kebun ke server");
@@ -2250,7 +2169,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await updateMasterDataLocationAction(id, loc);
+      const res = await updateMasterDataLocationAction(id, loc);
+      if (!res.success) {
+        if (original) {
+          setLocations((prev) => prev.map((l) => (l.id === id ? original! : l)));
+        }
+        toast.error(res.error || "Gagal memperbarui data kebun");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2269,7 +2195,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await deleteMasterDataLocationAction(id);
+      const res = await deleteMasterDataLocationAction(id);
+      if (!res.success) {
+        if (original) {
+          setLocations((prev) => [...prev, original!]);
+        }
+        toast.error(res.error || "Gagal menghapus kebun");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2305,8 +2238,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
               : b
           )
         );
+        return true;
+      } else {
+        setBlocks((prev) => prev.filter((b) => b.id !== tempId));
+        toast.error(res.error || "Gagal menyimpan blok ke server");
+        return false;
       }
-      return true;
     } catch (err: any) {
       setBlocks((prev) => prev.filter((b) => b.id !== tempId));
       toast.error(err.message || "Gagal menyimpan blok ke server");
@@ -2326,7 +2263,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await updateMasterDataBlockAction(id, blk);
+      const res = await updateMasterDataBlockAction(id, blk);
+      if (!res.success) {
+        if (original) {
+          setBlocks((prev) => prev.map((b) => (b.id === id ? original! : b)));
+        }
+        toast.error(res.error || "Gagal memperbarui data blok");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2345,7 +2289,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await deleteMasterDataBlockAction(id);
+      const res = await deleteMasterDataBlockAction(id);
+      if (!res.success) {
+        if (original) {
+          setBlocks((prev) => [...prev, original!]);
+        }
+        toast.error(res.error || "Gagal menghapus blok");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2381,8 +2332,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
               : m
           )
         );
+        return true;
+      } else {
+        setMaterials((prev) => prev.filter((m) => m.id !== tempId));
+        toast.error(res.error || "Gagal menyimpan material ke server");
+        return false;
       }
-      return true;
     } catch (err: any) {
       setMaterials((prev) => prev.filter((m) => m.id !== tempId));
       toast.error(err.message || "Gagal menyimpan material ke server");
@@ -2402,7 +2357,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await updateMasterDataMaterialAction(id, mat);
+      const res = await updateMasterDataMaterialAction(id, mat);
+      if (!res.success) {
+        if (original) {
+          setMaterials((prev) => prev.map((m) => (m.id === id ? original! : m)));
+        }
+        toast.error(res.error || "Gagal memperbarui data material");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2421,7 +2383,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await deleteMasterDataMaterialAction(id);
+      const res = await deleteMasterDataMaterialAction(id);
+      if (!res.success) {
+        if (original) {
+          setMaterials((prev) => [...prev, original!]);
+        }
+        toast.error(res.error || "Gagal menghapus material");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2457,8 +2426,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
               : s
           )
         );
+        return true;
+      } else {
+        setSuppliers((prev) => prev.filter((s) => s.id !== tempId));
+        toast.error(res.error || "Gagal menyimpan rekanan ke server");
+        return false;
       }
-      return true;
     } catch (err: any) {
       setSuppliers((prev) => prev.filter((s) => s.id !== tempId));
       toast.error(err.message || "Gagal menyimpan rekanan ke server");
@@ -2478,7 +2451,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await updateMasterDataSupplierAction(id, sup);
+      const res = await updateMasterDataSupplierAction(id, sup);
+      if (!res.success) {
+        if (original) {
+          setSuppliers((prev) => prev.map((s) => (s.id === id ? original! : s)));
+        }
+        toast.error(res.error || "Gagal memperbarui data rekanan");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2497,7 +2477,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await deleteMasterDataSupplierAction(id);
+      const res = await deleteMasterDataSupplierAction(id);
+      if (!res.success) {
+        if (original) {
+          setSuppliers((prev) => [...prev, original!]);
+        }
+        toast.error(res.error || "Gagal menghapus rekanan");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2533,8 +2520,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
               : u
           )
         );
+        return true;
+      } else {
+        setUsers((prev) => prev.filter((u) => u.id !== tempId));
+        toast.error(res.error || "Gagal menyimpan pengguna ke server");
+        return false;
       }
-      return true;
     } catch (err: any) {
       setUsers((prev) => prev.filter((u) => u.id !== tempId));
       toast.error(err.message || "Gagal menyimpan pengguna ke server");
@@ -2554,7 +2545,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await updateMasterDataUserAction(id, user);
+      const res = await updateMasterDataUserAction(id, user);
+      if (!res.success) {
+        if (original) {
+          setUsers((prev) => prev.map((u) => (u.id === id ? original! : u)));
+        }
+        toast.error(res.error || "Gagal memperbarui data pengguna");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2573,7 +2571,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await deleteMasterDataUserAction(id);
+      const res = await deleteMasterDataUserAction(id);
+      if (!res.success) {
+        if (original) {
+          setUsers((prev) => [...prev, original!]);
+        }
+        toast.error(res.error || "Gagal menghapus pengguna");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2609,8 +2614,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
               : r
           )
         );
+        return true;
+      } else {
+        setApprovalMatrix((prev) => prev.filter((r) => r.id !== tempId));
+        toast.error(res.error || "Gagal menyimpan tingkatan approval ke server");
+        return false;
       }
-      return true;
     } catch (err: any) {
       setApprovalMatrix((prev) => prev.filter((r) => r.id !== tempId));
       toast.error(err.message || "Gagal menyimpan tingkatan approval ke server");
@@ -2630,7 +2639,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await updateApprovalMatrixRuleAction(id, rule);
+      const res = await updateApprovalMatrixRuleAction(id, rule);
+      if (!res.success) {
+        if (original) {
+          setApprovalMatrix((prev) => prev.map((r) => (r.id === id ? original! : r)));
+        }
+        toast.error(res.error || "Gagal memperbarui tingkatan approval");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2649,7 +2665,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await deleteApprovalMatrixRuleAction(id);
+      const res = await deleteApprovalMatrixRuleAction(id);
+      if (!res.success) {
+        if (original) {
+          setApprovalMatrix((prev) => [...prev, original!]);
+        }
+        toast.error(res.error || "Gagal menghapus tingkatan approval");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2703,8 +2726,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
               : c
           )
         );
+        return true;
+      } else {
+        setProjectCategories((prev) => prev.filter((c) => c.id !== tempId));
+        toast.error(res.error || "Gagal menyimpan kategori proyek ke server");
+        return false;
       }
-      return true;
     } catch (err: any) {
       setProjectCategories((prev) => prev.filter((c) => c.id !== tempId));
       toast.error(err.message || "Gagal menyimpan kategori proyek ke server");
@@ -2724,7 +2751,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await updateMasterDataProjectCategoryAction(id, item);
+      const res = await updateMasterDataProjectCategoryAction(id, item);
+      if (!res.success) {
+        if (original) {
+          setProjectCategories((prev) => prev.map((c) => (c.id === id ? original! : c)));
+        }
+        toast.error(res.error || "Gagal memperbarui kategori proyek");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2743,7 +2777,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await deleteMasterDataProjectCategoryAction(id);
+      const res = await deleteMasterDataProjectCategoryAction(id);
+      if (!res.success) {
+        if (original) {
+          setProjectCategories((prev) => [...prev, original!]);
+        }
+        toast.error(res.error || "Gagal menghapus kategori proyek");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2779,8 +2820,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
               : t
           )
         );
+        return true;
+      } else {
+        setProjectTypes((prev) => prev.filter((t) => t.id !== tempId));
+        toast.error(res.error || "Gagal menyimpan tipe proyek ke server");
+        return false;
       }
-      return true;
     } catch (err: any) {
       setProjectTypes((prev) => prev.filter((t) => t.id !== tempId));
       toast.error(err.message || "Gagal menyimpan tipe proyek ke server");
@@ -2800,7 +2845,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await updateMasterDataProjectTypeAction(id, item);
+      const res = await updateMasterDataProjectTypeAction(id, item);
+      if (!res.success) {
+        if (original) {
+          setProjectTypes((prev) => prev.map((t) => (t.id === id ? original! : t)));
+        }
+        toast.error(res.error || "Gagal memperbarui tipe proyek");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2819,7 +2871,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await deleteMasterDataProjectTypeAction(id);
+      const res = await deleteMasterDataProjectTypeAction(id);
+      if (!res.success) {
+        if (original) {
+          setProjectTypes((prev) => [...prev, original!]);
+        }
+        toast.error(res.error || "Gagal menghapus tipe proyek");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2855,8 +2914,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
               : t
           )
         );
+        return true;
+      } else {
+        setProcurementTypes((prev) => prev.filter((t) => t.id !== tempId));
+        toast.error(res.error || "Gagal menyimpan metode pengadaan ke server");
+        return false;
       }
-      return true;
     } catch (err: any) {
       setProcurementTypes((prev) => prev.filter((t) => t.id !== tempId));
       toast.error(err.message || "Gagal menyimpan metode pengadaan ke server");
@@ -2876,7 +2939,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await updateMasterDataProcurementTypeAction(id, item);
+      const res = await updateMasterDataProcurementTypeAction(id, item);
+      if (!res.success) {
+        if (original) {
+          setProcurementTypes((prev) => prev.map((t) => (t.id === id ? original! : t)));
+        }
+        toast.error(res.error || "Gagal memperbarui metode pengadaan");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2895,7 +2965,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      await deleteMasterDataProcurementTypeAction(id);
+      const res = await deleteMasterDataProcurementTypeAction(id);
+      if (!res.success) {
+        if (original) {
+          setProcurementTypes((prev) => [...prev, original!]);
+        }
+        toast.error(res.error || "Gagal menghapus metode pengadaan");
+        return false;
+      }
       return true;
     } catch (err: any) {
       if (original) {
@@ -2924,6 +3001,11 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       setComments([]);
       setAttachments([]);
       setNotifications([]);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem("wm_toolkit_state_v1");
+        localStorage.removeItem("wm_toolkit_state");
+      } catch {}
       await refreshFromDatabase();
       toast.success(res.message);
     } else {
@@ -2950,6 +3032,11 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       setAttachments([]);
       setAuditLogs([]);
       setNotifications([]);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem("wm_toolkit_state_v1");
+        localStorage.removeItem("wm_toolkit_state");
+      } catch {}
       await refreshFromDatabase();
       toast.success(res.message);
     } else {

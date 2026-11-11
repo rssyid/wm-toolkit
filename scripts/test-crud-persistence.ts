@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { db } from "../src/server/db";
 import {
   createProjectAction,
@@ -232,12 +233,15 @@ async function runTestSuite() {
   const testAfceNum = `AFCE-2026-${Date.now().toString().slice(-4)}`;
   const testWorkItemId = `wbs-test-${Date.now()}`;
 
-  console.log(`Membuat Proyek Baru: ${testPrjCode} (ID: ${testPrjId})`);
-  const projectResult = await createProjectAction({
-    id: testPrjId,
-    code: testPrjCode,
-    name: `Proyek Uji Persistensi CRUD ${testPrjCode}`,
-    description: "Pengujian end-to-end seluruh alur transaksi sistem perkebunan",
+  let activeTestProjectId: string | null = null;
+  try {
+    activeTestProjectId = testPrjId;
+    console.log(`Membuat Proyek Baru: ${testPrjCode} (ID: ${testPrjId})`);
+    const projectResult = await createProjectAction({
+      id: testPrjId,
+      code: testPrjCode,
+      name: `Proyek Uji Persistensi CRUD ${testPrjCode}`,
+      description: "Pengujian end-to-end seluruh alur transaksi sistem perkebunan",
     locationId: location.id,
     locationName: location.name,
     projectType: "Physical Work",
@@ -671,12 +675,49 @@ async function runTestSuite() {
   const dbPrjCheck = await db.project.findUnique({ where: { id: testPrjId } });
   if (dbPrjCheck) throw new Error("Proyek uji masih tersisa di database!");
   console.log("[OK] Proyek uji dan seluruh relasi kaskade berhasil dibersihkan dari database!");
-  if (dbPrjCheck) throw new Error("Proyek uji masih tersisa di database!");
-  console.log("[OK] Proyek uji dan seluruh relasi kaskade berhasil dibersihkan dari database!");
 
   console.log("\n==================================================================");
   console.log("SEMUA PENGUJIAN PERSISTENSI CRUD KE BASIS DATA BERHASIL 100%!");
   console.log("==================================================================");
+  } finally {
+    // Fail-safe cleanup: jika terjadi error di tahap tengah, bersihkan proyek uji
+    if (activeTestProjectId) {
+      const remainingProject = await db.project.findUnique({ where: { id: activeTestProjectId } });
+      if (remainingProject) {
+        console.log(`\n[FAIL-SAFE CLEANUP] Membersihkan residu proyek uji: ${activeTestProjectId}`);
+        try {
+          await hardDeleteProjectAction(activeTestProjectId);
+        } catch {
+          await db.$transaction(async (tx) => {
+            await tx.progressLog.deleteMany({ where: { projectId: activeTestProjectId } });
+            await tx.purchaseOrder.deleteMany({ where: { projectId: activeTestProjectId } });
+            await tx.purchaseRequisition.deleteMany({ where: { projectId: activeTestProjectId } });
+            await tx.spk.deleteMany({ where: { projectId: activeTestProjectId } });
+            await tx.uspk.deleteMany({ where: { projectId: activeTestProjectId } });
+            await tx.afce.deleteMany({ where: { projectId: activeTestProjectId } });
+            await tx.projectAttachment.deleteMany({ where: { projectId: activeTestProjectId } });
+            await tx.projectComment.deleteMany({ where: { projectId: activeTestProjectId } });
+            await tx.workItem.deleteMany({ where: { projectId: activeTestProjectId } });
+            await tx.boqItem.deleteMany({ where: { projectId: activeTestProjectId } });
+            await tx.project.delete({ where: { id: activeTestProjectId } });
+          });
+        }
+      }
+      // Bersihkan juga audit log uji coba yang tercatat
+      await db.auditLog.deleteMany({
+        where: {
+          OR: [
+            { projectId: activeTestProjectId },
+            { entityTitle: { contains: "PRJ-CRUD" } },
+            { entityTitle: { contains: "Uji Persistensi" } },
+            { notes: { contains: "PRJ-CRUD" } },
+            { entityTitle: { contains: testAfceNum } },
+            { notes: { contains: testAfceNum } },
+          ],
+        },
+      });
+    }
+  }
 }
 
 runTestSuite()

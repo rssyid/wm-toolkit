@@ -18,12 +18,20 @@ function createPrismaClient(): PrismaClient {
     connectionTimeoutMillis: 10000,
   });
 
-  const adapter = new PrismaPg(pool);
+  // Mencegah uncaught exception saat koneksi idle diputus oleh serverless Neon
+  pool.on("error", (err) => {
+    console.warn("Peringatan koneksi idle PostgreSQL Pool:", err.message);
+  });
+
+  const adapter = new PrismaPg(pool, {
+    onPoolError: (err) => {
+      console.warn("Peringatan PrismaPg adapter pool:", err.message);
+    },
+  });
   return new PrismaClient({ adapter });
 }
 
 export const db = globalForPrisma.prisma ?? createPrismaClient();
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = db;
-}
+// Selalu cache instance prisma pada globalThis agar digunakan kembali pada warm container serverless
+globalForPrisma.prisma = db;
