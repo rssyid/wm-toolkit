@@ -84,6 +84,7 @@ import {
   processAfceApprovalAction,
   submitAfceApprovalAction,
   updateAfceAction,
+  syncAfceWithMatrixAction,
 } from "@/server/actions/afce";
 import {
   createPrAction,
@@ -121,14 +122,45 @@ import {
   deleteNotificationAction,
   clearAllNotificationsAction,
   updateNotificationSettingAction,
+  createNotificationAction,
 } from "@/server/actions/notifications";
 import {
   addMasterDataLocationAction,
+  updateMasterDataLocationAction,
+  deleteMasterDataLocationAction,
+  addMasterDataCompanyAction,
+  updateMasterDataCompanyAction,
+  deleteMasterDataCompanyAction,
+  addMasterDataRegionAction,
+  updateMasterDataRegionAction,
+  deleteMasterDataRegionAction,
+  addMasterDataBlockAction,
+  updateMasterDataBlockAction,
+  deleteMasterDataBlockAction,
   addMasterDataMaterialAction,
+  updateMasterDataMaterialAction,
+  deleteMasterDataMaterialAction,
   addMasterDataSupplierAction,
+  updateMasterDataSupplierAction,
+  deleteMasterDataSupplierAction,
   addMasterDataUserAction,
+  updateMasterDataUserAction,
+  deleteMasterDataUserAction,
   updateApprovalMatrixAction,
+  addApprovalMatrixRuleAction,
+  updateApprovalMatrixRuleAction,
+  deleteApprovalMatrixRuleAction,
+  addMasterDataProjectCategoryAction,
+  updateMasterDataProjectCategoryAction,
+  deleteMasterDataProjectCategoryAction,
+  addMasterDataProjectTypeAction,
+  updateMasterDataProjectTypeAction,
+  deleteMasterDataProjectTypeAction,
+  addMasterDataProcurementTypeAction,
+  updateMasterDataProcurementTypeAction,
+  deleteMasterDataProcurementTypeAction,
 } from "@/server/actions/master-data";
+import { updateCurrentUserProfileAction } from "@/server/actions/users";
 
 interface AppStateContextType {
   projects: Project[];
@@ -265,29 +297,40 @@ interface AppStateContextType {
   ) => AuditLog;
 
   // Master Data
-  addMasterDataRegion: (reg: Omit<Region, "id" | "updatedAt">) => void;
-  updateMasterDataRegion: (id: string, reg: Partial<Region>) => void;
-  addMasterDataCompany: (cmp: Omit<Company, "id" | "updatedAt">) => void;
-  updateMasterDataCompany: (id: string, cmp: Partial<Company>) => void;
-  addMasterDataLocation: (loc: Omit<EstateLocation, "id" | "updatedAt">) => void;
-  updateMasterDataLocation: (id: string, loc: Partial<EstateLocation>) => void;
-  addMasterDataBlock: (blk: Omit<EstateBlock, "id" | "updatedAt">) => void;
-  updateMasterDataBlock: (id: string, blk: Partial<EstateBlock>) => void;
-  addMasterDataMaterial: (mat: Omit<MaterialCatalogItem, "id" | "updatedAt">) => void;
-  updateMasterDataMaterial: (id: string, mat: Partial<MaterialCatalogItem>) => void;
-  addMasterDataSupplier: (sup: Omit<Supplier, "id" | "updatedAt">) => void;
-  updateMasterDataSupplier: (id: string, sup: Partial<Supplier>) => void;
-  addMasterDataUser: (user: Omit<AppUser, "id" | "updatedAt">) => void;
-  updateMasterDataUser: (id: string, user: Partial<AppUser>) => void;
-  addApprovalMatrixRule: (rule: Omit<ApprovalMatrixRule, "id" | "updatedAt">) => void;
-  updateApprovalMatrixRule: (id: string, rule: Partial<ApprovalMatrixRule>) => void;
+  addMasterDataRegion: (reg: Omit<Region, "id" | "updatedAt">) => Promise<boolean>;
+  updateMasterDataRegion: (id: string, reg: Partial<Region>) => Promise<boolean>;
+  deleteMasterDataRegion: (id: string) => Promise<boolean>;
+  addMasterDataCompany: (cmp: Omit<Company, "id" | "updatedAt">) => Promise<boolean>;
+  updateMasterDataCompany: (id: string, cmp: Partial<Company>) => Promise<boolean>;
+  deleteMasterDataCompany: (id: string) => Promise<boolean>;
+  addMasterDataLocation: (loc: Omit<EstateLocation, "id" | "updatedAt">) => Promise<boolean>;
+  updateMasterDataLocation: (id: string, loc: Partial<EstateLocation>) => Promise<boolean>;
+  deleteMasterDataLocation: (id: string) => Promise<boolean>;
+  addMasterDataBlock: (blk: Omit<EstateBlock, "id" | "updatedAt">) => Promise<boolean>;
+  updateMasterDataBlock: (id: string, blk: Partial<EstateBlock>) => Promise<boolean>;
+  deleteMasterDataBlock: (id: string) => Promise<boolean>;
+  addMasterDataMaterial: (mat: Omit<MaterialCatalogItem, "id" | "updatedAt">) => Promise<boolean>;
+  updateMasterDataMaterial: (id: string, mat: Partial<MaterialCatalogItem>) => Promise<boolean>;
+  deleteMasterDataMaterial: (id: string) => Promise<boolean>;
+  addMasterDataSupplier: (sup: Omit<Supplier, "id" | "updatedAt">) => Promise<boolean>;
+  updateMasterDataSupplier: (id: string, sup: Partial<Supplier>) => Promise<boolean>;
+  deleteMasterDataSupplier: (id: string) => Promise<boolean>;
+  addMasterDataUser: (user: Omit<AppUser, "id" | "updatedAt">) => Promise<boolean>;
+  updateMasterDataUser: (id: string, user: Partial<AppUser>) => Promise<boolean>;
+  deleteMasterDataUser: (id: string) => Promise<boolean>;
+  addApprovalMatrixRule: (rule: Omit<ApprovalMatrixRule, "id" | "updatedAt">) => Promise<boolean>;
+  updateApprovalMatrixRule: (id: string, rule: Partial<ApprovalMatrixRule>) => Promise<boolean>;
+  deleteApprovalMatrixRule: (id: string) => Promise<boolean>;
   toggleApprovalLevel: (tierId: string, levelIndex: number) => void;
-  addMasterDataProjectCategory: (item: Omit<ProjectCategoryItem, "id" | "updatedAt">) => void;
-  updateMasterDataProjectCategory: (id: string, item: Partial<ProjectCategoryItem>) => void;
-  addMasterDataProjectType: (item: Omit<ProjectTypeItem, "id" | "updatedAt">) => void;
-  updateMasterDataProjectType: (id: string, item: Partial<ProjectTypeItem>) => void;
-  addMasterDataProcurementType: (item: Omit<ProcurementTypeItem, "id" | "updatedAt">) => void;
-  updateMasterDataProcurementType: (id: string, item: Partial<ProcurementTypeItem>) => void;
+  addMasterDataProjectCategory: (item: Omit<ProjectCategoryItem, "id" | "updatedAt">) => Promise<boolean>;
+  updateMasterDataProjectCategory: (id: string, item: Partial<ProjectCategoryItem>) => Promise<boolean>;
+  deleteMasterDataProjectCategory: (id: string) => Promise<boolean>;
+  addMasterDataProjectType: (item: Omit<ProjectTypeItem, "id" | "updatedAt">) => Promise<boolean>;
+  updateMasterDataProjectType: (id: string, item: Partial<ProjectTypeItem>) => Promise<boolean>;
+  deleteMasterDataProjectType: (id: string) => Promise<boolean>;
+  addMasterDataProcurementType: (item: Omit<ProcurementTypeItem, "id" | "updatedAt">) => Promise<boolean>;
+  updateMasterDataProcurementType: (id: string, item: Partial<ProcurementTypeItem>) => Promise<boolean>;
+  deleteMasterDataProcurementType: (id: string) => Promise<boolean>;
 
   resetToMockData: () => void;
   refreshFromDatabase: () => Promise<void>;
@@ -338,6 +381,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
   const updateUserProfile = (updates: Partial<UserProfile>) => {
     setUserProfile((prev) => ({ ...prev, ...updates }));
+    updateCurrentUserProfileAction(updates).catch((err) =>
+      console.warn("Sync DB error (updateCurrentUserProfileAction):", err)
+    );
   };
 
   const updateSystemSettings = (updates: Partial<SystemSettings>) => {
@@ -581,7 +627,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     notificationSettings,
     dailyProgress,
     weeklyProgress,
+    regions,
+    companies,
     locations,
+    blocks,
     materials,
     suppliers,
     users,
@@ -589,6 +638,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     projectCategories,
     projectTypes,
     procurementTypes,
+    auditLogs,
     tableDensity,
     userProfile,
     systemSettings,
@@ -850,7 +900,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setAfces((prev) => [newAfce, ...prev]);
 
     // Persist to Neon DB in background
-    createProjectAction(newProject).catch((err) => console.warn("Sync DB error (createProjectAction):", err));
+    createProjectAction({
+      ...newProject,
+      afceId: newAfce.id,
+      afceNumber: newAfce.afceNumber,
+      afceValue: newAfce.value,
+      afceStatus: newAfce.status,
+      sapDocNumber: newAfce.sapDocNumber,
+    }).catch((err) => console.warn("Sync DB error (createProjectAction):", err));
 
     // Record Immutable Audit Log
     addAuditLog({
@@ -1183,6 +1240,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
               ? "Draft AFCE Preparation"
               : `Waiting Level ${newCurrentLevel}: ${newRole} Approval`,
         });
+
+        syncAfceWithMatrixAction(a.id, newLevels).catch((err) =>
+          console.warn("Sync DB error (syncAfceWithMatrixAction):", err)
+        );
 
         toast.success(`Matriks dokumen ${a.afceNumber} berhasil disinkronkan dengan SOP terbaru.`);
         return updated;
@@ -1876,6 +1937,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString(),
     };
     setNotifications((prev) => [newNotif, ...prev]);
+    createNotificationAction(newNotif).catch((err) =>
+      console.warn("Sync DB error (createNotificationAction):", err)
+    );
     return newNotif;
   };
 
@@ -1988,128 +2052,612 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Master Data Mutators
-  const addMasterDataRegion = (reg: Omit<Region, "id" | "updatedAt">) => {
+  const addMasterDataRegion = async (reg: Omit<Region, "id" | "updatedAt">): Promise<boolean> => {
+    const tempId = `reg-${Date.now()}`;
     const newReg: Region = {
       ...reg,
-      id: `reg-${Date.now()}`,
+      id: tempId,
       updatedAt: new Date().toISOString().split("T")[0],
     };
     setRegions((prev) => [...prev, newReg]);
+
+    try {
+      const res = await addMasterDataRegionAction(newReg);
+      if (res.success && res.region) {
+        setRegions((prev) =>
+          prev.map((r) =>
+            r.id === tempId
+              ? {
+                  ...r,
+                  id: res.region.id,
+                  updatedAt: res.region.updatedAt
+                    ? new Date(res.region.updatedAt).toISOString().split("T")[0]
+                    : r.updatedAt,
+                }
+              : r
+          )
+        );
+      }
+      return true;
+    } catch (err: any) {
+      setRegions((prev) => prev.filter((r) => r.id !== tempId));
+      toast.error(err.message || "Gagal menyimpan wilayah ke server");
+      return false;
+    }
   };
 
-  const updateMasterDataRegion = (id: string, reg: Partial<Region>) => {
-    setRegions((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, ...reg, updatedAt: new Date().toISOString().split("T")[0] } : r))
-    );
+  const updateMasterDataRegion = async (id: string, reg: Partial<Region>): Promise<boolean> => {
+    let original: Region | undefined;
+    setRegions((prev) => {
+      original = prev.find((r) => r.id === id);
+      return prev.map((r) =>
+        r.id === id
+          ? { ...r, ...reg, updatedAt: new Date().toISOString().split("T")[0] }
+          : r
+      );
+    });
+
+    try {
+      await updateMasterDataRegionAction(id, reg);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setRegions((prev) => prev.map((r) => (r.id === id ? original! : r)));
+      }
+      toast.error(err.message || "Gagal memperbarui data wilayah");
+      return false;
+    }
   };
 
-  const addMasterDataCompany = (cmp: Omit<Company, "id" | "updatedAt">) => {
+  const deleteMasterDataRegion = async (id: string): Promise<boolean> => {
+    let original: Region | undefined;
+    setRegions((prev) => {
+      original = prev.find((r) => r.id === id);
+      return prev.filter((r) => r.id !== id);
+    });
+
+    try {
+      await deleteMasterDataRegionAction(id);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setRegions((prev) => [...prev, original!]);
+      }
+      toast.error(err.message || "Gagal menghapus wilayah");
+      return false;
+    }
+  };
+
+  const addMasterDataCompany = async (cmp: Omit<Company, "id" | "updatedAt">): Promise<boolean> => {
+    const tempId = `cmp-${Date.now()}`;
     const newCmp: Company = {
       ...cmp,
-      id: `cmp-${Date.now()}`,
+      id: tempId,
       updatedAt: new Date().toISOString().split("T")[0],
     };
     setCompanies((prev) => [...prev, newCmp]);
+
+    try {
+      const res = await addMasterDataCompanyAction(newCmp);
+      if (res.success && res.company) {
+        setCompanies((prev) =>
+          prev.map((c) =>
+            c.id === tempId
+              ? {
+                  ...c,
+                  id: res.company.id,
+                  updatedAt: res.company.updatedAt
+                    ? new Date(res.company.updatedAt).toISOString().split("T")[0]
+                    : c.updatedAt,
+                }
+              : c
+          )
+        );
+      }
+      return true;
+    } catch (err: any) {
+      setCompanies((prev) => prev.filter((c) => c.id !== tempId));
+      toast.error(err.message || "Gagal menyimpan perusahaan ke server");
+      return false;
+    }
   };
 
-  const updateMasterDataCompany = (id: string, cmp: Partial<Company>) => {
-    setCompanies((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...cmp, updatedAt: new Date().toISOString().split("T")[0] } : c))
-    );
+  const updateMasterDataCompany = async (id: string, cmp: Partial<Company>): Promise<boolean> => {
+    let original: Company | undefined;
+    setCompanies((prev) => {
+      original = prev.find((c) => c.id === id);
+      return prev.map((c) =>
+        c.id === id
+          ? { ...c, ...cmp, updatedAt: new Date().toISOString().split("T")[0] }
+          : c
+      );
+    });
+
+    try {
+      await updateMasterDataCompanyAction(id, cmp);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setCompanies((prev) => prev.map((c) => (c.id === id ? original! : c)));
+      }
+      toast.error(err.message || "Gagal memperbarui data perusahaan");
+      return false;
+    }
   };
 
-  const addMasterDataLocation = (loc: Omit<EstateLocation, "id" | "updatedAt">) => {
+  const deleteMasterDataCompany = async (id: string): Promise<boolean> => {
+    let original: Company | undefined;
+    setCompanies((prev) => {
+      original = prev.find((c) => c.id === id);
+      return prev.filter((c) => c.id !== id);
+    });
+
+    try {
+      await deleteMasterDataCompanyAction(id);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setCompanies((prev) => [...prev, original!]);
+      }
+      toast.error(err.message || "Gagal menghapus perusahaan");
+      return false;
+    }
+  };
+
+  const addMasterDataLocation = async (loc: Omit<EstateLocation, "id" | "updatedAt">): Promise<boolean> => {
+    const tempId = `loc-${Date.now()}`;
     const newLoc: EstateLocation = {
       ...loc,
-      id: `loc-${Date.now()}`,
+      id: tempId,
       updatedAt: new Date().toISOString().split("T")[0],
     };
     setLocations((prev) => [...prev, newLoc]);
-    addMasterDataLocationAction(newLoc).catch((err) => console.warn("Sync DB error (addMasterDataLocationAction):", err));
+
+    try {
+      const res = await addMasterDataLocationAction(newLoc);
+      if (res.success && res.location) {
+        setLocations((prev) =>
+          prev.map((l) =>
+            l.id === tempId
+              ? {
+                  ...l,
+                  id: res.location.id,
+                  updatedAt: res.location.updatedAt
+                    ? new Date(res.location.updatedAt).toISOString().split("T")[0]
+                    : l.updatedAt,
+                }
+              : l
+          )
+        );
+      }
+      return true;
+    } catch (err: any) {
+      setLocations((prev) => prev.filter((l) => l.id !== tempId));
+      toast.error(err.message || "Gagal menyimpan kebun ke server");
+      return false;
+    }
   };
 
-  const updateMasterDataLocation = (id: string, loc: Partial<EstateLocation>) => {
-    setLocations((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, ...loc, updatedAt: new Date().toISOString().split("T")[0] } : l))
-    );
+  const updateMasterDataLocation = async (id: string, loc: Partial<EstateLocation>): Promise<boolean> => {
+    let original: EstateLocation | undefined;
+    setLocations((prev) => {
+      original = prev.find((l) => l.id === id);
+      return prev.map((l) =>
+        l.id === id
+          ? { ...l, ...loc, updatedAt: new Date().toISOString().split("T")[0] }
+          : l
+      );
+    });
+
+    try {
+      await updateMasterDataLocationAction(id, loc);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setLocations((prev) => prev.map((l) => (l.id === id ? original! : l)));
+      }
+      toast.error(err.message || "Gagal memperbarui data kebun");
+      return false;
+    }
   };
 
-  const addMasterDataBlock = (blk: Omit<EstateBlock, "id" | "updatedAt">) => {
+  const deleteMasterDataLocation = async (id: string): Promise<boolean> => {
+    let original: EstateLocation | undefined;
+    setLocations((prev) => {
+      original = prev.find((l) => l.id === id);
+      return prev.filter((l) => l.id !== id);
+    });
+
+    try {
+      await deleteMasterDataLocationAction(id);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setLocations((prev) => [...prev, original!]);
+      }
+      toast.error(err.message || "Gagal menghapus kebun");
+      return false;
+    }
+  };
+
+  const addMasterDataBlock = async (blk: Omit<EstateBlock, "id" | "updatedAt">): Promise<boolean> => {
+    const tempId = `blk-${Date.now()}`;
     const newBlk: EstateBlock = {
       ...blk,
-      id: `blk-${Date.now()}`,
+      id: tempId,
       updatedAt: new Date().toISOString().split("T")[0],
     };
     setBlocks((prev) => [...prev, newBlk]);
+
+    try {
+      const res = await addMasterDataBlockAction(newBlk);
+      if (res.success && res.block) {
+        setBlocks((prev) =>
+          prev.map((b) =>
+            b.id === tempId
+              ? {
+                  ...b,
+                  id: res.block.id,
+                  updatedAt: res.block.updatedAt
+                    ? new Date(res.block.updatedAt).toISOString().split("T")[0]
+                    : b.updatedAt,
+                }
+              : b
+          )
+        );
+      }
+      return true;
+    } catch (err: any) {
+      setBlocks((prev) => prev.filter((b) => b.id !== tempId));
+      toast.error(err.message || "Gagal menyimpan blok ke server");
+      return false;
+    }
   };
 
-  const updateMasterDataBlock = (id: string, blk: Partial<EstateBlock>) => {
-    setBlocks((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, ...blk, updatedAt: new Date().toISOString().split("T")[0] } : b))
-    );
+  const updateMasterDataBlock = async (id: string, blk: Partial<EstateBlock>): Promise<boolean> => {
+    let original: EstateBlock | undefined;
+    setBlocks((prev) => {
+      original = prev.find((b) => b.id === id);
+      return prev.map((b) =>
+        b.id === id
+          ? { ...b, ...blk, updatedAt: new Date().toISOString().split("T")[0] }
+          : b
+      );
+    });
+
+    try {
+      await updateMasterDataBlockAction(id, blk);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setBlocks((prev) => prev.map((b) => (b.id === id ? original! : b)));
+      }
+      toast.error(err.message || "Gagal memperbarui data blok");
+      return false;
+    }
   };
 
-  const addMasterDataMaterial = (mat: Omit<MaterialCatalogItem, "id" | "updatedAt">) => {
+  const deleteMasterDataBlock = async (id: string): Promise<boolean> => {
+    let original: EstateBlock | undefined;
+    setBlocks((prev) => {
+      original = prev.find((b) => b.id === id);
+      return prev.filter((b) => b.id !== id);
+    });
+
+    try {
+      await deleteMasterDataBlockAction(id);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setBlocks((prev) => [...prev, original!]);
+      }
+      toast.error(err.message || "Gagal menghapus blok");
+      return false;
+    }
+  };
+
+  const addMasterDataMaterial = async (mat: Omit<MaterialCatalogItem, "id" | "updatedAt">): Promise<boolean> => {
+    const tempId = `mat-${Date.now()}`;
     const newMat: MaterialCatalogItem = {
       ...mat,
-      id: `mat-${Date.now()}`,
+      id: tempId,
       updatedAt: new Date().toISOString().split("T")[0],
     };
     setMaterials((prev) => [...prev, newMat]);
-    addMasterDataMaterialAction(newMat).catch((err) => console.warn("Sync DB error (addMasterDataMaterialAction):", err));
+
+    try {
+      const res = await addMasterDataMaterialAction(newMat);
+      if (res.success && res.material) {
+        setMaterials((prev) =>
+          prev.map((m) =>
+            m.id === tempId
+              ? {
+                  ...m,
+                  id: res.material.id,
+                  updatedAt: res.material.updatedAt
+                    ? new Date(res.material.updatedAt).toISOString().split("T")[0]
+                    : m.updatedAt,
+                }
+              : m
+          )
+        );
+      }
+      return true;
+    } catch (err: any) {
+      setMaterials((prev) => prev.filter((m) => m.id !== tempId));
+      toast.error(err.message || "Gagal menyimpan material ke server");
+      return false;
+    }
   };
 
-  const updateMasterDataMaterial = (id: string, mat: Partial<MaterialCatalogItem>) => {
-    setMaterials((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, ...mat, updatedAt: new Date().toISOString().split("T")[0] } : m))
-    );
+  const updateMasterDataMaterial = async (id: string, mat: Partial<MaterialCatalogItem>): Promise<boolean> => {
+    let original: MaterialCatalogItem | undefined;
+    setMaterials((prev) => {
+      original = prev.find((m) => m.id === id);
+      return prev.map((m) =>
+        m.id === id
+          ? { ...m, ...mat, updatedAt: new Date().toISOString().split("T")[0] }
+          : m
+      );
+    });
+
+    try {
+      await updateMasterDataMaterialAction(id, mat);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setMaterials((prev) => prev.map((m) => (m.id === id ? original! : m)));
+      }
+      toast.error(err.message || "Gagal memperbarui data material");
+      return false;
+    }
   };
 
-  const addMasterDataSupplier = (sup: Omit<Supplier, "id" | "updatedAt">) => {
+  const deleteMasterDataMaterial = async (id: string): Promise<boolean> => {
+    let original: MaterialCatalogItem | undefined;
+    setMaterials((prev) => {
+      original = prev.find((m) => m.id === id);
+      return prev.filter((m) => m.id !== id);
+    });
+
+    try {
+      await deleteMasterDataMaterialAction(id);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setMaterials((prev) => [...prev, original!]);
+      }
+      toast.error(err.message || "Gagal menghapus material");
+      return false;
+    }
+  };
+
+  const addMasterDataSupplier = async (sup: Omit<Supplier, "id" | "updatedAt">): Promise<boolean> => {
+    const tempId = `sup-${Date.now()}`;
     const newSup: Supplier = {
       ...sup,
-      id: `sup-${Date.now()}`,
+      id: tempId,
       updatedAt: new Date().toISOString().split("T")[0],
     };
     setSuppliers((prev) => [...prev, newSup]);
-    addMasterDataSupplierAction(newSup).catch((err) => console.warn("Sync DB error (addMasterDataSupplierAction):", err));
+
+    try {
+      const res = await addMasterDataSupplierAction(newSup);
+      if (res.success && res.supplier) {
+        setSuppliers((prev) =>
+          prev.map((s) =>
+            s.id === tempId
+              ? {
+                  ...s,
+                  id: res.supplier.id,
+                  updatedAt: res.supplier.updatedAt
+                    ? new Date(res.supplier.updatedAt).toISOString().split("T")[0]
+                    : s.updatedAt,
+                }
+              : s
+          )
+        );
+      }
+      return true;
+    } catch (err: any) {
+      setSuppliers((prev) => prev.filter((s) => s.id !== tempId));
+      toast.error(err.message || "Gagal menyimpan rekanan ke server");
+      return false;
+    }
   };
 
-  const updateMasterDataSupplier = (id: string, sup: Partial<Supplier>) => {
-    setSuppliers((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...sup, updatedAt: new Date().toISOString().split("T")[0] } : s))
-    );
+  const updateMasterDataSupplier = async (id: string, sup: Partial<Supplier>): Promise<boolean> => {
+    let original: Supplier | undefined;
+    setSuppliers((prev) => {
+      original = prev.find((s) => s.id === id);
+      return prev.map((s) =>
+        s.id === id
+          ? { ...s, ...sup, updatedAt: new Date().toISOString().split("T")[0] }
+          : s
+      );
+    });
+
+    try {
+      await updateMasterDataSupplierAction(id, sup);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setSuppliers((prev) => prev.map((s) => (s.id === id ? original! : s)));
+      }
+      toast.error(err.message || "Gagal memperbarui data rekanan");
+      return false;
+    }
   };
 
-  const addMasterDataUser = (user: Omit<AppUser, "id" | "updatedAt">) => {
+  const deleteMasterDataSupplier = async (id: string): Promise<boolean> => {
+    let original: Supplier | undefined;
+    setSuppliers((prev) => {
+      original = prev.find((s) => s.id === id);
+      return prev.filter((s) => s.id !== id);
+    });
+
+    try {
+      await deleteMasterDataSupplierAction(id);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setSuppliers((prev) => [...prev, original!]);
+      }
+      toast.error(err.message || "Gagal menghapus rekanan");
+      return false;
+    }
+  };
+
+  const addMasterDataUser = async (user: Omit<AppUser, "id" | "updatedAt">): Promise<boolean> => {
+    const tempId = `usr-${Date.now()}`;
     const newUser: AppUser = {
       ...user,
-      id: `usr-${Date.now()}`,
+      id: tempId,
       updatedAt: new Date().toISOString().split("T")[0],
     };
     setUsers((prev) => [...prev, newUser]);
-    addMasterDataUserAction(newUser).catch((err) => console.warn("Sync DB error (addMasterDataUserAction):", err));
+
+    try {
+      const res = await addMasterDataUserAction(newUser);
+      if (res.success && res.user) {
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === tempId
+              ? {
+                  ...u,
+                  id: res.user.id,
+                  updatedAt: res.user.updatedAt
+                    ? new Date(res.user.updatedAt).toISOString().split("T")[0]
+                    : u.updatedAt,
+                }
+              : u
+          )
+        );
+      }
+      return true;
+    } catch (err: any) {
+      setUsers((prev) => prev.filter((u) => u.id !== tempId));
+      toast.error(err.message || "Gagal menyimpan pengguna ke server");
+      return false;
+    }
   };
 
-  const updateMasterDataUser = (id: string, user: Partial<AppUser>) => {
-    setUsers((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, ...user, updatedAt: new Date().toISOString().split("T")[0] } : u))
-    );
+  const updateMasterDataUser = async (id: string, user: Partial<AppUser>): Promise<boolean> => {
+    let original: AppUser | undefined;
+    setUsers((prev) => {
+      original = prev.find((u) => u.id === id);
+      return prev.map((u) =>
+        u.id === id
+          ? { ...u, ...user, updatedAt: new Date().toISOString().split("T")[0] }
+          : u
+      );
+    });
+
+    try {
+      await updateMasterDataUserAction(id, user);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setUsers((prev) => prev.map((u) => (u.id === id ? original! : u)));
+      }
+      toast.error(err.message || "Gagal memperbarui data pengguna");
+      return false;
+    }
   };
 
-  const addApprovalMatrixRule = (rule: Omit<ApprovalMatrixRule, "id" | "updatedAt">) => {
+  const deleteMasterDataUser = async (id: string): Promise<boolean> => {
+    let original: AppUser | undefined;
+    setUsers((prev) => {
+      original = prev.find((u) => u.id === id);
+      return prev.filter((u) => u.id !== id);
+    });
+
+    try {
+      await deleteMasterDataUserAction(id);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setUsers((prev) => [...prev, original!]);
+      }
+      toast.error(err.message || "Gagal menghapus pengguna");
+      return false;
+    }
+  };
+
+  const addApprovalMatrixRule = async (rule: Omit<ApprovalMatrixRule, "id" | "updatedAt">): Promise<boolean> => {
+    const tempId = `rule-${Date.now()}`;
     const newRule: ApprovalMatrixRule = {
       ...rule,
-      id: `rule-${Date.now()}`,
+      id: tempId,
       updatedAt: new Date().toISOString().split("T")[0],
     };
     setApprovalMatrix((prev) => [...prev, newRule]);
+
+    try {
+      const res = await addApprovalMatrixRuleAction(newRule);
+      if (res.success && res.rule) {
+        setApprovalMatrix((prev) =>
+          prev.map((r) =>
+            r.id === tempId
+              ? {
+                  ...r,
+                  id: res.rule.id,
+                  updatedAt: res.rule.updatedAt
+                    ? new Date(res.rule.updatedAt).toISOString().split("T")[0]
+                    : r.updatedAt,
+                }
+              : r
+          )
+        );
+      }
+      return true;
+    } catch (err: any) {
+      setApprovalMatrix((prev) => prev.filter((r) => r.id !== tempId));
+      toast.error(err.message || "Gagal menyimpan tingkatan approval ke server");
+      return false;
+    }
   };
 
-  const updateApprovalMatrixRule = (id: string, rule: Partial<ApprovalMatrixRule>) => {
-    setApprovalMatrix((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, ...rule, updatedAt: new Date().toISOString().split("T")[0] } : r))
-    );
+  const updateApprovalMatrixRule = async (id: string, rule: Partial<ApprovalMatrixRule>): Promise<boolean> => {
+    let original: ApprovalMatrixRule | undefined;
+    setApprovalMatrix((prev) => {
+      original = prev.find((r) => r.id === id);
+      return prev.map((r) =>
+        r.id === id
+          ? { ...r, ...rule, updatedAt: new Date().toISOString().split("T")[0] }
+          : r
+      );
+    });
+
+    try {
+      await updateApprovalMatrixRuleAction(id, rule);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setApprovalMatrix((prev) => prev.map((r) => (r.id === id ? original! : r)));
+      }
+      toast.error(err.message || "Gagal memperbarui tingkatan approval");
+      return false;
+    }
+  };
+
+  const deleteApprovalMatrixRule = async (id: string): Promise<boolean> => {
+    let original: ApprovalMatrixRule | undefined;
+    setApprovalMatrix((prev) => {
+      original = prev.find((r) => r.id === id);
+      return prev.filter((r) => r.id !== id);
+    });
+
+    try {
+      await deleteApprovalMatrixRuleAction(id);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setApprovalMatrix((prev) => [...prev, original!]);
+      }
+      toast.error(err.message || "Gagal menghapus tingkatan approval");
+      return false;
+    }
   };
 
   const toggleApprovalLevel = (tierId: string, levelIndex: number) => {
@@ -2117,61 +2665,245 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       prev.map((rule) => {
         if (rule.id !== tierId) return rule;
         const newLevels = [...rule.levels] as (ApprovalLevel | null)[];
-        // Simple toggle - no sequential enforcement, no cascade
         if (newLevels[levelIndex] !== null) {
           newLevels[levelIndex] = null;
         } else {
           newLevels[levelIndex] = APPROVAL_LEVEL_ORDER[levelIndex];
         }
-        updateApprovalMatrixAction(tierId, newLevels).catch((err) => console.warn("Sync DB error (updateApprovalMatrixAction):", err));
+        updateApprovalMatrixAction(tierId, newLevels).catch((err) =>
+          console.warn("Sync DB error (updateApprovalMatrixAction):", err)
+        );
         return { ...rule, levels: newLevels, updatedAt: new Date().toISOString().split("T")[0] };
       })
     );
   };
 
-  const addMasterDataProjectCategory = (item: Omit<ProjectCategoryItem, "id" | "updatedAt">) => {
+  const addMasterDataProjectCategory = async (item: Omit<ProjectCategoryItem, "id" | "updatedAt">): Promise<boolean> => {
+    const tempId = `cat-${Date.now()}`;
     const newItem: ProjectCategoryItem = {
       ...item,
-      id: `cat-${Date.now()}`,
+      id: tempId,
       updatedAt: new Date().toISOString().split("T")[0],
     };
-    setProjectCategories((prev) => [newItem, ...prev]);
+    setProjectCategories((prev) => [...prev, newItem]);
+
+    try {
+      const res = await addMasterDataProjectCategoryAction(newItem);
+      if (res.success && res.category) {
+        setProjectCategories((prev) =>
+          prev.map((c) =>
+            c.id === tempId
+              ? {
+                  ...c,
+                  id: res.category.id,
+                  updatedAt: res.category.updatedAt
+                    ? new Date(res.category.updatedAt).toISOString().split("T")[0]
+                    : c.updatedAt,
+                }
+              : c
+          )
+        );
+      }
+      return true;
+    } catch (err: any) {
+      setProjectCategories((prev) => prev.filter((c) => c.id !== tempId));
+      toast.error(err.message || "Gagal menyimpan kategori proyek ke server");
+      return false;
+    }
   };
 
-  const updateMasterDataProjectCategory = (id: string, item: Partial<ProjectCategoryItem>) => {
-    setProjectCategories((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...item, updatedAt: new Date().toISOString().split("T")[0] } : c))
-    );
+  const updateMasterDataProjectCategory = async (id: string, item: Partial<ProjectCategoryItem>): Promise<boolean> => {
+    let original: ProjectCategoryItem | undefined;
+    setProjectCategories((prev) => {
+      original = prev.find((c) => c.id === id);
+      return prev.map((c) =>
+        c.id === id
+          ? { ...c, ...item, updatedAt: new Date().toISOString().split("T")[0] }
+          : c
+      );
+    });
+
+    try {
+      await updateMasterDataProjectCategoryAction(id, item);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setProjectCategories((prev) => prev.map((c) => (c.id === id ? original! : c)));
+      }
+      toast.error(err.message || "Gagal memperbarui kategori proyek");
+      return false;
+    }
   };
 
-  const addMasterDataProjectType = (item: Omit<ProjectTypeItem, "id" | "updatedAt">) => {
+  const deleteMasterDataProjectCategory = async (id: string): Promise<boolean> => {
+    let original: ProjectCategoryItem | undefined;
+    setProjectCategories((prev) => {
+      original = prev.find((c) => c.id === id);
+      return prev.filter((c) => c.id !== id);
+    });
+
+    try {
+      await deleteMasterDataProjectCategoryAction(id);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setProjectCategories((prev) => [...prev, original!]);
+      }
+      toast.error(err.message || "Gagal menghapus kategori proyek");
+      return false;
+    }
+  };
+
+  const addMasterDataProjectType = async (item: Omit<ProjectTypeItem, "id" | "updatedAt">): Promise<boolean> => {
+    const tempId = `pt-${Date.now()}`;
     const newItem: ProjectTypeItem = {
       ...item,
-      id: `pt-${Date.now()}`,
+      id: tempId,
       updatedAt: new Date().toISOString().split("T")[0],
     };
     setProjectTypes((prev) => [...prev, newItem]);
+
+    try {
+      const res = await addMasterDataProjectTypeAction(newItem);
+      if (res.success && res.projectType) {
+        setProjectTypes((prev) =>
+          prev.map((t) =>
+            t.id === tempId
+              ? {
+                  ...t,
+                  id: res.projectType.id,
+                  updatedAt: res.projectType.updatedAt
+                    ? new Date(res.projectType.updatedAt).toISOString().split("T")[0]
+                    : t.updatedAt,
+                }
+              : t
+          )
+        );
+      }
+      return true;
+    } catch (err: any) {
+      setProjectTypes((prev) => prev.filter((t) => t.id !== tempId));
+      toast.error(err.message || "Gagal menyimpan tipe proyek ke server");
+      return false;
+    }
   };
 
-  const updateMasterDataProjectType = (id: string, item: Partial<ProjectTypeItem>) => {
-    setProjectTypes((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...item, updatedAt: new Date().toISOString().split("T")[0] } : t))
-    );
+  const updateMasterDataProjectType = async (id: string, item: Partial<ProjectTypeItem>): Promise<boolean> => {
+    let original: ProjectTypeItem | undefined;
+    setProjectTypes((prev) => {
+      original = prev.find((t) => t.id === id);
+      return prev.map((t) =>
+        t.id === id
+          ? { ...t, ...item, updatedAt: new Date().toISOString().split("T")[0] }
+          : t
+      );
+    });
+
+    try {
+      await updateMasterDataProjectTypeAction(id, item);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setProjectTypes((prev) => prev.map((t) => (t.id === id ? original! : t)));
+      }
+      toast.error(err.message || "Gagal memperbarui tipe proyek");
+      return false;
+    }
   };
 
-  const addMasterDataProcurementType = (item: Omit<ProcurementTypeItem, "id" | "updatedAt">) => {
+  const deleteMasterDataProjectType = async (id: string): Promise<boolean> => {
+    let original: ProjectTypeItem | undefined;
+    setProjectTypes((prev) => {
+      original = prev.find((t) => t.id === id);
+      return prev.filter((t) => t.id !== id);
+    });
+
+    try {
+      await deleteMasterDataProjectTypeAction(id);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setProjectTypes((prev) => [...prev, original!]);
+      }
+      toast.error(err.message || "Gagal menghapus tipe proyek");
+      return false;
+    }
+  };
+
+  const addMasterDataProcurementType = async (item: Omit<ProcurementTypeItem, "id" | "updatedAt">): Promise<boolean> => {
+    const tempId = `pct-${Date.now()}`;
     const newItem: ProcurementTypeItem = {
       ...item,
-      id: `pct-${Date.now()}`,
+      id: tempId,
       updatedAt: new Date().toISOString().split("T")[0],
     };
     setProcurementTypes((prev) => [...prev, newItem]);
+
+    try {
+      const res = await addMasterDataProcurementTypeAction(newItem);
+      if (res.success && res.procurementType) {
+        setProcurementTypes((prev) =>
+          prev.map((t) =>
+            t.id === tempId
+              ? {
+                  ...t,
+                  id: res.procurementType.id,
+                  updatedAt: res.procurementType.updatedAt
+                    ? new Date(res.procurementType.updatedAt).toISOString().split("T")[0]
+                    : t.updatedAt,
+                }
+              : t
+          )
+        );
+      }
+      return true;
+    } catch (err: any) {
+      setProcurementTypes((prev) => prev.filter((t) => t.id !== tempId));
+      toast.error(err.message || "Gagal menyimpan metode pengadaan ke server");
+      return false;
+    }
   };
 
-  const updateMasterDataProcurementType = (id: string, item: Partial<ProcurementTypeItem>) => {
-    setProcurementTypes((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...item, updatedAt: new Date().toISOString().split("T")[0] } : t))
-    );
+  const updateMasterDataProcurementType = async (id: string, item: Partial<ProcurementTypeItem>): Promise<boolean> => {
+    let original: ProcurementTypeItem | undefined;
+    setProcurementTypes((prev) => {
+      original = prev.find((t) => t.id === id);
+      return prev.map((t) =>
+        t.id === id
+          ? { ...t, ...item, updatedAt: new Date().toISOString().split("T")[0] }
+          : t
+      );
+    });
+
+    try {
+      await updateMasterDataProcurementTypeAction(id, item);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setProcurementTypes((prev) => prev.map((t) => (t.id === id ? original! : t)));
+      }
+      toast.error(err.message || "Gagal memperbarui metode pengadaan");
+      return false;
+    }
+  };
+
+  const deleteMasterDataProcurementType = async (id: string): Promise<boolean> => {
+    let original: ProcurementTypeItem | undefined;
+    setProcurementTypes((prev) => {
+      original = prev.find((t) => t.id === id);
+      return prev.filter((t) => t.id !== id);
+    });
+
+    try {
+      await deleteMasterDataProcurementTypeAction(id);
+      return true;
+    } catch (err: any) {
+      if (original) {
+        setProcurementTypes((prev) => [...prev, original!]);
+      }
+      toast.error(err.message || "Gagal menghapus metode pengadaan");
+      return false;
+    }
   };
 
   const clearDemoData = async () => {
@@ -2319,27 +3051,38 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
         addMasterDataRegion,
         updateMasterDataRegion,
+        deleteMasterDataRegion,
         addMasterDataCompany,
         updateMasterDataCompany,
+        deleteMasterDataCompany,
         addMasterDataLocation,
         updateMasterDataLocation,
+        deleteMasterDataLocation,
         addMasterDataBlock,
         updateMasterDataBlock,
+        deleteMasterDataBlock,
         addMasterDataMaterial,
         updateMasterDataMaterial,
+        deleteMasterDataMaterial,
         addMasterDataSupplier,
         updateMasterDataSupplier,
+        deleteMasterDataSupplier,
         addMasterDataUser,
         updateMasterDataUser,
+        deleteMasterDataUser,
         addApprovalMatrixRule,
         updateApprovalMatrixRule,
+        deleteApprovalMatrixRule,
         toggleApprovalLevel,
         addMasterDataProjectCategory,
         updateMasterDataProjectCategory,
+        deleteMasterDataProjectCategory,
         addMasterDataProjectType,
         updateMasterDataProjectType,
+        deleteMasterDataProjectType,
         addMasterDataProcurementType,
         updateMasterDataProcurementType,
+        deleteMasterDataProcurementType,
 
         resetToMockData,
         refreshFromDatabase,

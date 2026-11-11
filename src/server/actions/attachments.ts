@@ -2,7 +2,7 @@
 
 import { db } from "@/server/db";
 import { requireAuth } from "@/server/auth-guard";
-import { revalidatePath } from "next/cache";
+import { safeRevalidatePath as revalidatePath } from "@/server/revalidate";
 
 export async function addAttachmentAction(data: {
   projectId: string;

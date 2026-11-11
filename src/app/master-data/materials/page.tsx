@@ -37,11 +37,14 @@ import { formatIDR, formatIDDate } from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function MasterDataMaterialsPage() {
-  const { materials, addMasterDataMaterial, updateMasterDataMaterial } = useAppState();
+  const { materials, addMasterDataMaterial, updateMasterDataMaterial, deleteMasterDataMaterial } = useAppState();
 
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MaterialCatalogItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MaterialCatalogItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form states
   const [sapCode, setSapCode] = useState("");
@@ -79,40 +82,65 @@ export default function MasterDataMaterialsPage() {
     setDialogOpen(true);
   };
 
-  const handleToggleStatus = (mat: MaterialCatalogItem) => {
+  const handleToggleStatus = async (mat: MaterialCatalogItem) => {
     const newStatus = mat.status === "Active" ? "Inactive" : "Active";
-    updateMasterDataMaterial(mat.id, { status: newStatus });
-    toast.success(`Status material ${mat.name} diubah menjadi ${newStatus}`);
+    const ok = await updateMasterDataMaterial(mat.id, { status: newStatus });
+    if (ok) {
+      toast.success(`Status material ${mat.name} diubah menjadi ${newStatus}`);
+    }
   };
 
-  const handleSave = () => {
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const ok = await deleteMasterDataMaterial(deleteTarget.id);
+      if (ok) {
+        toast.success(`Material ${deleteTarget.name} berhasil dihapus.`);
+        setDeleteTarget(null);
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleSave = async () => {
     if (!sapCode.trim() || !name.trim()) {
       toast.error("Kode SAP dan deskripsi material wajib diisi");
       return;
     }
 
-    if (editingItem) {
-      updateMasterDataMaterial(editingItem.id, {
-        sapCode,
-        name,
-        category,
-        unit,
-        standardPrice,
-      });
-      toast.success("Katalog material berhasil diperbarui!");
-    } else {
-      addMasterDataMaterial({
-        sapCode,
-        name,
-        category,
-        unit,
-        standardPrice,
-        status: "Active",
-      });
-      toast.success("Material baru berhasil ditambahkan!");
+    setIsSubmitting(true);
+    try {
+      if (editingItem) {
+        const ok = await updateMasterDataMaterial(editingItem.id, {
+          sapCode: sapCode.trim(),
+          name: name.trim(),
+          category: category.trim(),
+          unit: unit.trim(),
+          standardPrice,
+        });
+        if (ok) {
+          toast.success("Katalog material berhasil diperbarui!");
+          setDialogOpen(false);
+        }
+      } else {
+        const ok = await addMasterDataMaterial({
+          sapCode: sapCode.trim(),
+          name: name.trim(),
+          category: category.trim(),
+          unit: unit.trim(),
+          standardPrice,
+          status: "Active",
+        });
+        if (ok) {
+          toast.success("Material baru berhasil ditambahkan!");
+          setDialogOpen(false);
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setDialogOpen(false);
   };
 
   return (
@@ -231,6 +259,14 @@ export default function MasterDataMaterialsPage() {
                         >
                           {mat.status === "Active" ? "Nonaktifkan" : "Aktifkan"}
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDeleteTarget(mat)}
+                          className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 mr-1" /> Hapus
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -313,11 +349,39 @@ export default function MasterDataMaterialsPage() {
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>
               Batal
             </Button>
-            <Button size="sm" onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              Simpan Material
+            <Button size="sm" onClick={handleSave} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              {isSubmitting ? "Menyimpan..." : "Simpan Material"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base text-rose-600">
+              Konfirmasi Hapus Material
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Apakah Anda yakin ingin menghapus material &quot;{deleteTarget?.name}&quot; ({deleteTarget?.sapCode}) dari sistem? Tindakan ini tidak dapat dibatalkan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
+              Batal
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {isDeleting ? "Menghapus..." : "Ya, Hapus Material"}
             </Button>
           </DialogFooter>
         </DialogContent>

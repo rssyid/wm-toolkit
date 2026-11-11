@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { FolderGit2, Plus, Search, Edit2, ChevronLeft } from "lucide-react";
+import { FolderGit2, Plus, Search, Edit2, Trash2, ChevronLeft } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,11 +31,19 @@ import { formatIDDate } from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function MasterDataProcurementTypesPage() {
-  const { procurementTypes, addMasterDataProcurementType, updateMasterDataProcurementType } = useAppState();
+  const {
+    procurementTypes,
+    addMasterDataProcurementType,
+    updateMasterDataProcurementType,
+    deleteMasterDataProcurementType,
+  } = useAppState();
 
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ProcurementTypeItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProcurementTypeItem | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form states
   const [code, setCode] = useState("");
@@ -64,36 +72,61 @@ export default function MasterDataProcurementTypesPage() {
     setDialogOpen(true);
   };
 
-  const handleToggleStatus = (item: ProcurementTypeItem) => {
+  const handleToggleStatus = async (item: ProcurementTypeItem) => {
     const newStatus = item.status === "Active" ? "Inactive" : "Active";
-    updateMasterDataProcurementType(item.id, { status: newStatus });
-    toast.success(`Status metode ${item.name} diubah menjadi ${newStatus}`);
+    const ok = await updateMasterDataProcurementType(item.id, { status: newStatus });
+    if (ok) {
+      toast.success(`Status metode ${item.name} diubah menjadi ${newStatus}`);
+    }
   };
 
-  const handleSave = () => {
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const ok = await deleteMasterDataProcurementType(deleteTarget.id);
+      if (ok) {
+        toast.success(`Metode pengadaan ${deleteTarget.name} berhasil dihapus.`);
+        setDeleteTarget(null);
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleSave = async () => {
     if (!code.trim() || !name.trim()) {
       toast.error("Kode dan nama metode pengadaan wajib diisi");
       return;
     }
 
-    if (editingItem) {
-      updateMasterDataProcurementType(editingItem.id, {
-        code,
-        name,
-        description,
-      });
-      toast.success("Metode pengadaan berhasil diperbarui!");
-    } else {
-      addMasterDataProcurementType({
-        code,
-        name,
-        description,
-        status: "Active",
-      });
-      toast.success("Metode pengadaan baru berhasil ditambahkan!");
+    setIsSubmitting(true);
+    try {
+      if (editingItem) {
+        const ok = await updateMasterDataProcurementType(editingItem.id, {
+          code: code.trim(),
+          name: name.trim(),
+          description: description.trim(),
+        });
+        if (ok) {
+          toast.success("Metode pengadaan berhasil diperbarui!");
+          setDialogOpen(false);
+        }
+      } else {
+        const ok = await addMasterDataProcurementType({
+          code: code.trim(),
+          name: name.trim(),
+          description: description.trim(),
+          status: "Active",
+        });
+        if (ok) {
+          toast.success("Metode pengadaan baru berhasil ditambahkan!");
+          setDialogOpen(false);
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setDialogOpen(false);
   };
 
   return (
@@ -201,6 +234,14 @@ export default function MasterDataProcurementTypesPage() {
                         >
                           {item.status === "Active" ? "Nonaktifkan" : "Aktifkan"}
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDeleteTarget(item)}
+                          className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -261,11 +302,53 @@ export default function MasterDataProcurementTypesPage() {
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDialogOpen(false)}
+              disabled={isSubmitting}
+            >
               Batal
             </Button>
-            <Button size="sm" onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              Simpan Metode Pengadaan
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={isSubmitting}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {isSubmitting ? "Menyimpan..." : "Simpan Metode Pengadaan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base text-rose-600">Hapus Metode Pengadaan</DialogTitle>
+            <DialogDescription className="text-xs">
+              Apakah Anda yakin ingin menghapus metode pengadaan{" "}
+              <strong className="text-foreground">{deleteTarget?.name}</strong> ({deleteTarget?.code}) dari database?
+              Tindakan ini tidak dapat dibatalkan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteTarget(null)}
+              disabled={isDeleting}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Menghapus..." : "Hapus Metode"}
             </Button>
           </DialogFooter>
         </DialogContent>

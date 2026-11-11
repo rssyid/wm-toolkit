@@ -16,6 +16,9 @@ import {
   CheckCircle2,
   Layers,
   ArrowRight,
+  Trash2,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -60,12 +63,16 @@ function MasterDataLocationsContent() {
     blocks,
     addMasterDataRegion,
     updateMasterDataRegion,
+    deleteMasterDataRegion,
     addMasterDataCompany,
     updateMasterDataCompany,
+    deleteMasterDataCompany,
     addMasterDataLocation,
     updateMasterDataLocation,
+    deleteMasterDataLocation,
     addMasterDataBlock,
     updateMasterDataBlock,
+    deleteMasterDataBlock,
   } = useAppState();
 
   const searchParams = useSearchParams();
@@ -83,6 +90,15 @@ function MasterDataLocationsContent() {
     }
   }, [tabParam]);
   const [search, setSearch] = useState("");
+
+  // Loading & Delete confirmation states
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: "estate" | "company" | "region" | "block";
+    id: string;
+    name: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Filters for Kebun tab
   const [estateRegionFilter, setEstateRegionFilter] = useState("ALL");
@@ -261,45 +277,65 @@ function MasterDataLocationsContent() {
     setEstateDialogOpen(true);
   };
 
-  const handleSaveEstate = () => {
+  const handleSaveEstate = async () => {
     if (!estateCode.trim() || !estateName.trim()) {
       toast.error("Kode dan nama kebun wajib diisi");
       return;
     }
+    if (!estateCompanyId) {
+      toast.error("Perusahaan (PT) wajib dipilih");
+      return;
+    }
+    if (!estateRegionId) {
+      toast.error("Wilayah (Region) wajib dipilih");
+      return;
+    }
 
     const reg = regionMap.get(estateRegionId);
+    setIsSubmitting(true);
 
-    if (editingEstate) {
-      updateMasterDataLocation(editingEstate.id, {
-        code: estateCode,
-        name: estateName,
-        companyId: estateCompanyId,
-        regionId: estateRegionId,
-        district: estateDistrict,
-        region: reg?.name || "Sumatera Utara",
-        hectares: estateHectares,
-      });
-      toast.success("Data kebun berhasil diperbarui!");
-    } else {
-      addMasterDataLocation({
-        code: estateCode,
-        name: estateName,
-        companyId: estateCompanyId,
-        regionId: estateRegionId,
-        district: estateDistrict,
-        region: reg?.name || "Sumatera Utara",
-        hectares: estateHectares,
-        status: "Active",
-      });
-      toast.success("Kebun baru berhasil ditambahkan!");
+    try {
+      if (editingEstate) {
+        const ok = await updateMasterDataLocation(editingEstate.id, {
+          code: estateCode.trim(),
+          name: estateName.trim(),
+          companyId: estateCompanyId,
+          regionId: estateRegionId,
+          district: estateDistrict.trim(),
+          region: reg?.name || "Sumatera Utara",
+          hectares: Number(estateHectares) || 0,
+        });
+        if (ok) {
+          toast.success("Data kebun berhasil diperbarui!");
+          setEstateDialogOpen(false);
+        }
+      } else {
+        const ok = await addMasterDataLocation({
+          code: estateCode.trim(),
+          name: estateName.trim(),
+          companyId: estateCompanyId,
+          regionId: estateRegionId,
+          district: estateDistrict.trim(),
+          region: reg?.name || "Sumatera Utara",
+          hectares: Number(estateHectares) || 0,
+          status: "Active",
+        });
+        if (ok) {
+          toast.success("Kebun baru berhasil ditambahkan!");
+          setEstateDialogOpen(false);
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-    setEstateDialogOpen(false);
   };
 
-  const handleToggleEstateStatus = (loc: EstateLocation) => {
+  const handleToggleEstateStatus = async (loc: EstateLocation) => {
     const newStatus = loc.status === "Active" ? "Inactive" : "Active";
-    updateMasterDataLocation(loc.id, { status: newStatus });
-    toast.success(`Status ${loc.name} diubah menjadi ${newStatus}`);
+    const ok = await updateMasterDataLocation(loc.id, { status: newStatus });
+    if (ok) {
+      toast.success(`Status ${loc.name} diubah menjadi ${newStatus}`);
+    }
   };
 
   // --- Handlers Perusahaan (Company) ---
@@ -319,34 +355,47 @@ function MasterDataLocationsContent() {
     setCompanyDialogOpen(true);
   };
 
-  const handleSaveCompany = () => {
+  const handleSaveCompany = async () => {
     if (!companyCode.trim() || !companyName.trim()) {
       toast.error("Kode dan nama perusahaan wajib diisi");
       return;
     }
-    if (editingCompany) {
-      updateMasterDataCompany(editingCompany.id, {
-        code: companyCode,
-        name: companyName,
-        npwp: companyNpwp,
-      });
-      toast.success("Data perusahaan berhasil diperbarui!");
-    } else {
-      addMasterDataCompany({
-        code: companyCode,
-        name: companyName,
-        npwp: companyNpwp,
-        status: "Active",
-      });
-      toast.success("Perusahaan baru berhasil ditambahkan!");
+    setIsSubmitting(true);
+
+    try {
+      if (editingCompany) {
+        const ok = await updateMasterDataCompany(editingCompany.id, {
+          code: companyCode.trim(),
+          name: companyName.trim(),
+          npwp: companyNpwp.trim() || undefined,
+        });
+        if (ok) {
+          toast.success("Data perusahaan berhasil diperbarui!");
+          setCompanyDialogOpen(false);
+        }
+      } else {
+        const ok = await addMasterDataCompany({
+          code: companyCode.trim(),
+          name: companyName.trim(),
+          npwp: companyNpwp.trim() || undefined,
+          status: "Active",
+        });
+        if (ok) {
+          toast.success("Perusahaan baru berhasil ditambahkan!");
+          setCompanyDialogOpen(false);
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-    setCompanyDialogOpen(false);
   };
 
-  const handleToggleCompanyStatus = (cmp: Company) => {
+  const handleToggleCompanyStatus = async (cmp: Company) => {
     const newStatus = cmp.status === "Active" ? "Inactive" : "Active";
-    updateMasterDataCompany(cmp.id, { status: newStatus });
-    toast.success(`Status ${cmp.name} diubah menjadi ${newStatus}`);
+    const ok = await updateMasterDataCompany(cmp.id, { status: newStatus });
+    if (ok) {
+      toast.success(`Status ${cmp.name} diubah menjadi ${newStatus}`);
+    }
   };
 
   // --- Handlers Wilayah (Region) ---
@@ -366,34 +415,47 @@ function MasterDataLocationsContent() {
     setRegionDialogOpen(true);
   };
 
-  const handleSaveRegion = () => {
+  const handleSaveRegion = async () => {
     if (!regionCode.trim() || !regionName.trim()) {
       toast.error("Kode dan nama wilayah wajib diisi");
       return;
     }
-    if (editingRegion) {
-      updateMasterDataRegion(editingRegion.id, {
-        code: regionCode,
-        name: regionName,
-        description: regionDesc,
-      });
-      toast.success("Data wilayah berhasil diperbarui!");
-    } else {
-      addMasterDataRegion({
-        code: regionCode,
-        name: regionName,
-        description: regionDesc,
-        status: "Active",
-      });
-      toast.success("Wilayah baru berhasil ditambahkan!");
+    setIsSubmitting(true);
+
+    try {
+      if (editingRegion) {
+        const ok = await updateMasterDataRegion(editingRegion.id, {
+          code: regionCode.trim(),
+          name: regionName.trim(),
+          description: regionDesc.trim() || undefined,
+        });
+        if (ok) {
+          toast.success("Data wilayah berhasil diperbarui!");
+          setRegionDialogOpen(false);
+        }
+      } else {
+        const ok = await addMasterDataRegion({
+          code: regionCode.trim(),
+          name: regionName.trim(),
+          description: regionDesc.trim() || undefined,
+          status: "Active",
+        });
+        if (ok) {
+          toast.success("Wilayah baru berhasil ditambahkan!");
+          setRegionDialogOpen(false);
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-    setRegionDialogOpen(false);
   };
 
-  const handleToggleRegionStatus = (reg: Region) => {
+  const handleToggleRegionStatus = async (reg: Region) => {
     const newStatus = reg.status === "Active" ? "Inactive" : "Active";
-    updateMasterDataRegion(reg.id, { status: newStatus });
-    toast.success(`Status ${reg.name} diubah menjadi ${newStatus}`);
+    const ok = await updateMasterDataRegion(reg.id, { status: newStatus });
+    if (ok) {
+      toast.success(`Status ${reg.name} diubah menjadi ${newStatus}`);
+    }
   };
 
   // --- Handlers Blok (Block) ---
@@ -421,42 +483,80 @@ function MasterDataLocationsContent() {
     setBlockDialogOpen(true);
   };
 
-  const handleSaveBlock = () => {
+  const handleSaveBlock = async () => {
     if (!blockCode.trim() || !blockName.trim() || !blockEstateId) {
       toast.error("Kebun, kode blok, dan nama blok wajib diisi");
       return;
     }
-    if (editingBlock) {
-      updateMasterDataBlock(editingBlock.id, {
-        estateId: blockEstateId,
-        code: blockCode,
-        name: blockName,
-        afdeling: blockAfdeling,
-        cropType: blockCropType,
-        plantingYear: blockPlantingYear,
-        hectares: blockHectares,
-      });
-      toast.success("Data blok berhasil diperbarui!");
-    } else {
-      addMasterDataBlock({
-        estateId: blockEstateId,
-        code: blockCode,
-        name: blockName,
-        afdeling: blockAfdeling,
-        cropType: blockCropType,
-        plantingYear: blockPlantingYear,
-        hectares: blockHectares,
-        status: "Active",
-      });
-      toast.success("Blok baru berhasil ditambahkan!");
+    setIsSubmitting(true);
+
+    try {
+      if (editingBlock) {
+        const ok = await updateMasterDataBlock(editingBlock.id, {
+          estateId: blockEstateId,
+          code: blockCode.trim(),
+          name: blockName.trim(),
+          afdeling: blockAfdeling.trim(),
+          cropType: blockCropType.trim(),
+          plantingYear: Number(blockPlantingYear) || new Date().getFullYear(),
+          hectares: Number(blockHectares) || 0,
+        });
+        if (ok) {
+          toast.success("Data blok berhasil diperbarui!");
+          setBlockDialogOpen(false);
+        }
+      } else {
+        const ok = await addMasterDataBlock({
+          estateId: blockEstateId,
+          code: blockCode.trim(),
+          name: blockName.trim(),
+          afdeling: blockAfdeling.trim(),
+          cropType: blockCropType.trim(),
+          plantingYear: Number(blockPlantingYear) || new Date().getFullYear(),
+          hectares: Number(blockHectares) || 0,
+          status: "Active",
+        });
+        if (ok) {
+          toast.success("Blok baru berhasil ditambahkan!");
+          setBlockDialogOpen(false);
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-    setBlockDialogOpen(false);
   };
 
-  const handleToggleBlockStatus = (blk: EstateBlock) => {
+  const handleToggleBlockStatus = async (blk: EstateBlock) => {
     const newStatus = blk.status === "Active" ? "Inactive" : "Active";
-    updateMasterDataBlock(blk.id, { status: newStatus });
-    toast.success(`Status ${blk.code} diubah menjadi ${newStatus}`);
+    const ok = await updateMasterDataBlock(blk.id, { status: newStatus });
+    if (ok) {
+      toast.success(`Status ${blk.code} diubah menjadi ${newStatus}`);
+    }
+  };
+
+  // --- Handler Konfirmasi Hapus ---
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      let ok = false;
+      if (deleteTarget.type === "estate") {
+        ok = await deleteMasterDataLocation(deleteTarget.id);
+      } else if (deleteTarget.type === "company") {
+        ok = await deleteMasterDataCompany(deleteTarget.id);
+      } else if (deleteTarget.type === "region") {
+        ok = await deleteMasterDataRegion(deleteTarget.id);
+      } else if (deleteTarget.type === "block") {
+        ok = await deleteMasterDataBlock(deleteTarget.id);
+      }
+
+      if (ok) {
+        toast.success(`Data ${deleteTarget.name} berhasil dihapus!`);
+        setDeleteTarget(null);
+      }
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -642,7 +742,7 @@ function MasterDataLocationsContent() {
                     <TableHead className="w-[85px] text-center">Blok</TableHead>
                     <TableHead className="w-[85px]">Status</TableHead>
                     <TableHead className="w-[100px]">Diperbarui</TableHead>
-                    <TableHead className="w-[140px] text-right">Aksi</TableHead>
+                    <TableHead className="w-[190px] text-right">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -715,6 +815,15 @@ function MasterDataLocationsContent() {
                               >
                                 {loc.status === "Active" ? "Nonaktifkan" : "Aktifkan"}
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setDeleteTarget({ type: "estate", id: loc.id, name: loc.name })}
+                                className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                                title="Hapus Kebun"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -757,7 +866,7 @@ function MasterDataLocationsContent() {
                     <TableHead className="w-[110px] text-center">Jumlah Kebun</TableHead>
                     <TableHead className="w-[120px] text-right">Total Luas (Ha)</TableHead>
                     <TableHead className="w-[90px]">Status</TableHead>
-                    <TableHead className="w-[140px] text-right">Aksi</TableHead>
+                    <TableHead className="w-[190px] text-right">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -842,6 +951,15 @@ function MasterDataLocationsContent() {
                               >
                                 {c.status === "Active" ? "Nonaktifkan" : "Aktifkan"}
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setDeleteTarget({ type: "company", id: c.id, name: c.name })}
+                                className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                                title="Hapus Perusahaan"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -884,7 +1002,7 @@ function MasterDataLocationsContent() {
                     <TableHead className="w-[110px] text-center">Jumlah Kebun</TableHead>
                     <TableHead className="w-[120px] text-right">Total Luas (Ha)</TableHead>
                     <TableHead className="w-[90px]">Status</TableHead>
-                    <TableHead className="w-[140px] text-right">Aksi</TableHead>
+                    <TableHead className="w-[190px] text-right">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -964,6 +1082,15 @@ function MasterDataLocationsContent() {
                               >
                                 {r.status === "Active" ? "Nonaktifkan" : "Aktifkan"}
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setDeleteTarget({ type: "region", id: r.id, name: r.name })}
+                                className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                                title="Hapus Wilayah"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1023,7 +1150,7 @@ function MasterDataLocationsContent() {
                     <TableHead className="w-[100px] text-center">Tahun Tanam</TableHead>
                     <TableHead className="w-[95px] text-right">Luas (Ha)</TableHead>
                     <TableHead className="w-[85px]">Status</TableHead>
-                    <TableHead className="w-[140px] text-right">Aksi</TableHead>
+                    <TableHead className="w-[190px] text-right">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1088,6 +1215,15 @@ function MasterDataLocationsContent() {
                                 }`}
                               >
                                 {blk.status === "Active" ? "Nonaktifkan" : "Aktifkan"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setDeleteTarget({ type: "block", id: blk.id, name: blk.name })}
+                                className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                                title="Hapus Blok"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
                           </TableCell>
@@ -1195,11 +1331,17 @@ function MasterDataLocationsContent() {
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={() => setEstateDialogOpen(false)}>
+            <Button variant="outline" size="sm" onClick={() => setEstateDialogOpen(false)} disabled={isSubmitting}>
               Batal
             </Button>
-            <Button size="sm" onClick={handleSaveEstate} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              Simpan Data Kebun
+            <Button size="sm" onClick={handleSaveEstate} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5">
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menyimpan...
+                </>
+              ) : (
+                "Simpan Data Kebun"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1255,11 +1397,17 @@ function MasterDataLocationsContent() {
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={() => setCompanyDialogOpen(false)}>
+            <Button variant="outline" size="sm" onClick={() => setCompanyDialogOpen(false)} disabled={isSubmitting}>
               Batal
             </Button>
-            <Button size="sm" onClick={handleSaveCompany} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              Simpan Perusahaan
+            <Button size="sm" onClick={handleSaveCompany} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5">
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menyimpan...
+                </>
+              ) : (
+                "Simpan Perusahaan"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1314,11 +1462,17 @@ function MasterDataLocationsContent() {
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={() => setRegionDialogOpen(false)}>
+            <Button variant="outline" size="sm" onClick={() => setRegionDialogOpen(false)} disabled={isSubmitting}>
               Batal
             </Button>
-            <Button size="sm" onClick={handleSaveRegion} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              Simpan Wilayah
+            <Button size="sm" onClick={handleSaveRegion} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5">
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menyimpan...
+                </>
+              ) : (
+                "Simpan Wilayah"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1426,11 +1580,65 @@ function MasterDataLocationsContent() {
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={() => setBlockDialogOpen(false)}>
+            <Button variant="outline" size="sm" onClick={() => setBlockDialogOpen(false)} disabled={isSubmitting}>
               Batal
             </Button>
-            <Button size="sm" onClick={handleSaveBlock} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              Simpan Blok Kebun
+            <Button size="sm" onClick={handleSaveBlock} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5">
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menyimpan...
+                </>
+              ) : (
+                "Simpan Blok Kebun"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ================= DIALOG KONFIRMASI HAPUS ================= */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2 text-rose-600">
+              <AlertTriangle className="w-4 h-4" /> Konfirmasi Penghapusan
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Apakah Anda yakin ingin menghapus{" "}
+              {deleteTarget?.type === "estate" && "kebun"}
+              {deleteTarget?.type === "company" && "perusahaan"}
+              {deleteTarget?.type === "region" && "wilayah"}
+              {deleteTarget?.type === "block" && "blok kebun"}{" "}
+              <strong className="text-foreground">{deleteTarget?.name}</strong>? Tindakan ini tidak dapat
+              dibatalkan jika data belum memiliki relasi transaksi.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteTarget(null)}
+              disabled={isDeleting}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+              className="gap-1.5"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menghapus...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5" /> Hapus Permanen
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

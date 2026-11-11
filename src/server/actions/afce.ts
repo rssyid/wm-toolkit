@@ -4,7 +4,7 @@ import { db } from "@/server/db";
 import { requireAuth, requireRole } from "@/server/auth-guard";
 import { recordServerAuditLog } from "@/server/audit";
 import { ProcessAfceActionSchema } from "@/server/schemas";
-import { revalidatePath } from "next/cache";
+import { safeRevalidatePath as revalidatePath } from "@/server/revalidate";
 
 export async function processAfceApprovalAction(rawInput: any) {
   const user = await requireRole(["ADMIN", "PIC", "APPROVER"]);
@@ -175,4 +175,71 @@ export async function updateAfceAction(afceId: string, updates: any) {
 
   revalidatePath(`/workspace/${updated.projectId}/afce`);
   return { success: true, afce: updated };
+}
+
+export async function syncAfceWithMatrixAction(afceId: string, matrixLevels: any[]) {
+  const user = await requireRole(["ADMIN", "PIC"]);
+
+  const afce = await db.afce.findUnique({
+    where: { id: afceId },
+    include: { approvalMatrixLevels: true, project: true },
+  });
+
+  if (!afce) {
+    throw new Error("Dokumen AFCE tidak ditemukan.");
+  }
+
+  // Rekonsiliasi level baru dengan level di basis data
+  await db.$transaction(async (tx) => {
+    // 1. Hapus level lama
+    await tx.afceApprovalLevel.deleteMany({
+      where: { afceId },
+    });
+
+    // 2. Buat kembali seluruh level sesuai konfigurasi matriks terbaru
+    if (matrixLevels && matrixLevels.length > 0) {
+      await tx.afceApprovalLevel.createMany({
+        data: matrixLevels.map((lvl: any, idx: number) => ({
+          afceId,
+          level: lvl.level || idx + 1,
+          code: lvl.code,
+          label: lvl.label,
+          isRequired: lvl.isRequired ?? true,
+          status: lvl.status || "Waiting",
+          approverName: lvl.approverName || null,
+          approverJabatan: lvl.approverJabatan || lvl.label,
+          decidedAt: lvl.decidedAt ? new Date(lvl.decidedAt) : null,
+          note: lvl.note || null,
+          sapDocNumber: lvl.sapDocNumber || null,
+          sapEvidenceUrl: lvl.sapEvidenceUrl || null,
+        })),
+      });
+    }
+
+    const firstUnapproved = matrixLevels.findIndex((l: any) => l.status !== "Approved");
+    const allApproved = firstUnapproved === -1 && matrixLevels.length > 0;
+    const newStatus = allApproved ? "APPROVED" : afce.status === "DRAFT" ? "DRAFT" : "PENDING_APPROVAL";
+
+    await tx.afce.update({
+      where: { id: afceId },
+      data: {
+        requiredLevels: matrixLevels.length,
+        currentLevel: allApproved ? matrixLevels.length : firstUnapproved !== -1 ? firstUnapproved + 1 : 1,
+        status: newStatus as any,
+      },
+    });
+  });
+
+  await recordServerAuditLog({
+    action: "UPDATE",
+    entityType: "AFCE",
+    entityId: afce.id,
+    entityTitle: `AFCE ${afce.afceNumber}`,
+    projectId: afce.projectId,
+    projectName: afce.project.name,
+    notes: `Matriks otorisasi dokumen AFCE disinkronkan dengan SOP terbaru oleh ${user.name}`,
+  });
+
+  revalidatePath(`/workspace/${afce.projectId}/afce`);
+  return { success: true };
 }

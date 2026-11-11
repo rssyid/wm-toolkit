@@ -10,7 +10,36 @@ import {
   CreateGoodsReceiptSchema,
   CreateGoodsHandoverSchema,
 } from "@/server/schemas";
-import { revalidatePath } from "next/cache";
+import { safeRevalidatePath as revalidatePath } from "@/server/revalidate";
+
+function toPrStatusEnum(status?: string): "DRAFT" | "RELEASED" | "CLOSED" | "CANCELLED" {
+  switch (status?.toUpperCase()) {
+    case "RELEASED":
+    case "APPROVED":
+      return "RELEASED";
+    case "CLOSED":
+      return "CLOSED";
+    case "CANCELLED":
+      return "CANCELLED";
+    default:
+      return "DRAFT";
+  }
+}
+
+function toPoStatusEnum(status?: string): "DRAFT" | "RELEASED" | "CLOSED" | "CANCELLED" {
+  switch (status?.toUpperCase()) {
+    case "RELEASED":
+    case "ISSUED":
+    case "ORDERED":
+      return "RELEASED";
+    case "CLOSED":
+      return "CLOSED";
+    case "CANCELLED":
+      return "CANCELLED";
+    default:
+      return "DRAFT";
+  }
+}
 
 export async function createPrAction(rawInput: any) {
   const user = await requireRole(["ADMIN", "PIC"]);
@@ -24,7 +53,7 @@ export async function createPrAction(rawInput: any) {
       sapPrNumber: parsed.sapPrNumber,
       prType: parsed.prType,
       description: parsed.description,
-      status: parsed.status as any,
+      status: toPrStatusEnum(parsed.status),
       releaseDate: new Date(parsed.releaseDate),
       attachmentName: parsed.attachmentName,
       createdById: user.id,
@@ -100,7 +129,7 @@ export async function createPoAction(rawInput: any) {
       poDate: new Date(parsed.poDate),
       releaseDate: parsed.releaseDate ? new Date(parsed.releaseDate) : null,
       poValue: parsed.poValue,
-      status: parsed.status as any,
+      status: toPoStatusEnum(parsed.status),
       attachmentName: parsed.attachmentName,
       createdById: user.id,
       items: {

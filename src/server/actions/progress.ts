@@ -4,7 +4,7 @@ import { db } from "@/server/db";
 import { requireAuth, requireRole } from "@/server/auth-guard";
 import { recordServerAuditLog } from "@/server/audit";
 import { CreateDailyProgressSchema, CreateWeeklyProgressSchema } from "@/server/schemas";
-import { revalidatePath } from "next/cache";
+import { safeRevalidatePath as revalidatePath } from "@/server/revalidate";
 
 export async function addDailyProgressAction(rawInput: any) {
   const user = await requireRole(["ADMIN", "PIC"]);

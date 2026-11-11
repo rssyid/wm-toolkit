@@ -2,7 +2,39 @@
 
 import { db } from "@/server/db";
 import { requireAuth } from "@/server/auth-guard";
-import { revalidatePath } from "next/cache";
+import { CreateNotificationSchema } from "@/server/schemas";
+import { safeRevalidatePath as revalidatePath } from "@/server/revalidate";
+
+export async function createNotificationAction(rawInput: any) {
+  try {
+    const user = await requireAuth();
+    const parsed = CreateNotificationSchema.parse(rawInput);
+
+    const targetUserId = parsed.userId || user.id;
+
+    const notif = await db.notification.create({
+      data: {
+        id: parsed.id || undefined,
+        userId: targetUserId,
+        type: parsed.type,
+        title: parsed.title,
+        message: parsed.message,
+        priority: parsed.priority,
+        linkUrl: parsed.linkUrl || undefined,
+        projectId: parsed.projectId || undefined,
+        projectCode: parsed.projectCode || undefined,
+        projectName: parsed.projectName || undefined,
+        isRead: false,
+      },
+    });
+
+    revalidatePath("/notifications");
+    return { success: true, notification: notif };
+  } catch (error: any) {
+    console.error("Gagal menyimpan notifikasi ke database:", error);
+    return { success: false, error: error.message };
+  }
+}
 
 export async function markNotificationAsReadAction(notificationId: string) {
   try {

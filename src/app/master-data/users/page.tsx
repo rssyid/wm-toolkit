@@ -46,11 +46,14 @@ import { formatIDDate } from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function MasterDataUsersPage() {
-  const { users, addMasterDataUser, updateMasterDataUser } = useAppState();
+  const { users, addMasterDataUser, updateMasterDataUser, deleteMasterDataUser } = useAppState();
 
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AppUser | null>(null);
   const [editingItem, setEditingItem] = useState<AppUser | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form states
   const [name, setName] = useState("");
@@ -85,38 +88,63 @@ export default function MasterDataUsersPage() {
     setDialogOpen(true);
   };
 
-  const handleToggleStatus = (user: AppUser) => {
+  const handleToggleStatus = async (user: AppUser) => {
     const newStatus = user.status === "Active" ? "Inactive" : "Active";
-    updateMasterDataUser(user.id, { status: newStatus });
-    toast.success(`Status user ${user.name} diubah menjadi ${newStatus}`);
+    const ok = await updateMasterDataUser(user.id, { status: newStatus });
+    if (ok) {
+      toast.success(`Status user ${user.name} diubah menjadi ${newStatus}`);
+    }
   };
 
-  const handleSave = () => {
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const ok = await deleteMasterDataUser(deleteTarget.id);
+      if (ok) {
+        toast.success(`Pengguna ${deleteTarget.name} berhasil dihapus.`);
+        setDeleteTarget(null);
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleSave = async () => {
     if (!name.trim() || !email.trim()) {
       toast.error("Nama dan email pengguna wajib diisi");
       return;
     }
 
-    if (editingItem) {
-      updateMasterDataUser(editingItem.id, {
-        name,
-        email,
-        role,
-        estateName,
-      });
-      toast.success("Data pengguna berhasil diperbarui!");
-    } else {
-      addMasterDataUser({
-        name,
-        email,
-        role,
-        estateName,
-        status: "Active",
-      });
-      toast.success("Pengguna baru berhasil ditambahkan!");
+    setIsSubmitting(true);
+    try {
+      if (editingItem) {
+        const ok = await updateMasterDataUser(editingItem.id, {
+          name: name.trim(),
+          email: email.trim(),
+          role,
+          estateName: estateName.trim(),
+        });
+        if (ok) {
+          toast.success("Data pengguna berhasil diperbarui!");
+          setDialogOpen(false);
+        }
+      } else {
+        const ok = await addMasterDataUser({
+          name: name.trim(),
+          email: email.trim(),
+          role,
+          estateName: estateName.trim(),
+          status: "Active",
+        });
+        if (ok) {
+          toast.success("Pengguna baru berhasil ditambahkan!");
+          setDialogOpen(false);
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setDialogOpen(false);
   };
 
   return (
@@ -231,6 +259,14 @@ export default function MasterDataUsersPage() {
                         >
                           {u.status === "Active" ? "Nonaktifkan" : "Aktifkan"}
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDeleteTarget(u)}
+                          className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -311,11 +347,53 @@ export default function MasterDataUsersPage() {
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDialogOpen(false)}
+              disabled={isSubmitting}
+            >
               Batal
             </Button>
-            <Button size="sm" onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              Simpan Pengguna
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={isSubmitting}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {isSubmitting ? "Menyimpan..." : "Simpan Pengguna"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base text-rose-600">Hapus Data Pengguna</DialogTitle>
+            <DialogDescription className="text-xs">
+              Apakah Anda yakin ingin menghapus akun pengguna{" "}
+              <strong className="text-foreground">{deleteTarget?.name}</strong> ({deleteTarget?.email}) dari database?
+              Tindakan ini tidak dapat dibatalkan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteTarget(null)}
+              disabled={isDeleting}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Menghapus..." : "Hapus Pengguna"}
             </Button>
           </DialogFooter>
         </DialogContent>

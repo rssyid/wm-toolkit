@@ -38,11 +38,14 @@ import { formatIDDate } from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function MasterDataSuppliersPage() {
-  const { suppliers, addMasterDataSupplier, updateMasterDataSupplier } = useAppState();
+  const { suppliers, addMasterDataSupplier, updateMasterDataSupplier, deleteMasterDataSupplier } = useAppState();
 
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Supplier | null>(null);
   const [editingItem, setEditingItem] = useState<Supplier | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form states
   const [code, setCode] = useState("");
@@ -86,44 +89,69 @@ export default function MasterDataSuppliersPage() {
     setDialogOpen(true);
   };
 
-  const handleToggleStatus = (sup: Supplier) => {
+  const handleToggleStatus = async (sup: Supplier) => {
     const newStatus = sup.status === "Active" ? "Inactive" : "Active";
-    updateMasterDataSupplier(sup.id, { status: newStatus });
-    toast.success(`Status rekanan ${sup.name} diubah menjadi ${newStatus}`);
+    const ok = await updateMasterDataSupplier(sup.id, { status: newStatus });
+    if (ok) {
+      toast.success(`Status rekanan ${sup.name} diubah menjadi ${newStatus}`);
+    }
   };
 
-  const handleSave = () => {
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const ok = await deleteMasterDataSupplier(deleteTarget.id);
+      if (ok) {
+        toast.success(`Rekanan ${deleteTarget.name} berhasil dihapus.`);
+        setDeleteTarget(null);
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleSave = async () => {
     if (!code.trim() || !name.trim()) {
       toast.error("Kode dan nama rekanan wajib diisi");
       return;
     }
 
-    if (editingItem) {
-      updateMasterDataSupplier(editingItem.id, {
-        code,
-        name,
-        category,
-        contactPerson,
-        phone,
-        npwp,
-        rating,
-      });
-      toast.success("Data supplier berhasil diperbarui!");
-    } else {
-      addMasterDataSupplier({
-        code,
-        name,
-        category,
-        contactPerson,
-        phone,
-        npwp,
-        rating,
-        status: "Active",
-      });
-      toast.success("Supplier baru berhasil ditambahkan!");
+    setIsSubmitting(true);
+    try {
+      if (editingItem) {
+        const ok = await updateMasterDataSupplier(editingItem.id, {
+          code: code.trim(),
+          name: name.trim(),
+          category: category.trim(),
+          contactPerson: contactPerson.trim(),
+          phone: phone.trim(),
+          npwp: npwp.trim(),
+          rating,
+        });
+        if (ok) {
+          toast.success("Data supplier berhasil diperbarui!");
+          setDialogOpen(false);
+        }
+      } else {
+        const ok = await addMasterDataSupplier({
+          code: code.trim(),
+          name: name.trim(),
+          category: category.trim(),
+          contactPerson: contactPerson.trim(),
+          phone: phone.trim(),
+          npwp: npwp.trim(),
+          rating,
+          status: "Active",
+        });
+        if (ok) {
+          toast.success("Supplier baru berhasil ditambahkan!");
+          setDialogOpen(false);
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setDialogOpen(false);
   };
 
   return (
@@ -247,6 +275,14 @@ export default function MasterDataSuppliersPage() {
                         >
                           {sup.status === "Active" ? "Nonaktifkan" : "Aktifkan"}
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDeleteTarget(sup)}
+                          className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -357,11 +393,53 @@ export default function MasterDataSuppliersPage() {
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDialogOpen(false)}
+              disabled={isSubmitting}
+            >
               Batal
             </Button>
-            <Button size="sm" onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              Simpan Data Rekanan
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={isSubmitting}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {isSubmitting ? "Menyimpan..." : "Simpan Data Rekanan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base text-rose-600">Hapus Data Rekanan</DialogTitle>
+            <DialogDescription className="text-xs">
+              Apakah Anda yakin ingin menghapus rekanan{" "}
+              <strong className="text-foreground">{deleteTarget?.name}</strong> ({deleteTarget?.code}) dari database?
+              Tindakan ini tidak dapat dibatalkan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteTarget(null)}
+              disabled={isDeleting}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Menghapus..." : "Hapus Rekanan"}
             </Button>
           </DialogFooter>
         </DialogContent>

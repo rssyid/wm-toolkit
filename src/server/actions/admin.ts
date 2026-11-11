@@ -4,7 +4,7 @@ import { db } from "@/server/db";
 import { requireRole } from "@/server/auth-guard";
 import { recordServerAuditLog } from "@/server/audit";
 import { seedDatabase } from "../../../prisma/seed";
-import { revalidatePath } from "next/cache";
+import { safeRevalidatePath as revalidatePath } from "@/server/revalidate";
 
 /**
  * 1. Seed Master Data: Memastikan seluruh master data (kebun, PT, blok, material, vendor, matriks approval, pengguna) terisi di basis data.

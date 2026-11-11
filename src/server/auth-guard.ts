@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { db } from "@/server/db";
 import { Role } from "@/generated/prisma/enums";
 
 export interface SessionUser {
@@ -11,6 +12,23 @@ export interface SessionUser {
 }
 
 export async function getCurrentUser(): Promise<SessionUser | null> {
+  // Support internal test scripts with explicit TEST_AUTH_USER_ID
+  if (process.env.TEST_AUTH_USER_ID) {
+    const testUser = await db.user.findUnique({
+      where: { id: process.env.TEST_AUTH_USER_ID },
+    });
+    if (testUser) {
+      return {
+        id: testUser.id,
+        name: testUser.name,
+        email: testUser.email,
+        role: testUser.role,
+        jabatan: testUser.jabatan || undefined,
+        estateName: testUser.estateName || undefined,
+      };
+    }
+  }
+
   const session = await auth();
   if (!session?.user?.id) {
     return null;

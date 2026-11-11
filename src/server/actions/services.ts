@@ -8,7 +8,7 @@ import {
   CreateTechnicalEvaluationSchema,
   CreateSpkSchema,
 } from "@/server/schemas";
-import { revalidatePath } from "next/cache";
+import { safeRevalidatePath as revalidatePath } from "@/server/revalidate";
 
 export async function createUspkAction(rawInput: any) {
   const user = await requireRole(["ADMIN", "PIC"]);
@@ -28,7 +28,7 @@ export async function createUspkAction(rawInput: any) {
       unit: parsed.unit,
       startDate: new Date(parsed.startDate),
       endDate: new Date(parsed.endDate),
-      status: parsed.status as any,
+      status: (parsed.status?.toUpperCase() || "DRAFT") as any,
       attachmentName: parsed.attachmentName,
       createdById: user.id,
       createdBy: parsed.createdBy || user.name,
@@ -140,7 +140,7 @@ export async function createSpkAction(rawInput: any) {
       value: parsed.value,
       startDate: new Date(parsed.startDate),
       endDate: new Date(parsed.endDate),
-      status: parsed.status as any,
+      status: (parsed.status?.toUpperCase() || "DRAFT") as any,
       releasedAt: parsed.releasedAt ? new Date(parsed.releasedAt) : null,
       attachmentName: parsed.attachmentName,
       notes: parsed.notes,

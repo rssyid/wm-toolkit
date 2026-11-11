@@ -9,6 +9,7 @@ import {
   Info,
   Plus,
   Edit2,
+  Trash2,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -88,11 +89,19 @@ function LevelCell({ tierId, levelIndex, isActive, roleName, onToggle }: LevelCe
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function MasterDataApprovalMatrixPage() {
-  const { approvalMatrix, toggleApprovalLevel, updateApprovalMatrixRule, addApprovalMatrixRule } =
-    useAppState();
+  const {
+    approvalMatrix,
+    toggleApprovalLevel,
+    updateApprovalMatrixRule,
+    addApprovalMatrixRule,
+    deleteApprovalMatrixRule,
+  } = useAppState();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTier, setEditingTier] = useState<ApprovalMatrixRule | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ApprovalMatrixRule | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Dialog form states (only name + range)
   const [tierName, setTierName] = useState("");
@@ -115,27 +124,54 @@ export default function MasterDataApprovalMatrixPage() {
     setDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const ok = await deleteApprovalMatrixRule(deleteTarget.id);
+      if (ok) {
+        toast.success(`Tingkatan ${deleteTarget.tierName} berhasil dihapus.`);
+        setDeleteTarget(null);
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleSave = async () => {
     if (!tierName.trim()) {
       toast.error("Nama tingkatan wajib diisi");
       return;
     }
 
-    if (editingTier) {
-      updateApprovalMatrixRule(editingTier.id, { tierName, minValue, maxValue });
-      toast.success("Parameter tier berhasil diperbarui!");
-    } else {
-      addApprovalMatrixRule({
-        tierName,
-        minValue,
-        maxValue,
-        levels: Array(9).fill(null) as (ApprovalLevel | null)[],
-        active: true,
-      });
-      toast.success("Tingkatan persetujuan baru ditambahkan! Aktifkan level via toggle di tabel.");
+    setIsSubmitting(true);
+    try {
+      if (editingTier) {
+        const ok = await updateApprovalMatrixRule(editingTier.id, {
+          tierName: tierName.trim(),
+          minValue,
+          maxValue,
+        });
+        if (ok) {
+          toast.success("Parameter tier berhasil diperbarui!");
+          setDialogOpen(false);
+        }
+      } else {
+        const ok = await addApprovalMatrixRule({
+          tierName: tierName.trim(),
+          minValue,
+          maxValue,
+          levels: Array(9).fill(null) as (ApprovalLevel | null)[],
+          active: true,
+        });
+        if (ok) {
+          toast.success("Tingkatan persetujuan baru ditambahkan! Aktifkan level via toggle di tabel.");
+          setDialogOpen(false);
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setDialogOpen(false);
   };
 
   // Count active tiers
@@ -313,14 +349,24 @@ export default function MasterDataApprovalMatrixPage() {
 
                     {/* Actions */}
                     <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleOpenEdit(tier)}
-                        className="h-7 text-xs px-2 hover:text-emerald-600"
-                      >
-                        <Edit2 className="w-3.5 h-3.5 mr-1" /> Ubah
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleOpenEdit(tier)}
+                          className="h-7 text-xs px-2 hover:text-emerald-600"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 mr-1" /> Ubah
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setDeleteTarget(tier)}
+                          className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -399,15 +445,53 @@ export default function MasterDataApprovalMatrixPage() {
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDialogOpen(false)}
+              disabled={isSubmitting}
+            >
               Batal
             </Button>
             <Button
               size="sm"
               onClick={handleSave}
+              disabled={isSubmitting}
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              {editingTier ? "Simpan Perubahan" : "Simpan Tier"}
+              {isSubmitting ? "Menyimpan..." : editingTier ? "Simpan Perubahan" : "Simpan Tier"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base text-rose-600">Hapus Tingkatan Persetujuan</DialogTitle>
+            <DialogDescription className="text-xs">
+              Apakah Anda yakin ingin menghapus tingkatan{" "}
+              <strong className="text-foreground">{deleteTarget?.tierName}</strong> dari database?
+              Aturan otorisasi untuk rentang nilai ini akan dihapus.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteTarget(null)}
+              disabled={isDeleting}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Menghapus..." : "Hapus Tingkatan"}
             </Button>
           </DialogFooter>
         </DialogContent>
