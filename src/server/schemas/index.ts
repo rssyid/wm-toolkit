@@ -322,7 +322,8 @@ export const CreateUserSchema = z.object({
   email: z.string().email("Format alamat email tidak valid"),
   password: z.string().min(6, "Kata sandi minimal 6 karakter").optional(),
   systemRole: z.enum(["ADMIN", "PIC", "APPROVER", "VIEWER"]).default("PIC"),
-  jabatan: z.string().min(2, "Jabatan kedinasan wajib diisi"),
+  role: z.enum(["ADMIN", "PIC", "APPROVER", "VIEWER"]).optional(),
+  jabatan: z.string().optional().nullable().default("-"),
   estateName: z.string().optional().nullable(),
   status: z.enum(["Active", "Inactive"]).default("Active"),
 });

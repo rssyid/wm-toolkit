@@ -509,7 +509,7 @@ export interface AppUser {
   id: string;
   name: string;
   email: string;
-  role: AFCEApprovalRole | "Estate Engineer" | "Procurement Officer";
+  role: SystemRole | AFCEApprovalRole | string;
   systemRole?: SystemRole;
   jabatan?: string;
   estateName?: string;

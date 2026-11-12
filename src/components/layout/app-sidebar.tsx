@@ -15,6 +15,7 @@ import {
   Package,
   Truck,
   Users2,
+  Shield,
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
@@ -72,6 +73,7 @@ export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
     { label: "Katalog Material", href: "/master-data/materials", icon: Package },
     { label: "Supplier Rekanan", href: "/master-data/suppliers", icon: Truck },
     { label: "User & Role", href: "/master-data/users", icon: Users2 },
+    { label: "Hak Akses & RBAC", href: "/master-data/rbac", icon: Shield },
     { label: "Matriks Approval", href: "/master-data/approval-matrix", icon: ShieldCheck },
   ];
 

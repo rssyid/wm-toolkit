@@ -603,19 +603,22 @@ export async function addMasterDataUserAction(data: any) {
     const bcrypt = await import("bcryptjs");
     const passwordHash = await bcrypt.hash(parsed.password || "wmtoolkit2026", 10);
 
+    const targetRole = (parsed.role || parsed.systemRole || "PIC") as any;
+
     const user = await db.user.create({
       data: {
         id: parsed.id || undefined,
         name: parsed.name,
         email: parsed.email,
         passwordHash,
-        role: parsed.systemRole as any,
-        jabatan: parsed.jabatan,
+        role: targetRole,
+        jabatan: parsed.jabatan || "-",
         estateName: parsed.estateName,
         isActive: parsed.status === "Active",
       },
     });
     revalidatePath("/master-data/users");
+    revalidatePath("/master-data/rbac");
     return { success: true, user };
   } catch (err: any) {
     console.error("Gagal menambah pengguna:", err);
@@ -643,13 +646,15 @@ export async function updateMasterDataUserAction(id: string, data: any) {
       passwordHash = await bcrypt.hash(parsed.password, 10);
     }
 
+    const roleVal = parsed.systemRole !== undefined ? parsed.systemRole : parsed.role;
+
     const updated = await db.user.update({
       where: { id },
       data: {
         name: parsed.name !== undefined ? parsed.name : undefined,
         email: parsed.email !== undefined ? parsed.email : undefined,
         passwordHash: passwordHash || undefined,
-        role: parsed.systemRole !== undefined ? (parsed.systemRole as any) : undefined,
+        role: roleVal !== undefined ? (roleVal as any) : undefined,
         jabatan: parsed.jabatan !== undefined ? parsed.jabatan : undefined,
         estateName: parsed.estateName !== undefined ? parsed.estateName : undefined,
         isActive: parsed.status !== undefined ? parsed.status === "Active" : undefined,
@@ -657,6 +662,7 @@ export async function updateMasterDataUserAction(id: string, data: any) {
     });
 
     revalidatePath("/master-data/users");
+    revalidatePath("/master-data/rbac");
     return { success: true, user: updated };
   } catch (err: any) {
     console.error("Gagal memperbarui pengguna:", err);
