@@ -12,11 +12,15 @@ import {
   Shield,
   Briefcase,
   Building,
+  Sparkles,
+  X,
 } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarPickerDialog } from "@/components/shared/avatar-picker-dialog";
 import {
   Table,
   TableHeader,
@@ -73,6 +77,17 @@ function getRoleBadge(roleStr: string) {
   };
 }
 
+function getInitials(name?: string) {
+  if (!name) return "U";
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
 export default function MasterDataUsersPage() {
   const { users, addMasterDataUser, updateMasterDataUser, deleteMasterDataUser } = useAppState();
 
@@ -89,6 +104,8 @@ export default function MasterDataUsersPage() {
   const [role, setRole] = useState<SystemRole>("PIC");
   const [jabatan, setJabatan] = useState("");
   const [estateName, setEstateName] = useState("Kebun Sei Silau");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
 
   const filteredUsers = users.filter((u) => {
     const q = search.toLowerCase();
@@ -111,6 +128,7 @@ export default function MasterDataUsersPage() {
     setRole("PIC");
     setJabatan("Estate Engineer");
     setEstateName("Kebun Sei Silau");
+    setAvatarUrl("");
     setDialogOpen(true);
   };
 
@@ -118,6 +136,7 @@ export default function MasterDataUsersPage() {
     setEditingItem(user);
     setName(user.name);
     setEmail(user.email);
+    setAvatarUrl(user.avatarUrl || "");
     const r = (user.systemRole || user.role || "PIC").toUpperCase();
     const validRole: SystemRole = r.includes("ADMIN")
       ? "ADMIN"
@@ -177,6 +196,7 @@ export default function MasterDataUsersPage() {
           systemRole: role,
           jabatan: jabatan.trim() || "-",
           estateName: estateName.trim(),
+          avatarUrl: avatarUrl || undefined,
         });
         if (ok) {
           toast.success("Data pengguna berhasil diperbarui!");
@@ -191,6 +211,7 @@ export default function MasterDataUsersPage() {
           jabatan: jabatan.trim() || "-",
           estateName: estateName.trim(),
           status: "Active",
+          avatarUrl: avatarUrl || undefined,
         });
         if (ok) {
           toast.success("Pengguna baru berhasil ditambahkan!");
@@ -289,7 +310,21 @@ export default function MasterDataUsersPage() {
                   return (
                     <TableRow key={u.id} className="hover:bg-muted/30 text-xs">
                       <TableCell className="font-semibold text-foreground whitespace-nowrap">
-                        {u.name}
+                        <div className="flex items-center gap-2.5">
+                          <Avatar className="w-7 h-7 border text-[10px] shrink-0">
+                            {u.avatarUrl ? (
+                              <AvatarImage
+                                src={u.avatarUrl}
+                                alt={u.name}
+                                className="object-cover"
+                              />
+                            ) : null}
+                            <AvatarFallback className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold text-[10px]">
+                              {getInitials(u.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{u.name}</span>
+                        </div>
                       </TableCell>
                       <TableCell className="font-mono text-muted-foreground whitespace-nowrap text-[11px]">
                         {u.email}
@@ -368,6 +403,50 @@ export default function MasterDataUsersPage() {
           </DialogHeader>
 
           <div className="space-y-3 py-1 text-xs">
+            <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/20">
+              <Avatar className="w-12 h-12 border-2 border-emerald-500/30 shrink-0">
+                {avatarUrl ? (
+                  <AvatarImage
+                    src={avatarUrl}
+                    alt={name || "Avatar"}
+                    className="object-cover"
+                  />
+                ) : null}
+                <AvatarFallback className="bg-emerald-600 text-white font-semibold text-sm">
+                  {getInitials(name)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 space-y-1">
+                <span className="font-semibold text-foreground block text-xs">
+                  Avatar Karakter DiceBear
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[11px] gap-1 border-emerald-600/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                    onClick={() => setIsAvatarPickerOpen(true)}
+                  >
+                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                    {avatarUrl ? "Ganti Avatar" : "Pilih Avatar"}
+                  </Button>
+                  {avatarUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-[11px] text-muted-foreground hover:text-destructive gap-1 px-2"
+                      onClick={() => setAvatarUrl("")}
+                    >
+                      <X className="w-3 h-3" />
+                      Hapus
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div>
               <label className="font-semibold text-foreground block mb-1">
                 Nama Lengkap & Gelar <span className="text-rose-500">*</span>
@@ -508,6 +587,15 @@ export default function MasterDataUsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog Pemilih Avatar DiceBear */}
+      <AvatarPickerDialog
+        open={isAvatarPickerOpen}
+        onOpenChange={setIsAvatarPickerOpen}
+        currentAvatarUrl={avatarUrl}
+        onSelectAvatar={(newUrl) => setAvatarUrl(newUrl)}
+        userFullName={name}
+      />
     </div>
   );
 }

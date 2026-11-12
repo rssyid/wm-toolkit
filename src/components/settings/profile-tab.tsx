@@ -11,6 +11,7 @@ import {
   Lock,
   ShieldCheck,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { AvatarPickerDialog } from "@/components/shared/avatar-picker-dialog";
 import { useAppState } from "@/context/app-state-context";
 import { AFCEApprovalRole } from "@/types";
 import { changeCurrentUserPasswordAction } from "@/server/actions/users";
@@ -83,6 +85,7 @@ export function ProfileTab() {
   const [avatarUrl, setAvatarUrl] = useState(userProfile.avatarUrl || "");
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
 
   // Password Form States
   const [currentPassword, setCurrentPassword] = useState("");
@@ -139,6 +142,12 @@ export function ProfileTab() {
     setAvatarUrl("");
     updateUserProfile({ avatarUrl: "" });
     toast.info("Foto profil dihapus, kembali ke inisial nama.");
+  };
+
+  const handleSelectDiceBearAvatar = (newAvatarUrl: string) => {
+    setAvatarUrl(newAvatarUrl);
+    updateUserProfile({ avatarUrl: newAvatarUrl });
+    toast.success("Avatar DiceBear berhasil dipilih dan diperbarui!");
   };
 
   const handleSaveProfile = async () => {
@@ -279,7 +288,17 @@ export function ProfileTab() {
                   {getInitials(fullName)}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5 shadow-xs border-emerald-600/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                  onClick={() => setIsAvatarPickerOpen(true)}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  Pilih Avatar Karakter
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
@@ -293,7 +312,7 @@ export function ProfileTab() {
                   ) : (
                     <Camera className="w-3.5 h-3.5 text-muted-foreground" />
                   )}
-                  {avatarUrl ? "Ganti Foto" : "Unggah Foto"}
+                  {avatarUrl ? "Unggah Foto File" : "Unggah Foto"}
                 </Button>
                 {avatarUrl && (
                   <Button
@@ -633,6 +652,15 @@ export function ProfileTab() {
           </div>
         </form>
       </div>
+
+      {/* Dialog Pemilih Avatar DiceBear */}
+      <AvatarPickerDialog
+        open={isAvatarPickerOpen}
+        onOpenChange={setIsAvatarPickerOpen}
+        currentAvatarUrl={avatarUrl}
+        onSelectAvatar={handleSelectDiceBearAvatar}
+        userFullName={fullName}
+      />
     </div>
   );
 }
