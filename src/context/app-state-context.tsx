@@ -380,7 +380,15 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(DEFAULT_SYSTEM_SETTINGS);
 
   const updateUserProfile = (updates: Partial<UserProfile>) => {
-    setUserProfile((prev) => ({ ...prev, ...updates }));
+    setUserProfile((prev) => {
+      const next = { ...prev, ...updates };
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        const parsed = stored ? JSON.parse(stored) : {};
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...parsed, userProfile: next }));
+      } catch {}
+      return next;
+    });
     updateCurrentUserProfileAction(updates).catch((err) =>
       console.warn("Sync DB error (updateCurrentUserProfileAction):", err)
     );
@@ -405,6 +413,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         role: u.jabatan || prev.role,
         systemRole: userRole,
         selectedLocation: u.estateName || prev.selectedLocation,
+        avatarUrl: u.avatarUrl || u.image || prev.avatarUrl,
       }));
     }
   }, [session]);

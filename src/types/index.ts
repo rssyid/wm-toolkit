@@ -513,6 +513,7 @@ export interface AppUser {
   systemRole?: SystemRole;
   jabatan?: string;
   estateName?: string;
+  avatarUrl?: string;
   status: "Active" | "Inactive";
   updatedAt: string;
 }
@@ -636,6 +637,7 @@ export interface UserProfile {
   timeZone: "WIB" | "WITA" | "WIT";
   selectedLocation: string;
   bio: string;
+  avatarUrl?: string;
 }
 
 export interface SystemSettings {

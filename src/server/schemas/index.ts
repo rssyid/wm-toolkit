@@ -399,6 +399,19 @@ export const UpdateUserProfileSchema = z.object({
   selectedLocation: z.string().optional().nullable(),
   bio: z.string().optional().nullable(),
   timeZone: z.string().optional(),
+  avatarUrl: z.string().optional().nullable(),
 });
+
+// Change Password Schema
+export const ChangePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Kata sandi saat ini wajib diisi"),
+    newPassword: z.string().min(6, "Kata sandi baru minimal 6 karakter"),
+    confirmPassword: z.string().min(6, "Konfirmasi kata sandi minimal 6 karakter"),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Konfirmasi kata sandi tidak cocok dengan kata sandi baru",
+    path: ["confirmPassword"],
+  });
 
 

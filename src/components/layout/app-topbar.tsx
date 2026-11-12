@@ -27,7 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { GlobalSearch } from "./global-search";
 import { useAppState } from "@/context/app-state-context";
 import { toast } from "sonner";
@@ -232,6 +232,13 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
               title="Profil Pengguna & Sesi Aktif"
             >
               <Avatar className="h-8 w-8 border shrink-0">
+                {userProfile?.avatarUrl && (
+                  <AvatarImage
+                    src={userProfile.avatarUrl}
+                    alt={userProfile?.fullName || "Avatar"}
+                    className="object-cover"
+                  />
+                )}
                 <AvatarFallback
                   className={cn(
                     "text-white font-semibold text-xs",

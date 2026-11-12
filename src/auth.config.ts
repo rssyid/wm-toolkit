@@ -11,6 +11,7 @@ export const authConfig: NextAuthConfig = {
         token.role = (user as any).role;
         token.jabatan = (user as any).jabatan;
         token.estateName = (user as any).estateName;
+        token.avatarUrl = (user as any).avatarUrl;
       }
       return token;
     },
@@ -20,6 +21,8 @@ export const authConfig: NextAuthConfig = {
         (session.user as any).role = token.role;
         (session.user as any).jabatan = token.jabatan;
         (session.user as any).estateName = token.estateName;
+        (session.user as any).avatarUrl = token.avatarUrl;
+        session.user.image = (token.avatarUrl as string) || (token as any).picture || null;
       }
       return session;
     },

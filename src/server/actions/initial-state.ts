@@ -537,6 +537,7 @@ export async function getInitialAppStateAction() {
       systemRole: u.role as any,
       jabatan: u.jabatan || undefined,
       estateName: u.estateName || undefined,
+      avatarUrl: u.avatarUrl || undefined,
       status: (u.isActive ? "Active" : "Inactive") as any,
       updatedAt: u.updatedAt.toISOString().slice(0, 10),
     }));

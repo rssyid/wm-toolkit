@@ -41,6 +41,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           role: user.role,
           jabatan: user.jabatan,
           estateName: user.estateName,
+          avatarUrl: user.avatarUrl,
         };
       },
     }),
