@@ -8,13 +8,9 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
-  ShieldCheck,
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { signIn } from "next-auth/react";
 
@@ -66,121 +62,101 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col justify-center items-center p-4 sm:p-6 bg-radial from-slate-50 via-slate-100 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      {/* Brand & Title */}
-      <div className="w-full max-w-md text-center mb-6 space-y-2">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-600 text-white font-bold text-xl shadow-md mb-2">
-          WM
+    <div className="min-h-screen w-full flex items-center justify-center p-4 sm:p-6 bg-[#f8fafc] dark:bg-slate-950 text-foreground transition-colors">
+      <div className="w-full max-w-[400px] flex flex-col items-center">
+        {/* Header Identitas Brand */}
+        <div className="flex flex-col items-center text-center mb-8">
+          <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white font-bold text-lg flex items-center justify-center shadow-sm select-none mb-4">
+            WM
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            WM-Toolkit
+          </h1>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
+            Project Management
+          </p>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-          WM-Toolkit
-        </h1>
-        <p className="text-xs sm:text-sm text-muted-foreground max-w-sm mx-auto">
-          Sistem Pencatatan & Monitoring Proyek Teknis Perkebunan Kelapa Sawit Berbasis SAP
-        </p>
-      </div>
 
-      {/* Main Login Card */}
-      <Card className="w-full max-w-md shadow-xl border-border/80">
-        <CardHeader className="p-6 pb-4 border-b">
-          <CardTitle className="text-lg font-bold flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            Masuk ke Sistem
-          </CardTitle>
-          <CardDescription className="text-xs mt-1">
-            Gunakan alamat email perkebunan dan kata sandi terdaftar Anda untuk mengakses portal kerja.
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="p-6 space-y-4">
+        {/* Card Formulir Login */}
+        <div className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-8 shadow-[0_4px_16px_rgba(15,23,42,0.04),0_1px_3px_rgba(15,23,42,0.02)]">
           {errorMessage && (
-            <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300 text-xs flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
-              <div className="flex-1">{errorMessage}</div>
+            <div className="mb-5 p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 dark:text-rose-400" />
+              <span className="flex-1 leading-relaxed">{errorMessage}</span>
             </div>
           )}
 
           <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">
-                Alamat Email Kedinasan
+            {/* Input Email */}
+            <div className="relative flex items-center">
+              <label htmlFor="email" className="sr-only">
+                Email
               </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="nama@perkebunan.co.id"
-                  className="pl-9 text-xs h-9 font-medium"
-                  autoComplete="email"
-                  autoFocus
-                  required
-                />
-              </div>
+              <Mail className="w-5 h-5 absolute left-3.5 text-slate-400 dark:text-slate-500 pointer-events-none transition-colors" />
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+                autoComplete="email"
+                autoFocus
+                required
+                className="w-full h-11 pl-11 pr-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-[15px] focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
+              />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">
-                Kata Sandi
+            {/* Input Kata Sandi */}
+            <div className="relative flex items-center">
+              <label htmlFor="password" className="sr-only">
+                Kata sandi
               </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="pl-9 pr-9 text-xs h-9 font-medium"
-                  autoComplete="current-password"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground transition-colors"
-                  title={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
+              <Lock className="w-5 h-5 absolute left-3.5 text-slate-400 dark:text-slate-500 pointer-events-none transition-colors" />
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Kata sandi"
+                autoComplete="current-password"
+                required
+                className="w-full h-11 pl-11 pr-11 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-[15px] focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-all"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors p-0.5 rounded focus:outline-none"
+                aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
+              >
+                {showPassword ? (
+                  <EyeOff className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
+              </button>
             </div>
 
-            <Button
+            {/* Tombol Masuk */}
+            <button
               type="submit"
               disabled={isLoading}
-              className="w-full h-10 mt-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-md gap-2"
+              className="w-full h-11 !mt-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-[15px] flex items-center justify-center gap-2 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
             >
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Memverifikasi Kredensial...</span>
+                  <span>Memverifikasi...</span>
                 </>
               ) : (
                 <>
-                  <span>Masuk ke Sistem</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <span>Masuk</span>
+                  <ArrowRight className="w-[18px] h-[18px]" />
                 </>
               )}
-            </Button>
+            </button>
           </form>
-        </CardContent>
-
-        <CardFooter className="p-4 bg-muted/20 border-t flex items-center justify-between text-[11px] text-muted-foreground">
-          <div className="flex items-center gap-1.5 mx-auto">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span>Sesi aman terenkripsi & otorisasi berbasis peran (RBAC)</span>
-          </div>
-        </CardFooter>
-      </Card>
-
-      <p className="text-[11px] text-muted-foreground mt-6 text-center">
-        © 2026 WM-Toolkit &bull; Proyek Teknis & Pemantauan Perkebunan Sawit Berkelanjutan
-      </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -189,7 +165,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center text-xs text-muted-foreground">
+        <div className="min-h-screen flex items-center justify-center text-xs text-muted-foreground bg-[#f8fafc] dark:bg-slate-950">
           Memuat sesi login...
         </div>
       }
