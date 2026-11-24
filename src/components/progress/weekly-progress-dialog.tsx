@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -40,30 +40,63 @@ interface WeeklyProgressDialogProps {
   preselectedWorkItemId?: string;
 }
 
+function getCurrentWeekWindow() {
+  const now = new Date();
+  const day = now.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMonday);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  const fmtIso = (d: Date) => d.toISOString().split("T")[0];
+  const fmtShort = (d: Date) =>
+    d.toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
+  const weekNum = Math.max(
+    1,
+    Math.ceil(
+      ((monday.getTime() - new Date(monday.getFullYear(), 0, 1).getTime()) /
+        86400000 +
+        1) /
+        7
+    )
+  );
+
+  return {
+    startDate: fmtIso(monday),
+    endDate: fmtIso(sunday),
+    period: `Minggu ${weekNum} (${fmtShort(monday)} - ${fmtShort(sunday)} ${sunday.getFullYear()})`,
+  };
+}
+
 export function WeeklyProgressDialog({
   open,
   onOpenChange,
   project,
   preselectedWorkItemId,
 }: WeeklyProgressDialogProps) {
-  const { addWeeklyProgress, spkContracts } = useAppState();
+  const { addWeeklyProgress, spkContracts, userProfile } = useAppState();
 
-  const projectSpks = spkContracts.filter((s) => s.projectId === project.id);
+  const projectSpks = useMemo(
+    () => spkContracts.filter((s) => s.projectId === project.id && !s.deletedAt),
+    [spkContracts, project.id]
+  );
 
   const [workItemId, setWorkItemId] = useState(
     preselectedWorkItemId || project.workItems[0]?.id || ""
   );
   const [selectedSpkId, setSelectedSpkId] = useState<string>("none");
   const [customContractor, setCustomContractor] = useState("");
-  const [period, setPeriod] = useState("Minggu 14 (26 Okt - 01 Nov 2026)");
-  const [startDate, setStartDate] = useState("2026-10-26");
-  const [endDate, setEndDate] = useState("2026-11-01");
+  const [period, setPeriod] = useState(() => getCurrentWeekWindow().period);
+  const [startDate, setStartDate] = useState(() => getCurrentWeekWindow().startDate);
+  const [endDate, setEndDate] = useState(() => getCurrentWeekWindow().endDate);
   const [plannedProgress, setPlannedProgress] = useState<number>(85);
   const [notes, setNotes] = useState("");
   const [reportName, setReportName] = useState("");
   const [reportUrl, setReportUrl] = useState("");
   const [uploadingReport, setUploadingReport] = useState(false);
-  const [createdBy, setCreatedBy] = useState("Ahmad Fauzi (Project Manager)");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createdBy, setCreatedBy] = useState(userProfile?.fullName || "");
 
   const handleReportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -86,20 +119,32 @@ export function WeeklyProgressDialog({
       }
 
       setReportName(json.data.fileName);
-      setReportUrl(json.data.webViewLink);
+      setReportUrl(
+        json.data.webViewLink ||
+          (json.data.fileId ? `/api/files/${json.data.fileId}/download` : "")
+      );
       toast.success(`Laporan "${json.data.fileName}" berhasil diunggah ke Google Drive!`);
-    } catch (err: any) {
-      toast.error(err.message || "Gagal mengunggah laporan");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal mengunggah laporan");
     } finally {
       setUploadingReport(false);
     }
   };
 
-  // Initial chaining sync when dialog opens
   useEffect(() => {
     if (open) {
+      const win = getCurrentWeekWindow();
       const initialWiId = preselectedWorkItemId || project.workItems[0]?.id || "";
       setWorkItemId(initialWiId);
+      setPeriod(win.period);
+      setStartDate(win.startDate);
+      setEndDate(win.endDate);
+      setCustomContractor("");
+      setNotes("");
+      setReportName("");
+      setReportUrl("");
+      setCreatedBy(userProfile?.fullName || "");
+
       const matchingSpks = projectSpks.filter((s) => s.workItemId === initialWiId);
       if (matchingSpks.length > 0) {
         setSelectedSpkId(matchingSpks[0].id);
@@ -107,12 +152,11 @@ export function WeeklyProgressDialog({
         setSelectedSpkId("none");
       }
     }
-  }, [open, preselectedWorkItemId, project.workItems]);
+  }, [open, preselectedWorkItemId, project.workItems, projectSpks, userProfile?.fullName]);
 
   const selectedWi = project.workItems.find((w) => w.id === workItemId);
   const activeSpk = projectSpks.find((s) => s.id === selectedSpkId);
 
-  // 1. Chaining: When Work Item changes, filter / auto-select corresponding SPK
   const handleWorkItemChange = (newWiId: string) => {
     setWorkItemId(newWiId);
     const matchingSpks = projectSpks.filter((s) => s.workItemId === newWiId);
@@ -123,7 +167,6 @@ export function WeeklyProgressDialog({
     }
   };
 
-  // 2. Chaining: When SPK changes, auto-select corresponding Work Item
   const handleSpkChange = (newSpkId: string) => {
     setSelectedSpkId(newSpkId);
     if (newSpkId !== "none") {
@@ -134,7 +177,6 @@ export function WeeklyProgressDialog({
     }
   };
 
-  // Auto-calculated actual progress from current cumulative physical work (NO MANUAL INPUT)
   const currentActualProgress = selectedWi?.progress || 0;
   const variance = currentActualProgress - plannedProgress;
   const achievement =
@@ -142,42 +184,65 @@ export function WeeklyProgressDialog({
       ? Math.round((currentActualProgress / plannedProgress) * 100)
       : 100;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!workItemId) {
       toast.error("Pilih item pekerjaan");
+      return;
+    }
+    if (!period.trim()) {
+      toast.error("Nama periode laporan wajib diisi");
+      return;
+    }
+    if (!startDate || !endDate) {
+      toast.error("Tanggal mulai dan selesai periode wajib diisi");
+      return;
+    }
+    if (new Date(endDate) < new Date(startDate)) {
+      toast.error("Tanggal selesai periode tidak boleh lebih awal dari tanggal mulai");
+      return;
+    }
+    if (Number.isNaN(Number(plannedProgress)) || plannedProgress < 0 || plannedProgress > 100) {
+      toast.error("Rencana baseline harus bernilai 0 sampai 100%");
       return;
     }
 
     const contractorName =
       activeSpk
         ? activeSpk.vendorName
-        : customContractor.trim() || "Swakelola Kebun Afdeling";
+        : customContractor.trim() || "Tim Swakelola Kebun";
 
-    addWeeklyProgress({
-      projectId: project.id,
-      workItemId,
-      workItemName: selectedWi?.name || "Item Pekerjaan",
-      periodType: "WEEKLY",
-      spkId: activeSpk ? activeSpk.id : undefined,
-      spkNumber: activeSpk ? activeSpk.spkNumber : undefined,
-      contractorName,
-      period,
-      startDate,
-      endDate,
-      plannedProgress,
-      actualProgress: currentActualProgress,
-      variance,
-      achievement,
-      notes: notes.trim() || `Laporan kemajuan mingguan ${period}`,
-      reportName: reportName || `Laporan_Mingguan_${project.code}_${period.slice(0, 9)}.pdf`,
-      photoUrl: reportUrl || `/reports/${reportName || `Laporan_Mingguan_${project.code}_${period.slice(0, 9)}.pdf`}`,
-      createdBy: createdBy.trim() || "Project Manager",
-    });
+    setIsSubmitting(true);
+    try {
+      const ok = await addWeeklyProgress({
+        projectId: project.id,
+        workItemId,
+        workItemName: selectedWi?.name || "Item Pekerjaan",
+        periodType: "WEEKLY",
+        spkId: activeSpk ? activeSpk.id : undefined,
+        spkNumber: activeSpk ? activeSpk.spkNumber : undefined,
+        contractorName,
+        period: period.trim(),
+        startDate,
+        endDate,
+        plannedProgress,
+        actualProgress: currentActualProgress,
+        variance,
+        achievement,
+        notes: notes.trim() || `Laporan kemajuan mingguan ${period.trim()}`,
+        reportName: reportName.trim() || undefined,
+        photoUrl: reportUrl.trim() || undefined,
+        createdBy: createdBy.trim() || userProfile?.fullName || "",
+      });
 
-    toast.success(
-      `Laporan mingguan berhasil disimpan! Realisasi aktual terintegrasi otomatis: ${currentActualProgress}%.`
-    );
-    onOpenChange(false);
+      if (!ok) return;
+
+      toast.success(
+        `Laporan mingguan berhasil disimpan! Realisasi aktual terintegrasi otomatis: ${currentActualProgress}%.`
+      );
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -364,9 +429,9 @@ export function WeeklyProgressDialog({
 
           <div>
             <label className="font-semibold text-foreground flex items-center justify-between mb-1">
-              <span>Lampiran Laporan Mingguan Resmi (PDF)</span>
+              <span>Lampiran Laporan Mingguan Resmi (PDF, Opsional)</span>
               {uploadingReport && (
-                <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-normal">
+                <span className="text-[10px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-normal">
                   <Loader2 className="w-3 h-3 animate-spin" /> Mengunggah ke Drive...
                 </span>
               )}
@@ -375,41 +440,35 @@ export function WeeklyProgressDialog({
               <Input
                 value={reportName}
                 onChange={(e) => setReportName(e.target.value)}
-                placeholder="Laporan_Mingguan_M14.pdf"
+                placeholder="Nama berkas atau unggah PDF ke Google Drive"
                 className="text-xs"
               />
-              <label className="h-9 px-2.5 rounded-md border border-input hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 text-foreground transition-colors gap-1.5">
-                <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="hidden sm:inline">Pilih PDF</span>
+              <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 text-foreground transition-colors gap-1.5">
+                <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                <span>Unggah PDF</span>
                 <input
                   type="file"
                   className="hidden"
                   accept="application/pdf"
                   onChange={handleReportUpload}
+                  disabled={uploadingReport}
                 />
               </label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0 text-xs"
-                onClick={() => {
-                  setReportName(`Laporan_Mingguan_${project.code}_${period.slice(0, 9)}.pdf`);
-                  toast.info("Laporan mingguan terlampir");
-                }}
-              >
-                <UploadCloud className="w-3.5 h-3.5 mr-1" /> Mock
-              </Button>
             </div>
           </div>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Batal
           </Button>
-          <Button size="sm" onClick={handleSubmit} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
-            Simpan Laporan Mingguan
+          <Button
+            size="sm"
+            onClick={handleSubmit}
+            disabled={isSubmitting || uploadingReport}
+            className="bg-indigo-700 hover:bg-indigo-800 text-white font-semibold"
+          >
+            {isSubmitting ? "Menyimpan..." : "Simpan Laporan Mingguan"}
           </Button>
         </DialogFooter>
       </DialogContent>

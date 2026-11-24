@@ -6,19 +6,17 @@ import {
   Search,
   Filter,
   Download,
-  PlusCircle,
   FileCode,
-  Clock,
   Globe,
   ArrowUpDown,
-  RefreshCw,
   Layers,
   Activity,
   CheckCircle2,
   FileText,
-  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -32,25 +30,39 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { useAppState } from "@/context/app-state-context";
-import { AuditLog, AuditLogAction, AuditEntityType } from "@/types";
-import { formatIDDate } from "@/lib/utils";
+import { AuditLog, AuditLogAction } from "@/types";
+import { formatIDDate, formatWibTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { AuditLogDetailDialog } from "@/components/dashboard/audit-log-detail-dialog";
 
+const PAGE_SIZE = 20;
+
+function getJakartaDateStr(input: string | Date): string {
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
 export function AuditLogViewer() {
-  const { auditLogs, addAuditLog, userProfile } = useAppState();
+  const { auditLogs } = useAppState();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [selectedAction, setSelectedAction] = useState<string>("ALL");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [currentPage, setCurrentPage] = useState(1);
   const [activeLogForDiff, setActiveLogForDiff] = useState<AuditLog | null>(null);
   const [diffDialogOpen, setDiffDialogOpen] = useState(false);
 
   // Metrics
   const totalLogs = auditLogs.length;
-  const todayStr = new Date().toISOString().split("T")[0];
-  const logsToday = auditLogs.filter((l) => l.createdAt.startsWith(todayStr)).length;
+  const todayJakarta = getJakartaDateStr(new Date());
+  const logsToday = auditLogs.filter((l) => getJakartaDateStr(l.createdAt) === todayJakarta).length;
   const uniqueEntities = new Set(auditLogs.map((l) => `${l.entityType}:${l.entityId}`)).size;
   const approvalAndReleaseCount = auditLogs.filter(
     (l) => l.action === "APPROVE" || l.action === "RELEASE"
@@ -108,6 +120,13 @@ export function AuditLogViewer() {
       });
   }, [auditLogs, selectedCategory, selectedAction, searchQuery, sortOrder]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedLogs = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE;
+    return filteredLogs.slice(start, start + PAGE_SIZE);
+  }, [filteredLogs, safePage]);
+
   const getActionBadgeColor = (action: AuditLogAction) => {
     switch (action) {
       case "CREATE":
@@ -145,7 +164,7 @@ export function AuditLogViewer() {
 
     const rows = filteredLogs.map((l) => [
       `"${l.id}"`,
-      `"${l.createdAt}"`,
+      `"${getJakartaDateStr(l.createdAt)} ${formatWibTime(l.createdAt, true)} WIB"`,
       `"${l.userName.replace(/"/g, '""')}"`,
       `"${(l.userJabatan || l.userRole || "").replace(/"/g, '""')}"`,
       `"${l.ipAddress}"`,
@@ -156,44 +175,19 @@ export function AuditLogViewer() {
       `"${(l.notes || "").replace(/"/g, '""')}"`,
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    const csvText = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob(["\uFEFF" + csvText], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Audit_Log_WM_Toolkit_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.href = url;
+    link.download = `Audit_Log_WM_Toolkit_${getJakartaDateStr(new Date())}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 
     toast.success("Log audit berhasil diekspor ke format CSV", {
       description: `${filteredLogs.length} baris jejak audit tersimpan aman.`,
-    });
-  };
-
-  const handleSimulateNewAudit = () => {
-    const newEntry = addAuditLog({
-      action: "UPDATE",
-      entityType: "PROJECT",
-      entityId: "prj-1",
-      entityTitle: "PRJ-2026-001 • Pembangunan Pintu Air & Tanggul Banjir Afdeling III",
-      projectId: "prj-1",
-      projectName: "Pembangunan Pintu Air & Tanggul Banjir Afdeling III",
-      beforeData: {
-        lastInspectionStatus: "Routine Check",
-        supervisor: "Mandor Lapangan",
-      },
-      afterData: {
-        lastInspectionStatus: "Verified Site Check",
-        supervisor: userProfile.fullName,
-        timestamp: new Date().toISOString(),
-      },
-      ipAddress: "10.20.4.15",
-      notes: "Verifikasi simulasi pencatatan jejak audit interaktif oleh pengguna.",
-    });
-
-    toast.success("Entri jejak audit baru berhasil dicatat", {
-      description: `ID: ${newEntry.id} • Snapshot data tersimpan di LocalStorage.`,
-      icon: <ShieldCheck className="w-4 h-4 text-emerald-600" />,
     });
   };
 
@@ -217,18 +211,9 @@ export function AuditLogViewer() {
         <div className="flex items-center gap-2">
           <Button
             size="sm"
-            variant="outline"
-            className="gap-1.5 text-xs"
-            onClick={handleSimulateNewAudit}
-          >
-            <PlusCircle className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Simulasi Catat Audit</span>
-          </Button>
-
-          <Button
-            size="sm"
-            className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs shadow-xs"
+            className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs shadow-sm"
             onClick={handleExportCSV}
+            disabled={filteredLogs.length === 0}
           >
             <Download className="w-3.5 h-3.5" />
             <span>Ekspor CSV</span>
@@ -238,53 +223,53 @@ export function AuditLogViewer() {
 
       {/* 4 Summary KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="shadow-xs">
+        <Card className="shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <span className="text-xs text-muted-foreground font-medium">Total Jejak Audit</span>
               <div className="text-2xl font-bold font-mono text-foreground mt-1">{totalLogs}</div>
-              <span className="text-[10px] text-emerald-600 font-medium">Immutable Record</span>
+              <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">Immutable Record</span>
             </div>
-            <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600">
+            <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400">
               <ShieldCheck className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs">
+        <Card className="shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <span className="text-xs text-muted-foreground font-medium">Aktivitas Hari Ini</span>
               <div className="text-2xl font-bold font-mono text-foreground mt-1">{logsToday}</div>
-              <span className="text-[10px] text-blue-600 font-medium">Sesi Berjalan</span>
+              <span className="text-[10px] text-blue-700 dark:text-blue-400 font-medium">Sesi Berjalan</span>
             </div>
-            <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600">
+            <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400">
               <Activity className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs">
+        <Card className="shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <span className="text-xs text-muted-foreground font-medium">Entitas Terpantau</span>
               <div className="text-2xl font-bold font-mono text-foreground mt-1">{uniqueEntities}</div>
-              <span className="text-[10px] text-purple-600 font-medium">AFCE, PR, PO, SPK, BAST</span>
+              <span className="text-[10px] text-purple-700 dark:text-purple-400 font-medium">AFCE, PR, PO, SPK, BAST</span>
             </div>
-            <div className="p-2.5 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600">
+            <div className="p-2.5 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400">
               <Layers className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs">
+        <Card className="shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <span className="text-xs text-muted-foreground font-medium">Approval & Rilis</span>
+              <span className="text-xs text-muted-foreground font-medium">Approval &amp; Rilis</span>
               <div className="text-2xl font-bold font-mono text-foreground mt-1">{approvalAndReleaseCount}</div>
-              <span className="text-[10px] text-teal-600 font-medium">Otoritas Bertingkat</span>
+              <span className="text-[10px] text-teal-700 dark:text-teal-400 font-medium">Otoritas Bertingkat</span>
             </div>
-            <div className="p-2.5 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-teal-600">
+            <div className="p-2.5 rounded-lg bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </CardContent>
@@ -292,7 +277,7 @@ export function AuditLogViewer() {
       </div>
 
       {/* Main Table Card */}
-      <Card className="shadow-xs">
+      <Card className="shadow-sm">
         <CardHeader className="pb-3 border-b">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -306,7 +291,10 @@ export function AuditLogViewer() {
               <Input
                 placeholder="Cari user, entitas, ID dokumen, IP..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="pl-8 h-8 text-xs"
               />
             </div>
@@ -329,10 +317,14 @@ export function AuditLogViewer() {
               ].map((cat) => (
                 <button
                   key={cat.key}
-                  onClick={() => setSelectedCategory(cat.key)}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(cat.key);
+                    setCurrentPage(1);
+                  }}
                   className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                     selectedCategory === cat.key
-                      ? "bg-emerald-600 text-white font-semibold shadow-2xs"
+                      ? "bg-emerald-700 text-white font-semibold shadow-sm"
                       : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`}
                 >
@@ -346,7 +338,10 @@ export function AuditLogViewer() {
               <select
                 aria-label="Filter Tipe Aksi"
                 value={selectedAction}
-                onChange={(e) => setSelectedAction(e.target.value)}
+                onChange={(e) => {
+                  setSelectedAction(e.target.value);
+                  setCurrentPage(1);
+                }}
                 className="h-8 text-xs border rounded-md px-2 bg-background text-foreground"
               >
                 <option value="ALL">Semua Aksi</option>
@@ -386,25 +381,25 @@ export function AuditLogViewer() {
               </TableHeader>
 
               <TableBody>
-                {filteredLogs.length === 0 ? (
+                {paginatedLogs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="py-12 text-center text-xs text-muted-foreground">
                       Tidak ditemukan riwayat jejak audit yang sesuai dengan filter pencarian.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredLogs.map((log) => (
+                  paginatedLogs.map((log) => (
                     <TableRow key={log.id} className="hover:bg-muted/40 transition-colors">
                       {/* Waktu & IP */}
                       <TableCell className="align-top py-3 text-xs">
                         <div className="space-y-0.5">
                           <p className="font-semibold text-foreground">
-                            {formatIDDate(log.createdAt.split("T")[0])}
+                            {formatIDDate(log.createdAt)}
                           </p>
                           <p className="text-[11px] font-mono text-muted-foreground">
-                            {log.createdAt.includes("T") ? log.createdAt.split("T")[1].slice(0, 8) : "10:00:00"} WIB
+                            {formatWibTime(log.createdAt, true)} WIB
                           </p>
-                          <span className="inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.2 rounded">
+                          <span className="inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
                             <Globe className="w-2.5 h-2.5" /> {log.ipAddress}
                           </span>
                         </div>
@@ -484,14 +479,34 @@ export function AuditLogViewer() {
             </Table>
           </div>
 
-          <div className="p-3 border-t bg-muted/20 flex items-center justify-between text-xs text-muted-foreground">
+          <div className="p-3 border-t bg-muted/20 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
             <span>
-              Menampilkan <b className="text-foreground">{filteredLogs.length}</b> dari{" "}
-              <b className="text-foreground">{totalLogs}</b> entri audit
+              Menampilkan <b className="text-foreground">{paginatedLogs.length}</b> dari{" "}
+              <b className="text-foreground">{filteredLogs.length}</b> entri cocok ({totalLogs} total)
             </span>
-            <span className="font-mono text-[11px]">
-              Engine: PostgreSQL &bull; Prisma schema audit_logs
-            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2 gap-1"
+                disabled={safePage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="w-3.5 h-3.5" /> Sebelumnya
+              </Button>
+              <span className="font-mono text-[11px] text-foreground">
+                Hal {safePage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2 gap-1"
+                disabled={safePage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Berikutnya <ChevronRight className="w-3.5 h-3.5" />
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

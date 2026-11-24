@@ -1,26 +1,24 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { useParams } from "next/navigation";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   TrendingUp,
   HardHat,
-  Calendar,
   CloudSun,
   Sun,
   CloudRain,
-  Camera,
   Activity,
   Layers,
-  FileSpreadsheet,
   AlertTriangle,
-  CheckCircle2,
-  Clock,
   Plus,
   Send,
   CalendarClock,
   ClipboardList,
-  Sparkles,
+  Edit2,
+  Trash2,
+  History,
+  MapPin,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -35,7 +33,6 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -46,6 +43,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableHeader,
   TableBody,
@@ -53,24 +58,34 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { AttachmentPreview } from "@/components/shared/attachment-preview";
+import { EmptyState } from "@/components/shared/empty-state";
 
-// Components
 import { DailyProgressDialog } from "@/components/progress/daily-progress-dialog";
 import { WeeklyProgressDialog } from "@/components/progress/weekly-progress-dialog";
 import { ScheduleGanttMatrix } from "@/components/workspace/schedule-gantt-matrix";
 import { ScheduleRevisionDialog } from "@/components/workspace/schedule-revision-dialog";
 
 import { useAppState } from "@/context/app-state-context";
-import { formatIDDate, formatIDR, cn } from "@/lib/utils";
-import { WorkItem, BOQItem, ScheduleGanttGroup } from "@/types";
+import { formatIDDate, formatIDR, calculateDaysBetween, cn } from "@/lib/utils";
+import { BOQItem, ProcurementType, ScheduleGanttGroup, WorkItem } from "@/types";
 import { toast } from "sonner";
 
-export default function UnifiedExecutionHub() {
+function normalizeExecutionTab(raw: string | null): string {
+  if (raw === "work-items" || raw === "workitems") return "work-items";
+  if (raw === "schedule" || raw === "gantt") return "schedule";
+  if (raw === "boq" || raw === "survey-boq") return "boq";
+  return "progress";
+}
+
+function UnifiedExecutionHubContent() {
   const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const projectId = params?.projectId as string;
+  const tabParam = normalizeExecutionTab(searchParams?.get("tab") ?? null);
 
   const {
     projects,
@@ -79,127 +94,353 @@ export default function UnifiedExecutionHub() {
     weeklyProgress,
     spkContracts,
     addDailyProgress,
-    isViewerOnly,
+    addWorkItem,
+    updateWorkItem,
+    deleteWorkItem,
+    addBoqItem,
+    deleteBoqItem,
+    canEditProjects,
+    userProfile,
   } = useAppState();
 
   const project = projects.find((p) => p.id === projectId);
 
-  const [activeTab, setActiveTab] = useState("scurve");
+  const [activeTab, setActiveTab] = useState(tabParam);
   const [dailyDialogOpen, setDailyDialogOpen] = useState(false);
   const [weeklyDialogOpen, setWeeklyDialogOpen] = useState(false);
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
 
-  // Quick In-Page Progress Form State
+  // Quick Progress Form State
   const [quickWorkItemId, setQuickWorkItemId] = useState("");
   const [quickActivity, setQuickActivity] = useState("");
   const [quickVolume, setQuickVolume] = useState<number | "">("");
+  const [quickProgressPercent, setQuickProgressPercent] = useState<string>("");
   const [quickWeather, setQuickWeather] = useState<"Cerah" | "Hujan" | "Berawan">("Cerah");
   const [quickNotes, setQuickNotes] = useState("");
-  const [quickDate, setQuickDate] = useState(new Date().toISOString().split("T")[0]);
+  const [quickDate, setQuickDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [isQuickSubmitting, setIsQuickSubmitting] = useState(false);
+
+  // Paginasi log harian
+  const [dailyPage, setDailyPage] = useState(1);
+  const pageSize = 10;
+
+  // WBS Dialog State
+  const [wbsDialogOpen, setWbsDialogOpen] = useState(false);
+  const [editingWorkItem, setEditingWorkItem] = useState<WorkItem | null>(null);
+  const [wiName, setWiName] = useState("");
+  const [wiType, setWiType] = useState<"Physical" | "Material">("Physical");
+  const [wiWeight, setWiWeight] = useState<number>(20);
+  const [wiStartDate, setWiStartDate] = useState("");
+  const [wiEndDate, setWiEndDate] = useState("");
+  const [wiProcurementType, setWiProcurementType] = useState<ProcurementType>("Tender");
+  const [wiProgressMode, setWiProgressMode] = useState<"Daily" | "Weekly">("Daily");
+  const [wiPhase, setWiPhase] = useState<WorkItem["phase"]>("Physical Execution");
+  const [isSavingWbs, setIsSavingWbs] = useState(false);
+
+  // BOQ Dialog State
+  const [boqDialogOpen, setBoqDialogOpen] = useState(false);
+  const [boqCode, setBoqCode] = useState("");
+  const [boqName, setBoqName] = useState("");
+  const [boqVolume, setBoqVolume] = useState<number>(1);
+  const [boqUnit, setBoqUnit] = useState("M3");
+  const [boqUnitPrice, setBoqUnitPrice] = useState<number>(100000);
+  const [boqWeight, setBoqWeight] = useState<number>(5);
+  const [isSavingBoq, setIsSavingBoq] = useState(false);
+
+  // Konfirmasi hapus WBS / BOQ
+  const [deleteTarget, setDeleteTarget] = useState<
+    { kind: "workItem" | "boqItem"; id: string; label: string } | null
+  >(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    setActiveTab(tabParam);
+  }, [tabParam]);
+
+  const workItems = useMemo(() => project?.workItems || [], [project?.workItems]);
+  const boqList = project?.surveyAndBoq || [];
+
+  useEffect(() => {
+    if (!quickWorkItemId && workItems.length > 0) {
+      setQuickWorkItemId(workItems[0].id);
+      setQuickProgressPercent(String(workItems[0].progress));
+    }
+  }, [quickWorkItemId, workItems]);
 
   const projectDaily = dailyProgress.filter((d) => d.projectId === projectId);
   const projectWeekly = weeklyProgress.filter((w) => w.projectId === projectId);
-  const workItems = project?.workItems || [];
-  const boqList = project?.surveyAndBoq || [];
 
-  // Generate S-Curve Chart Data
   const chartData = useMemo(() => {
-    if (!project) return [];
+    if (projectWeekly.length === 0) return [];
     const sortedWeekly = [...projectWeekly].sort(
       (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
     );
-
-    if (sortedWeekly.length > 0) {
-      return sortedWeekly.map((wp, idx) => {
-        const match = wp.period.match(/Minggu\s+(\d+)/i);
-        const label = match ? `M${match[1]}` : `W${idx + 1}`;
-        return {
-          week: label,
-          plan: wp.plannedProgress,
-          actual: wp.actualProgress,
-          variance: wp.variance,
-        };
-      });
-    }
-
-    // Fallback simulation based on project duration & progress
-    const totalWeeks = Math.max(4, Math.ceil((project.durationDays || 30) / 7));
-    const currentWeekIdx = Math.min(
-      totalWeeks,
-      Math.max(1, Math.round(((project.progress || 0) / 100) * totalWeeks))
-    );
-
-    const pts = [];
-    for (let w = 1; w <= totalWeeks; w++) {
-      const planVal = Math.min(
-        100,
-        Math.round((100 / (1 + Math.exp(-0.8 * (w - totalWeeks / 2)))) * 10) / 10
-      );
-      let actualVal = null;
-      if (w <= currentWeekIdx) {
-        actualVal = Math.min(
-          100,
-          Math.round(((project.progress || 0) / currentWeekIdx) * w * 10) / 10
-        );
-      }
-      pts.push({
-        week: `W${w}`,
-        plan: planVal,
-        actual: actualVal,
-        variance: actualVal !== null ? Math.round((actualVal - planVal) * 10) / 10 : null,
-      });
-    }
-    return pts;
-  }, [projectWeekly, project?.progress, project?.durationDays, project]);
+    return sortedWeekly.map((wp, idx) => {
+      const match = wp.period.match(/Minggu\s+(\d+)/i);
+      const label = match ? `M${match[1]}` : `M${idx + 1}`;
+      return {
+        week: label,
+        plan: wp.plannedProgress,
+        actual: wp.actualProgress,
+        variance: wp.variance,
+      };
+    });
+  }, [projectWeekly]);
 
   if (!project) return null;
 
-  const handleQuickSubmit = (e: React.FormEvent) => {
+  const isAfceApproved = project.afceStatus === "Approved";
+  const canRecordProgress = canEditProjects && isAfceApproved;
+
+  const totalWeight = workItems.reduce((acc, it) => acc + (it.weight || 0), 0);
+  const totalBoqValue = boqList.reduce((acc, it) => acc + it.totalPrice, 0);
+  const totalBoqWeight = boqList.reduce((acc, it) => acc + it.weight, 0);
+
+  const totalDailyPages = Math.max(1, Math.ceil(projectDaily.length / pageSize));
+  const pagedDaily = projectDaily.slice((dailyPage - 1) * pageSize, dailyPage * pageSize);
+
+  const handleTabChange = (nextTab: string) => {
+    setActiveTab(nextTab);
+    router.replace(`/workspace/${projectId}/execution?tab=${nextTab}`, {
+      scroll: false,
+    });
+  };
+
+  const handleQuickWorkItemSelect = (nextId: string) => {
+    setQuickWorkItemId(nextId);
+    const wi = workItems.find((w) => w.id === nextId);
+    if (wi) {
+      setQuickProgressPercent(String(wi.progress));
+    }
+  };
+
+  const handleQuickSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quickWorkItemId && workItems.length > 0) {
-      toast.error("Pilih komponen pekerjaan");
+    if (!canRecordProgress) {
+      toast.error("Progres hanya dapat dicatat oleh PIC/Admin setelah AFCE disetujui.");
       return;
     }
     const targetWiId = quickWorkItemId || workItems[0]?.id;
     const selectedWi = workItems.find((w) => w.id === targetWiId);
+    if (!selectedWi) {
+      toast.error("Tambahkan minimal 1 item pekerjaan WBS sebelum mencatat progres.");
+      return;
+    }
 
-    const spk = spkContracts.find((s) => s.projectId === projectId && s.workItemId === targetWiId);
+    const volNum = Number(quickVolume);
+    if (!volNum || volNum <= 0) {
+      toast.error("Volume realisasi harian harus lebih besar dari 0.");
+      return;
+    }
 
-    addDailyProgress({
-      projectId: project.id,
-      workItemId: targetWiId,
-      workItemName: selectedWi?.name || "Pekerjaan Lapangan",
-      spkId: spk?.id,
-      spkNumber: spk?.spkNumber,
-      contractorName: spk?.vendorName || "Swakelola Kebun",
-      date: quickDate,
-      weather: quickWeather,
-      activity: quickActivity.trim() || `Pelaksanaan harian ${selectedWi?.name}`,
-      actualVolume: Number(quickVolume) || 1,
-      plannedVolume: 1,
-      unit: spk?.unit || "Unit",
-      progressPercent: selectedWi ? Math.min(100, selectedWi.progress + 5) : 5,
-      notes: quickNotes.trim(),
-      photoUrl: "site_doc_progress.jpg",
-      createdBy: "Pengawas Lapangan (PIC)",
-    });
+    const spk = spkContracts.find(
+      (s) => s.projectId === projectId && s.workItemId === targetWiId && !s.deletedAt
+    );
 
-    toast.success("Catatan progres harian berhasil disimpan!");
-    setQuickActivity("");
-    setQuickVolume("");
-    setQuickNotes("");
+    const priorLogs = projectDaily.filter((d) => d.workItemId === targetWiId);
+    const priorCumulative = priorLogs.reduce((sum, log) => sum + (log.actualVolume || 0), 0);
+    const cumulativeVolume = priorCumulative + volNum;
+    const targetVol = spk?.targetVolume || 0;
+    const remainingVolume = targetVol > 0 ? Math.max(0, targetVol - cumulativeVolume) : undefined;
+
+    let computedPercent =
+      quickProgressPercent.trim() !== ""
+        ? Number(quickProgressPercent)
+        : targetVol > 0
+        ? Math.min(100, Math.round((cumulativeVolume / targetVol) * 100))
+        : selectedWi.progress;
+
+    if (Number.isNaN(computedPercent) || computedPercent < 0 || computedPercent > 100) {
+      toast.error("Persentase progres komulatif harus berada di antara 0 dan 100%.");
+      return;
+    }
+
+    setIsQuickSubmitting(true);
+    try {
+      const ok = await addDailyProgress({
+        projectId: project.id,
+        workItemId: targetWiId,
+        workItemName: selectedWi.name,
+        spkId: spk?.id,
+        spkNumber: spk?.spkNumber,
+        contractorName: spk?.vendorName || "Swakelola Kebun",
+        date: quickDate,
+        weather: quickWeather,
+        activity: quickActivity.trim() || `Pelaksanaan harian ${selectedWi.name}`,
+        targetVolume: targetVol || undefined,
+        actualVolume: volNum,
+        plannedVolume: volNum,
+        cumulativeVolume,
+        remainingVolume,
+        unit: spk?.unit || "Unit",
+        progressPercent: computedPercent,
+        notes: quickNotes.trim(),
+        createdBy: userProfile.fullName || "PIC Proyek",
+      });
+      if (ok) {
+        toast.success("Catatan progres harian berhasil disimpan ke database.");
+        setQuickActivity("");
+        setQuickVolume("");
+        setQuickNotes("");
+        setDailyPage(1);
+      }
+    } finally {
+      setIsQuickSubmitting(false);
+    }
+  };
+
+  const handleOpenAddWbs = () => {
+    setEditingWorkItem(null);
+    setWiName("");
+    setWiType("Physical");
+    setWiWeight(10);
+    setWiStartDate(project.baselineStartDate);
+    setWiEndDate(project.baselineEndDate);
+    setWiProcurementType(project.procurementType || "Tender");
+    setWiProgressMode("Daily");
+    setWiPhase("Physical Execution");
+    setWbsDialogOpen(true);
+  };
+
+  const handleOpenEditWbs = (wi: WorkItem) => {
+    setEditingWorkItem(wi);
+    setWiName(wi.name);
+    setWiType(wi.type);
+    setWiWeight(wi.weight);
+    setWiStartDate(wi.startDate);
+    setWiEndDate(wi.endDate);
+    setWiProcurementType(wi.procurementType);
+    setWiProgressMode(wi.progressMode);
+    setWiPhase(wi.phase);
+    setWbsDialogOpen(true);
+  };
+
+  const handleSaveWbs = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!wiName.trim()) {
+      toast.error("Nama item pekerjaan wajib diisi.");
+      return;
+    }
+    if (wiWeight <= 0 || wiWeight > 100) {
+      toast.error("Bobot item pekerjaan harus antara 1% hingga 100%.");
+      return;
+    }
+    if (wiStartDate && wiEndDate && wiEndDate < wiStartDate) {
+      toast.error("Tanggal selesai tidak boleh lebih awal dari tanggal mulai.");
+      return;
+    }
+
+    setIsSavingWbs(true);
+    try {
+      const ok = editingWorkItem
+        ? await updateWorkItem(editingWorkItem.id, project.id, {
+            name: wiName.trim(),
+            type: wiType,
+            weight: wiWeight,
+            startDate: wiStartDate,
+            endDate: wiEndDate,
+            procurementType: wiProcurementType,
+            progressMode: wiProgressMode,
+            phase: wiPhase,
+          })
+        : await addWorkItem(project.id, {
+            name: wiName.trim(),
+            type: wiType,
+            weight: wiWeight,
+            startDate: wiStartDate,
+            endDate: wiEndDate,
+            procurementType: wiProcurementType,
+            progressMode: wiProgressMode,
+            phase: wiPhase,
+            status: "Planned",
+            progress: 0,
+          });
+      if (ok) {
+        setWbsDialogOpen(false);
+      }
+    } finally {
+      setIsSavingWbs(false);
+    }
+  };
+
+  const handleSaveBoq = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!boqName.trim()) {
+      toast.error("Nama uraian pekerjaan BOQ wajib diisi.");
+      return;
+    }
+    if (boqVolume <= 0) {
+      toast.error("Volume BOQ harus lebih besar dari 0.");
+      return;
+    }
+    if (boqUnitPrice < 0) {
+      toast.error("Harga satuan tidak boleh negatif.");
+      return;
+    }
+
+    setIsSavingBoq(true);
+    try {
+      const ok = await addBoqItem(project.id, {
+        itemCode: boqCode.trim() || `BOQ-${String(boqList.length + 1).padStart(3, "0")}`,
+        name: boqName.trim(),
+        volume: boqVolume,
+        unit: boqUnit.trim() || "Unit",
+        unitPrice: boqUnitPrice,
+        totalPrice: boqVolume * boqUnitPrice,
+        weight: boqWeight,
+        status: "Draft",
+      });
+      if (ok) {
+        setBoqDialogOpen(false);
+      }
+    } finally {
+      setIsSavingBoq(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const ok =
+        deleteTarget.kind === "workItem"
+          ? await deleteWorkItem(deleteTarget.id, project.id)
+          : await deleteBoqItem(deleteTarget.id, project.id);
+      if (ok) {
+        setDeleteTarget(null);
+      }
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleUpdateSchedule = (updatedGroups: ScheduleGanttGroup[]) => {
-    updateProject(projectId, {
+    void updateProject(projectId, {
       scheduleMatrix: updatedGroups,
     });
   };
 
+  const baselineDays = calculateDaysBetween(project.baselineStartDate, project.baselineEndDate);
+  const targetDays = calculateDaysBetween(project.baselineStartDate, project.targetEndDate);
+
   return (
     <div className="space-y-4">
-      {/* Top Physical Progress & Variance Banner */}
-      <div className="rounded-lg border bg-card p-4 shadow-xs space-y-3">
+      {!isAfceApproved && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3.5 flex items-start gap-3 text-xs">
+          <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-amber-900 dark:text-amber-200">
+              Dokumen AFCE belum berstatus Disetujui
+            </p>
+            <p className="text-amber-800 dark:text-amber-300 mt-0.5">
+              Pencatatan log progres harian & mingguan dikunci hingga otorisasi AFCE SAP berstatus Disetujui.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Header & Ringkasan */}
+      <div className="rounded-lg border bg-card p-4 shadow-sm space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -211,24 +452,26 @@ export default function UnifiedExecutionHub() {
               </h2>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Monitoring Kurva S, log harian/mingguan, item pekerjaan berbobot, dan matriks jadwal Gantt.
+              Pantau Kurva S, catat log harian/mingguan, kelola WBS berbobot, jadwal Gantt, serta BOQ teknis.
             </p>
           </div>
 
-          {!isViewerOnly && (
-            <div className="flex items-center gap-2">
+          {canEditProjects && (
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
                 variant="outline"
+                disabled={!canRecordProgress}
                 onClick={() => setDailyDialogOpen(true)}
-                className="h-8 text-xs gap-1.5"
+                className="h-9 text-xs gap-1.5"
               >
                 <Plus className="w-3.5 h-3.5" /> Log Harian
               </Button>
               <Button
                 size="sm"
+                disabled={!canRecordProgress}
                 onClick={() => setWeeklyDialogOpen(true)}
-                className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                className="h-9 text-xs gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-medium"
               >
                 <Plus className="w-3.5 h-3.5" /> Log Mingguan
               </Button>
@@ -236,11 +479,10 @@ export default function UnifiedExecutionHub() {
           )}
         </div>
 
-        {/* Highlight Metrics */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t text-xs">
           <div>
             <span className="text-muted-foreground block text-[11px]">Realisasi Fisik Total</span>
-            <span className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">
+            <span className="text-lg font-bold font-mono text-emerald-700 dark:text-emerald-400">
               {project.progress}%
             </span>
           </div>
@@ -256,8 +498,8 @@ export default function UnifiedExecutionHub() {
               className={cn(
                 "text-lg font-bold font-mono",
                 project.scheduleVarianceDays > 7
-                  ? "text-rose-600"
-                  : "text-emerald-600"
+                  ? "text-rose-700 dark:text-rose-400"
+                  : "text-emerald-700 dark:text-emerald-400"
               )}
             >
               {project.scheduleVarianceDays > 0
@@ -266,129 +508,121 @@ export default function UnifiedExecutionHub() {
             </span>
           </div>
           <div>
-            <span className="text-muted-foreground block text-[11px]">Total Item Pekerjaan</span>
+            <span className="text-muted-foreground block text-[11px]">Item Pekerjaan WBS</span>
             <span className="text-lg font-bold font-mono text-foreground">
               {workItems.length} Komponen
             </span>
           </div>
         </div>
 
-        {/* Tab Strip */}
         <div className="border-t pt-2">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="h-8">
-              <TabsTrigger
-                value="scurve"
-                className="text-xs gap-1.5 data-[state=active]:font-semibold"
-              >
+          <Tabs value={activeTab} onValueChange={handleTabChange}>
+            <TabsList className="h-auto w-full flex flex-wrap justify-start gap-1">
+              <TabsTrigger value="progress" className="text-xs gap-1.5 data-[state=active]:font-semibold">
                 <TrendingUp className="w-3.5 h-3.5" />
-                Kurva S & Log Fisik ({projectDaily.length})
+                <span>Kurva S & Log Fisik ({projectDaily.length})</span>
               </TabsTrigger>
-              <TabsTrigger
-                value="workitems"
-                className="text-xs gap-1.5 data-[state=active]:font-semibold"
-              >
+              <TabsTrigger value="work-items" className="text-xs gap-1.5 data-[state=active]:font-semibold">
                 <Layers className="w-3.5 h-3.5" />
-                Item Pekerjaan & Bobot ({workItems.length})
+                <span>Item Pekerjaan WBS ({workItems.length})</span>
               </TabsTrigger>
-              <TabsTrigger
-                value="gantt"
-                className="text-xs gap-1.5 data-[state=active]:font-semibold"
-              >
+              <TabsTrigger value="schedule" className="text-xs gap-1.5 data-[state=active]:font-semibold">
                 <CalendarClock className="w-3.5 h-3.5" />
-                Matriks Jadwal & Gantt
+                <span>Jadwal & Matriks Gantt</span>
               </TabsTrigger>
-              <TabsTrigger
-                value="boq"
-                className="text-xs gap-1.5 data-[state=active]:font-semibold"
-              >
+              <TabsTrigger value="boq" className="text-xs gap-1.5 data-[state=active]:font-semibold">
                 <ClipboardList className="w-3.5 h-3.5" />
-                Survey & BOQ ({boqList.length})
+                <span>Survey & BOQ ({boqList.length})</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
       </div>
 
-      {/* SUB-TAB 1: KURVA S & QUICK LOG */}
-      {activeTab === "scurve" && (
+      {/* TAB 1: KURVA S & LOG FISIK */}
+      {activeTab === "progress" && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Left 2 Cols: Kurva S Chart */}
-            <Card className="lg:col-span-2 shadow-xs">
+            <Card className="lg:col-span-2 shadow-sm">
               <CardHeader className="pb-2 border-b flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-sm font-semibold">
                     Kurva S Rencana vs Realisasi Aktual
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Garis hijau menunjukkan realisasi fisik kumulatif lapangan.
+                    Berdasarkan laporan evaluasi mingguan yang tercatat pada database.
                   </p>
                 </div>
-                <Badge variant="outline" className="text-[10px] font-mono">
-                  {chartData.length} Minggu
+                <Badge variant="outline" className="text-[11px] font-mono">
+                  {chartData.length} Minggu Tercatat
                 </Badge>
               </CardHeader>
               <CardContent className="p-4">
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="week" tick={{ fontSize: 11 }} />
-                      <YAxis
-                        unit="%"
-                        domain={[0, 100]}
-                        tick={{ fontSize: 11 }}
-                      />
-                      <RechartsTooltip />
-                      <Legend wrapperStyle={{ fontSize: "11px" }} />
-                      <Line
-                        type="monotone"
-                        dataKey="plan"
-                        name="Rencana Baseline (%)"
-                        stroke="#94a3b8"
-                        strokeDasharray="4 4"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="actual"
-                        name="Realisasi Aktual (%)"
-                        stroke="#10b981"
-                        strokeWidth={2.5}
-                        dot={{ r: 3 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+                {chartData.length === 0 ? (
+                  <EmptyState
+                    icon={<TrendingUp className="w-8 h-8 opacity-60" />}
+                    title="Belum ada data Kurva S mingguan"
+                    description="Catat minimal satu laporan evaluasi mingguan untuk menampilkan grafik Kurva S rencana terhadap realisasi aktual."
+                    actionLabel={canRecordProgress ? "Catat Log Mingguan" : undefined}
+                    onAction={canRecordProgress ? () => setWeeklyDialogOpen(true) : undefined}
+                  />
+                ) : (
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                        <YAxis unit="%" domain={[0, 100]} tick={{ fontSize: 11 }} />
+                        <RechartsTooltip />
+                        <Legend wrapperStyle={{ fontSize: "11px" }} />
+                        <Line
+                          type="monotone"
+                          dataKey="plan"
+                          name="Rencana Baseline (%)"
+                          stroke="#64748b"
+                          strokeDasharray="4 4"
+                          strokeWidth={2}
+                          dot={false}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="actual"
+                          name="Realisasi Aktual (%)"
+                          stroke="#047857"
+                          strokeWidth={2.5}
+                          dot={{ r: 3 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Right 1 Col: Quick In-Page Progress Form */}
-            {!isViewerOnly ? (
-              <Card className="shadow-xs border-emerald-200 dark:border-emerald-800 bg-emerald-50/20 dark:bg-emerald-950/10">
+            {canEditProjects ? (
+              <Card className="shadow-sm border-emerald-200 dark:border-emerald-800 bg-emerald-50/20 dark:bg-emerald-950/10">
                 <CardHeader className="pb-2 border-b border-emerald-200 dark:border-emerald-800/60">
                   <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-semibold text-xs">
-                    <Sparkles className="w-4 h-4 text-emerald-600" />
-                    Quick Progress Log (15 Detik)
+                    <Activity className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+                    Input Progres Harian Cepat
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    Catat kemajuan harian tanpa membuka form modal panjang.
+                    Catat progres lapangan harian ke komponen WBS proyek.
                   </p>
                 </CardHeader>
                 <CardContent className="p-3.5">
                   <form onSubmit={handleQuickSubmit} className="space-y-2.5 text-xs">
                     <div>
-                      <label className="text-[11px] font-medium text-foreground block mb-1">
+                      <label htmlFor="quick-wi" className="text-[11px] font-medium text-foreground block mb-1">
                         Komponen Pekerjaan
                       </label>
                       <Select
                         value={quickWorkItemId || (workItems[0]?.id || "")}
-                        onValueChange={setQuickWorkItemId}
+                        onValueChange={handleQuickWorkItemSelect}
+                        disabled={!canRecordProgress || workItems.length === 0}
                       >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="Pilih work item" />
+                        <SelectTrigger id="quick-wi" className="h-9 text-xs">
+                          <SelectValue placeholder="Pilih item pekerjaan" />
                         </SelectTrigger>
                         <SelectContent>
                           {workItems.map((wi) => (
@@ -402,45 +636,46 @@ export default function UnifiedExecutionHub() {
 
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-[11px] font-medium text-foreground block mb-1">
+                        <label htmlFor="quick-date" className="text-[11px] font-medium text-foreground block mb-1">
                           Tanggal
                         </label>
                         <Input
+                          id="quick-date"
                           type="date"
                           value={quickDate}
                           onChange={(e) => setQuickDate(e.target.value)}
-                          className="h-8 text-xs font-mono"
+                          disabled={!canRecordProgress}
+                          className="h-9 text-xs font-mono"
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-medium text-foreground block mb-1">
+                        <label htmlFor="quick-weather" className="text-[11px] font-medium text-foreground block mb-1">
                           Cuaca
                         </label>
                         <Select
                           value={quickWeather}
-                          onValueChange={(v: "Cerah" | "Hujan" | "Berawan") =>
-                            setQuickWeather(v)
-                          }
+                          onValueChange={(v: "Cerah" | "Hujan" | "Berawan") => setQuickWeather(v)}
+                          disabled={!canRecordProgress}
                         >
-                          <SelectTrigger className="h-8 text-xs">
+                          <SelectTrigger id="quick-weather" className="h-9 text-xs">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Cerah">
                               <span className="flex items-center gap-1.5">
-                                <Sun className="w-3.5 h-3.5 text-amber-500" />
+                                <Sun className="w-3.5 h-3.5 text-amber-600" />
                                 <span>Cerah</span>
                               </span>
                             </SelectItem>
                             <SelectItem value="Berawan">
                               <span className="flex items-center gap-1.5">
-                                <CloudSun className="w-3.5 h-3.5 text-sky-500" />
+                                <CloudSun className="w-3.5 h-3.5 text-sky-600" />
                                 <span>Berawan</span>
                               </span>
                             </SelectItem>
                             <SelectItem value="Hujan">
                               <span className="flex items-center gap-1.5">
-                                <CloudRain className="w-3.5 h-3.5 text-blue-500" />
+                                <CloudRain className="w-3.5 h-3.5 text-blue-600" />
                                 <span>Hujan</span>
                               </span>
                             </SelectItem>
@@ -450,140 +685,264 @@ export default function UnifiedExecutionHub() {
                     </div>
 
                     <div>
-                      <label className="text-[11px] font-medium text-foreground block mb-1">
+                      <label htmlFor="quick-activity" className="text-[11px] font-medium text-foreground block mb-1">
                         Aktivitas Lapangan
                       </label>
                       <Input
+                        id="quick-activity"
                         placeholder="Contoh: Pemasangan bronjong & cerucuk"
                         value={quickActivity}
                         onChange={(e) => setQuickActivity(e.target.value)}
-                        className="h-8 text-xs"
+                        disabled={!canRecordProgress}
+                        className="h-9 text-xs"
                       />
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-[11px] font-medium text-foreground block mb-1">
+                        <label htmlFor="quick-volume" className="text-[11px] font-medium text-foreground block mb-1">
                           Volume Hari Ini
                         </label>
                         <Input
+                          id="quick-volume"
                           type="number"
-                          placeholder="Vol"
+                          min="0.01"
+                          step="any"
+                          placeholder="0"
                           value={quickVolume}
                           onChange={(e) =>
                             setQuickVolume(e.target.value === "" ? "" : Number(e.target.value))
                           }
-                          className="h-8 text-xs"
+                          disabled={!canRecordProgress}
+                          className="h-9 text-xs font-mono"
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] font-medium text-foreground block mb-1">
-                          Catatan
+                        <label htmlFor="quick-percent" className="text-[11px] font-medium text-foreground block mb-1">
+                          Progres Item (%)
                         </label>
                         <Input
-                          placeholder="Kendala / alat"
-                          value={quickNotes}
-                          onChange={(e) => setQuickNotes(e.target.value)}
-                          className="h-8 text-xs"
+                          id="quick-percent"
+                          type="number"
+                          min="0"
+                          max="100"
+                          placeholder="0-100"
+                          value={quickProgressPercent}
+                          onChange={(e) => setQuickProgressPercent(e.target.value)}
+                          disabled={!canRecordProgress}
+                          className="h-9 text-xs font-mono"
                         />
                       </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="quick-notes" className="text-[11px] font-medium text-foreground block mb-1">
+                        Catatan Kendala / Alat
+                      </label>
+                      <Input
+                        id="quick-notes"
+                        placeholder="Opsional"
+                        value={quickNotes}
+                        onChange={(e) => setQuickNotes(e.target.value)}
+                        disabled={!canRecordProgress}
+                        className="h-9 text-xs"
+                      />
                     </div>
 
                     <Button
                       type="submit"
                       size="sm"
-                      className="w-full h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium gap-1.5 shadow-xs mt-1"
+                      disabled={!canRecordProgress || isQuickSubmitting || workItems.length === 0}
+                      className="w-full h-9 text-xs bg-emerald-700 hover:bg-emerald-800 text-white font-medium gap-1.5 shadow-sm"
                     >
-                      <Send className="w-3.5 h-3.5" /> Simpan Laporan Harian
+                      <Send className="w-3.5 h-3.5" />
+                      {isQuickSubmitting ? "Menyimpan..." : "Simpan Laporan Harian"}
                     </Button>
                   </form>
                 </CardContent>
               </Card>
             ) : (
-              <Card className="shadow-xs p-4 text-xs text-muted-foreground text-center flex flex-col items-center justify-center">
+              <Card className="shadow-sm p-4 text-xs text-muted-foreground text-center flex flex-col items-center justify-center">
                 <HardHat className="w-8 h-8 opacity-40 mb-2" />
-                <p className="font-semibold text-foreground">Mode Pantau (Viewer)</p>
-                <p className="text-[11px] mt-1">Anda memiliki izin read-only untuk progres proyek.</p>
+                <p className="font-semibold text-foreground">Akses Baca Saja</p>
+                <p className="text-[11px] mt-1">
+                  Hanya PIC proyek atau Administrator yang dapat mencatat laporan progres harian.
+                </p>
               </Card>
             )}
           </div>
 
-          {/* Daily Progress Feed */}
-          <Card className="shadow-xs">
-            <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
+          {/* Tabel Log Harian Berpaginasi */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-sm font-semibold">
                   Riwayat Laporan Progres Harian ({projectDaily.length})
                 </CardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Daftar laporan volume dan dokumentasi fisik lapangan.
+                  Daftar realisasi volume harian dan kondisi cuaca lapangan.
                 </p>
               </div>
-              {!isViewerOnly && (
+              {canRecordProgress && (
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => setDailyDialogOpen(true)}
-                  className="h-7 text-xs gap-1"
+                  className="h-9 text-xs gap-1"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Form Lengkap
+                  <Plus className="w-3.5 h-3.5" /> Form Harian Lengkap
                 </Button>
               )}
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 overflow-x-auto">
               {projectDaily.length === 0 ? (
-                <div className="text-center py-10 text-xs text-muted-foreground space-y-1">
-                  <Activity className="w-7 h-7 mx-auto opacity-40" />
-                  <p className="font-medium">Belum ada laporan progres tercatat</p>
-                  <p className="text-[11px]">
-                    Gunakan widget quick log di atas untuk mencatat kemajuan fisik hari ini.
-                  </p>
+                <div className="p-6">
+                  <EmptyState
+                    icon={<Activity className="w-8 h-8 opacity-60" />}
+                    title="Belum ada laporan progres harian"
+                    description="Catat laporan harian untuk memantau perkembangan volume pekerjaan di lapangan."
+                  />
+                </div>
+              ) : (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Tanggal</TableHead>
+                        <TableHead>Komponen Kerja</TableHead>
+                        <TableHead>Aktivitas</TableHead>
+                        <TableHead>Volume</TableHead>
+                        <TableHead>Cuaca</TableHead>
+                        <TableHead>Pencatat</TableHead>
+                        <TableHead>Dokumen</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pagedDaily.map((log) => (
+                        <TableRow key={log.id} className="text-xs">
+                          <TableCell className="font-mono font-medium whitespace-nowrap">
+                            {formatIDDate(log.date)}
+                          </TableCell>
+                          <TableCell className="font-medium">{log.workItemName}</TableCell>
+                          <TableCell className="max-w-xs truncate">{log.activity}</TableCell>
+                          <TableCell className="font-mono">
+                            {log.actualVolume} {log.unit}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-[11px]">
+                              {log.weather}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{log.createdBy}</TableCell>
+                          <TableCell>
+                            {log.photoUrl ? (
+                              <AttachmentPreview
+                                filename={log.photoName || log.photoUrl}
+                                fileUrl={log.photoUrl.startsWith("/") || log.photoUrl.startsWith("http") ? log.photoUrl : undefined}
+                                title="Dokumentasi Fisik Lapangan"
+                              />
+                            ) : (
+                              <span className="text-muted-foreground text-[11px]">-</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+
+                  {totalDailyPages > 1 && (
+                    <div className="p-3 border-t flex items-center justify-between text-xs text-muted-foreground">
+                      <span>
+                        Halaman {dailyPage} dari {totalDailyPages} ({projectDaily.length} log)
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={dailyPage <= 1}
+                          onClick={() => setDailyPage((p) => Math.max(1, p - 1))}
+                          className="h-8 text-xs"
+                        >
+                          Sebelumnya
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={dailyPage >= totalDailyPages}
+                          onClick={() => setDailyPage((p) => Math.min(totalDailyPages, p + 1))}
+                          className="h-8 text-xs"
+                        >
+                          Berikutnya
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Tabel Log Mingguan */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-semibold">
+                  Evaluasi Kurva S Mingguan ({projectWeekly.length})
+                </CardTitle>
+              </div>
+              {canRecordProgress && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setWeeklyDialogOpen(true)}
+                  className="h-9 text-xs gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Catat Log Mingguan
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              {projectWeekly.length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground">
+                  Belum ada evaluasi mingguan tercatat.
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Tanggal</TableHead>
+                      <TableHead>Periode</TableHead>
+                      <TableHead>Rentang Tanggal</TableHead>
                       <TableHead>Komponen Kerja</TableHead>
-                      <TableHead>Aktivitas</TableHead>
-                      <TableHead>Volume</TableHead>
-                      <TableHead>Cuaca</TableHead>
-                      <TableHead>Pengawas</TableHead>
-                      <TableHead>Foto/Dokumen</TableHead>
+                      <TableHead className="text-right">Rencana (%)</TableHead>
+                      <TableHead className="text-right">Realisasi (%)</TableHead>
+                      <TableHead className="text-right">Deviasi (%)</TableHead>
+                      <TableHead>Catatan</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {projectDaily.slice(0, 10).map((log) => (
-                      <TableRow key={log.id} className="text-xs">
-                        <TableCell className="font-mono font-medium whitespace-nowrap">
-                          {formatIDDate(log.date)}
+                    {projectWeekly.map((wp) => (
+                      <TableRow key={wp.id} className="text-xs">
+                        <TableCell className="font-semibold">{wp.period}</TableCell>
+                        <TableCell className="font-mono text-muted-foreground">
+                          {formatIDDate(wp.startDate)} s/d {formatIDDate(wp.endDate)}
                         </TableCell>
-                        <TableCell className="font-medium">
-                          {log.workItemName}
+                        <TableCell>{wp.workItemName}</TableCell>
+                        <TableCell className="font-mono text-right">{wp.plannedProgress}%</TableCell>
+                        <TableCell className="font-mono font-bold text-right text-emerald-700 dark:text-emerald-400">
+                          {wp.actualProgress}%
                         </TableCell>
-                        <TableCell className="max-w-xs truncate">
-                          {log.activity}
-                        </TableCell>
-                        <TableCell className="font-mono">
-                          {log.actualVolume} {log.unit}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-[10px]">
-                            {log.weather}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {log.createdBy}
-                        </TableCell>
-                        <TableCell>
-                          {log.photoUrl ? (
-                            <AttachmentPreview
-                              filename={log.photoUrl}
-                              title="Dokumentasi Fisik Lapangan"
-                            />
-                          ) : (
-                            <span className="text-muted-foreground text-[11px]">-</span>
+                        <TableCell
+                          className={cn(
+                            "font-mono font-semibold text-right",
+                            wp.variance < 0
+                              ? "text-rose-700 dark:text-rose-400"
+                              : "text-emerald-700 dark:text-emerald-400"
                           )}
+                        >
+                          {wp.variance > 0 ? `+${wp.variance}%` : `${wp.variance}%`}
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate text-muted-foreground">
+                          {wp.notes || "-"}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -595,145 +954,128 @@ export default function UnifiedExecutionHub() {
         </div>
       )}
 
-      {/* SUB-TAB 2: WORK ITEMS */}
-      {activeTab === "workitems" && (
-        <Card className="shadow-xs">
-          <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
+      {/* TAB 2: ITEM PEKERJAAN (WBS CRUD) */}
+      {activeTab === "work-items" && (
+        <Card className="shadow-sm">
+          <CardHeader className="p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <CardTitle className="text-sm font-semibold">
-                Komponen Item Pekerjaan & Bobot (Work Items)
+                Daftar Item Pekerjaan (Work Breakdown Structure)
               </CardTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Total bobot pekerjaan harus terdistribusi tepat 100%.
+                Kelola tugas fisik/material, jadwal rencana, serta bobot kontribusi terhadap progres proyek (target total 100%).
               </p>
             </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-mono font-medium px-2.5 py-1.5 rounded bg-muted border">
+                Total Bobot:{" "}
+                <b
+                  className={
+                    totalWeight === 100
+                      ? "text-emerald-700 dark:text-emerald-400"
+                      : "text-amber-700 dark:text-amber-400"
+                  }
+                >
+                  {totalWeight}%
+                </b>
+              </span>
+              {canEditProjects && (
+                <Button
+                  size="sm"
+                  onClick={handleOpenAddWbs}
+                  className="h-9 gap-1.5 text-xs bg-emerald-700 hover:bg-emerald-800 text-white"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Tambah Item WBS
+                </Button>
+              )}
+            </div>
           </CardHeader>
-          <CardContent className="p-4 space-y-4">
+          <CardContent className="p-0 overflow-x-auto">
             {workItems.length === 0 ? (
-              <div className="text-center py-10 text-xs text-muted-foreground">
-                Belum ada Work Items yang didefinisikan.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {workItems.map((wi) => (
-                  <div
-                    key={wi.id}
-                    className="p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors space-y-2 text-xs"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">
-                          {wi.name}
-                        </span>
-                        <Badge variant="outline" className="text-[10px]">
-                          {wi.type}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-muted-foreground font-mono">
-                          Bobot: <strong>{wi.weight}%</strong>
-                        </span>
-                        <span className="font-bold font-mono text-emerald-600">
-                          {wi.progress}%
-                        </span>
-                      </div>
-                    </div>
-
-                    <Progress
-                      value={wi.progress}
-                      className="h-2"
-                      indicatorClassName={
-                        wi.progress >= 100
-                          ? "bg-emerald-600"
-                          : wi.progress > 0
-                          ? "bg-blue-600"
-                          : "bg-slate-300"
-                      }
-                    />
-
-                    <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1">
-                      <span>
-                        Jadwal: {formatIDDate(wi.startDate)} s/d {formatIDDate(wi.endDate)}
-                      </span>
-                      <StatusBadge status={wi.status} showDot={false} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* SUB-TAB 3: GANTT MATRIX */}
-      {activeTab === "gantt" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">
-              Matriks jadwal mingguan berbasis milestone dan revisi baseline.
-            </span>
-            {!isViewerOnly && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setRevisionDialogOpen(true)}
-                className="h-7 text-xs gap-1.5"
-              >
-                <CalendarClock className="w-3.5 h-3.5 text-amber-600" />
-                Ajukan Revisi Jadwal
-              </Button>
-            )}
-          </div>
-          <ScheduleGanttMatrix
-            project={project}
-            onUpdateSchedule={handleUpdateSchedule}
-          />
-        </div>
-      )}
-
-      {/* SUB-TAB 4: BOQ */}
-      {activeTab === "boq" && (
-        <Card className="shadow-xs">
-          <CardHeader className="pb-3 border-b">
-            <CardTitle className="text-sm font-semibold">
-              Rincian Bill of Quantities (BOQ) & Survey Teknis
-            </CardTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Daftar volume spesifikasi material dan satuan harga proyek.
-            </p>
-          </CardHeader>
-          <CardContent className="p-0">
-            {boqList.length === 0 ? (
-              <div className="text-center py-10 text-xs text-muted-foreground">
-                Belum ada rincian BOQ yang terdaftar.
+              <div className="p-6">
+                <EmptyState
+                  icon={<Layers className="w-8 h-8 opacity-60" />}
+                  title="Belum ada item pekerjaan WBS"
+                  description="Tambahkan item pekerjaan untuk mengukur progres fisik proyek secara terstruktur."
+                  actionLabel={canEditProjects ? "Tambah Item WBS" : undefined}
+                  onAction={canEditProjects ? handleOpenAddWbs : undefined}
+                />
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Kode Item</TableHead>
-                    <TableHead>Uraian Spesifikasi</TableHead>
-                    <TableHead>Volume</TableHead>
-                    <TableHead>Satuan</TableHead>
-                    <TableHead>Harga Satuan</TableHead>
-                    <TableHead className="text-right">Total Harga</TableHead>
+                    <TableHead>Nama Item Pekerjaan</TableHead>
+                    <TableHead>Tipe</TableHead>
+                    <TableHead>Pengadaan</TableHead>
+                    <TableHead>Bobot</TableHead>
+                    <TableHead>Jadwal Rencana</TableHead>
+                    <TableHead>Progres</TableHead>
+                    <TableHead>Status</TableHead>
+                    {canEditProjects && <TableHead className="text-right">Aksi</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {boqList.map((boq) => (
-                    <TableRow key={boq.id} className="text-xs">
-                      <TableCell className="font-mono font-medium">
-                        {boq.itemCode}
+                  {workItems.map((wi) => (
+                    <TableRow key={wi.id} className="text-xs hover:bg-muted/30">
+                      <TableCell>
+                        <div className="font-semibold text-foreground">{wi.name}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Fase: {wi.phase} &bull; Mode: {wi.progressMode}
+                        </div>
                       </TableCell>
-                      <TableCell className="font-medium">{boq.name}</TableCell>
-                      <TableCell className="font-mono">{boq.volume}</TableCell>
-                      <TableCell>{boq.unit}</TableCell>
-                      <TableCell className="font-mono">
-                        {formatIDR(boq.unitPrice)}
+                      <TableCell>
+                        <Badge variant="outline" className="text-[11px]">
+                          {wi.type}
+                        </Badge>
                       </TableCell>
-                      <TableCell className="font-mono font-bold text-right">
-                        {formatIDR(boq.totalPrice)}
+                      <TableCell>{wi.procurementType}</TableCell>
+                      <TableCell className="font-mono font-bold">{wi.weight}%</TableCell>
+                      <TableCell className="font-mono text-muted-foreground whitespace-nowrap">
+                        {formatIDDate(wi.startDate)} s/d {formatIDDate(wi.endDate)}
                       </TableCell>
+                      <TableCell className="min-w-[120px]">
+                        <div className="flex items-center gap-2">
+                          <Progress value={wi.progress} className="h-2 flex-1" />
+                          <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                            {wi.progress}%
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={wi.status} showDot={false} />
+                      </TableCell>
+                      {canEditProjects && (
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label={`Ubah item pekerjaan ${wi.name}`}
+                              onClick={() => handleOpenEditWbs(wi)}
+                              className="h-8 w-8"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              aria-label={`Hapus item pekerjaan ${wi.name}`}
+                              onClick={() =>
+                                setDeleteTarget({
+                                  kind: "workItem",
+                                  id: wi.id,
+                                  label: `Item WBS "${wi.name}"`,
+                                })
+                              }
+                              className="h-8 w-8 text-muted-foreground hover:text-rose-700"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -743,7 +1085,608 @@ export default function UnifiedExecutionHub() {
         </Card>
       )}
 
-      {/* Dialogs */}
+      {/* TAB 3: JADWAL & MATRIKS GANTT */}
+      {activeTab === "schedule" && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card className="p-4 shadow-sm">
+              <span className="text-xs text-muted-foreground font-medium block">
+                Jadwal Baseline (Awal)
+              </span>
+              <div className="mt-1 font-mono text-sm font-bold text-foreground">
+                {formatIDDate(project.baselineStartDate)} s/d {formatIDDate(project.baselineEndDate)}
+              </div>
+              <span className="text-[11px] text-muted-foreground block mt-1">
+                Durasi Baseline: {baselineDays} Hari
+              </span>
+            </Card>
+
+            <Card className="p-4 shadow-sm border-emerald-300 dark:border-emerald-800 bg-emerald-50/20 dark:bg-emerald-950/20">
+              <span className="text-xs text-emerald-800 dark:text-emerald-300 font-semibold block">
+                Target Penyelesaian Saat Ini
+              </span>
+              <div className="mt-1 font-mono text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                {formatIDDate(project.targetEndDate)}
+              </div>
+              <span className="text-[11px] text-muted-foreground block mt-1">
+                Total Durasi Berjalan: {targetDays} Hari
+              </span>
+            </Card>
+
+            <Card className="p-4 shadow-sm flex flex-col justify-between gap-2">
+              <div>
+                <span className="text-xs text-muted-foreground font-medium block">
+                  Deviasi & Riwayat Addendum
+                </span>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span
+                    className={cn(
+                      "font-mono text-sm font-bold",
+                      project.scheduleVarianceDays > 0
+                        ? "text-rose-700 dark:text-rose-400"
+                        : "text-emerald-700 dark:text-emerald-400"
+                    )}
+                  >
+                    {project.scheduleVarianceDays > 0
+                      ? `+${project.scheduleVarianceDays} Hari Deviasi`
+                      : "Sesuai Jadwal"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    ({(project.revisions || []).length}x Revisi)
+                  </span>
+                </div>
+              </div>
+              {canEditProjects && (
+                <Button
+                  size="sm"
+                  onClick={() => setRevisionDialogOpen(true)}
+                  className="w-full text-xs h-9 bg-amber-800 hover:bg-amber-900 text-white"
+                >
+                  <CalendarClock className="w-3.5 h-3.5 mr-1.5" /> Ajukan Revisi Jadwal
+                </Button>
+              )}
+            </Card>
+          </div>
+
+          <ScheduleGanttMatrix project={project} onUpdateSchedule={handleUpdateSchedule} />
+
+          <Card className="shadow-sm">
+            <CardHeader className="p-4 border-b flex flex-row items-center justify-between">
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+                <CardTitle className="text-sm font-semibold">
+                  Riwayat Perubahan Jadwal (Addendum Log)
+                </CardTitle>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {(project.revisions || []).length} Catatan Riwayat
+              </span>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Revisi</TableHead>
+                    <TableHead>Target Lama</TableHead>
+                    <TableHead>Target Baru</TableHead>
+                    <TableHead>Perpanjangan</TableHead>
+                    <TableHead>Alasan</TableHead>
+                    <TableHead>Pengaju / Penyetuju</TableHead>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead className="text-right">Lampiran</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(project.revisions || []).length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="h-24 text-center text-xs text-muted-foreground">
+                        Belum pernah dilakukan revisi jadwal. Proyek masih berjalan sesuai baseline awal.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    (project.revisions || []).map((rev) => (
+                      <TableRow key={rev.id} className="text-xs">
+                        <TableCell className="font-mono font-bold">
+                          Rev #{rev.revisionNumber}
+                        </TableCell>
+                        <TableCell className="font-mono text-muted-foreground">
+                          {formatIDDate(rev.previousEndDate)}
+                        </TableCell>
+                        <TableCell className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                          {formatIDDate(rev.newEndDate)}
+                        </TableCell>
+                        <TableCell className="font-mono font-semibold text-amber-700 dark:text-amber-400">
+                          +{rev.extendedWeeks} Minggu
+                        </TableCell>
+                        <TableCell>{rev.reason}</TableCell>
+                        <TableCell>
+                          <span className="font-semibold block">
+                            {rev.approvedBy || rev.revisedBy}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            Diajukan: {rev.revisedBy}
+                          </span>
+                        </TableCell>
+                        <TableCell className="font-mono">
+                          {formatIDDate(rev.approvalDate || rev.revisedAt)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {rev.attachmentName ? (
+                            <AttachmentPreview
+                              filename={rev.attachmentName}
+                              title={`Berita Acara Revisi Rev #${rev.revisionNumber}`}
+                              description={rev.reason}
+                            />
+                          ) : (
+                            <span className="text-muted-foreground text-[11px]">-</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* TAB 4: SURVEY & BOQ (CRUD REAL DB) */}
+      {activeTab === "boq" && (
+        <div className="space-y-4">
+          <Card className="shadow-sm p-4 bg-muted/20 border">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>Informasi Lokasi & Survey Teknis Proyek</span>
+                </div>
+                <p className="text-foreground font-medium">
+                  Lokasi Kebun: {project.locationName || "-"}
+                  {project.blockCode ? ` | Blok: ${project.blockCode}` : ""}
+                </p>
+              </div>
+              <div className="text-[11px] text-muted-foreground font-mono">
+                Tanggal Baseline: {formatIDDate(project.baselineStartDate)} | PIC: {project.picName || "-"}
+              </div>
+            </div>
+          </Card>
+
+          <Card className="shadow-sm">
+            <CardHeader className="p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-sm font-semibold">
+                  Bill of Quantities (BOQ) Rencana Anggaran ({boqList.length} Item)
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Rincian volume, satuan, harga satuan, dan nilai total pekerjaan.
+                </p>
+              </div>
+              {canEditProjects && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setBoqCode(`BOQ-${String(boqList.length + 1).padStart(3, "0")}`);
+                    setBoqName("");
+                    setBoqVolume(1);
+                    setBoqUnit("M3");
+                    setBoqUnitPrice(100000);
+                    setBoqWeight(5);
+                    setBoqDialogOpen(true);
+                  }}
+                  className="h-9 gap-1.5 text-xs bg-emerald-700 hover:bg-emerald-800 text-white"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Tambah Item BOQ
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              {boqList.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState
+                    icon={<ClipboardList className="w-8 h-8 opacity-60" />}
+                    title="Belum ada rincian BOQ terdaftar"
+                    description="Tambahkan item BOQ untuk mencatat estimasi volume dan biaya pekerjaan secara rinci."
+                  />
+                </div>
+              ) : (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Kode Item</TableHead>
+                        <TableHead>Uraian Pekerjaan / Material</TableHead>
+                        <TableHead className="text-right">Volume</TableHead>
+                        <TableHead>Satuan</TableHead>
+                        <TableHead className="text-right">Harga Satuan</TableHead>
+                        <TableHead className="text-right">Total Harga</TableHead>
+                        <TableHead className="text-right">Bobot (%)</TableHead>
+                        <TableHead>Status</TableHead>
+                        {canEditProjects && <TableHead className="text-right">Aksi</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {boqList.map((boq: BOQItem) => (
+                        <TableRow key={boq.id} className="text-xs">
+                          <TableCell className="font-mono font-semibold">{boq.itemCode}</TableCell>
+                          <TableCell className="font-medium">{boq.name}</TableCell>
+                          <TableCell className="font-mono text-right">
+                            {boq.volume.toLocaleString("id-ID")}
+                          </TableCell>
+                          <TableCell>{boq.unit}</TableCell>
+                          <TableCell className="font-mono text-right">
+                            {formatIDR(boq.unitPrice)}
+                          </TableCell>
+                          <TableCell className="font-mono font-bold text-right">
+                            {formatIDR(boq.totalPrice)}
+                          </TableCell>
+                          <TableCell className="font-mono font-bold text-right text-emerald-700 dark:text-emerald-400">
+                            {boq.weight}%
+                          </TableCell>
+                          <TableCell>
+                            <StatusBadge status={boq.status} />
+                          </TableCell>
+                          {canEditProjects && (
+                            <TableCell className="text-right">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                aria-label={`Hapus item BOQ ${boq.name}`}
+                                onClick={() =>
+                                  setDeleteTarget({
+                                    kind: "boqItem",
+                                    id: boq.id,
+                                    label: `Item BOQ "${boq.name}"`,
+                                  })
+                                }
+                                className="h-8 w-8 text-muted-foreground hover:text-rose-700"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+
+                  <div className="p-4 border-t bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <span className="text-muted-foreground font-medium">
+                      Total Nilai BOQ Terinci ({boqList.length} Item):
+                    </span>
+                    <div className="flex items-center gap-4 font-mono">
+                      <span>
+                        Total Bobot: <strong>{totalBoqWeight}%</strong>
+                      </span>
+                      <strong className="text-base text-emerald-700 dark:text-emerald-400">
+                        {formatIDR(totalBoqValue)}
+                      </strong>
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Dialog Tambah / Edit WBS */}
+      <Dialog open={wbsDialogOpen} onOpenChange={setWbsDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold">
+              {editingWorkItem ? "Ubah Item Pekerjaan (WBS)" : "Tambah Item Pekerjaan (WBS)"}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Tentukan komponen pekerjaan dan bobot kontribusi progres terhadap proyek.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveWbs} className="space-y-3 text-xs">
+            <div>
+              <label htmlFor="wbs-name" className="font-semibold block mb-1">
+                Nama Item Pekerjaan <span className="text-rose-600">*</span>
+              </label>
+              <Input
+                id="wbs-name"
+                value={wiName}
+                onChange={(e) => setWiName(e.target.value)}
+                placeholder="Contoh: Galian Saluran Utama"
+                className="h-9 text-xs"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="wbs-type" className="font-semibold block mb-1">
+                  Tipe Pekerjaan
+                </label>
+                <Select value={wiType} onValueChange={(v: "Physical" | "Material") => setWiType(v)}>
+                  <SelectTrigger id="wbs-type" className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Physical">Pekerjaan Fisik</SelectItem>
+                    <SelectItem value="Material">Komponen Material</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label htmlFor="wbs-weight" className="font-semibold block mb-1">
+                  Bobot (%) <span className="text-rose-600">*</span>
+                </label>
+                <Input
+                  id="wbs-weight"
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={wiWeight}
+                  onChange={(e) => setWiWeight(Number(e.target.value))}
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="wbs-start" className="font-semibold block mb-1">
+                  Tanggal Mulai
+                </label>
+                <Input
+                  id="wbs-start"
+                  type="date"
+                  value={wiStartDate}
+                  onChange={(e) => setWiStartDate(e.target.value)}
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+              <div>
+                <label htmlFor="wbs-end" className="font-semibold block mb-1">
+                  Tanggal Selesai
+                </label>
+                <Input
+                  id="wbs-end"
+                  type="date"
+                  value={wiEndDate}
+                  onChange={(e) => setWiEndDate(e.target.value)}
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="wbs-proc" className="font-semibold block mb-1">
+                  Metode Pengadaan
+                </label>
+                <Select
+                  value={wiProcurementType}
+                  onValueChange={(v: ProcurementType) => setWiProcurementType(v)}
+                >
+                  <SelectTrigger id="wbs-proc" className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Tender">Tender</SelectItem>
+                    <SelectItem value="Swakelola">Swakelola</SelectItem>
+                    <SelectItem value="Purchase">Purchase Langsung</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label htmlFor="wbs-mode" className="font-semibold block mb-1">
+                  Mode Pelaporan
+                </label>
+                <Select
+                  value={wiProgressMode}
+                  onValueChange={(v: "Daily" | "Weekly") => setWiProgressMode(v)}
+                >
+                  <SelectTrigger id="wbs-mode" className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Daily">Harian (Daily)</SelectItem>
+                    <SelectItem value="Weekly">Mingguan (Weekly)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="wbs-phase" className="font-semibold block mb-1">
+                Fase Pelaksanaan
+              </label>
+              <Select
+                value={wiPhase}
+                onValueChange={(v: WorkItem["phase"]) => setWiPhase(v)}
+              >
+                <SelectTrigger id="wbs-phase" className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Tender">Persiapan & Tender</SelectItem>
+                  <SelectItem value="Physical Execution">Pelaksanaan Fisik</SelectItem>
+                  <SelectItem value="Supporting Materials">Material Pendukung</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setWbsDialogOpen(false)}
+                className="h-9 text-xs"
+              >
+                Batal
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isSavingWbs}
+                className="h-9 text-xs bg-emerald-700 hover:bg-emerald-800 text-white"
+              >
+                {isSavingWbs ? "Menyimpan..." : "Simpan Item WBS"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Tambah BOQ */}
+      <Dialog open={boqDialogOpen} onOpenChange={setBoqDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold">Tambah Item Survey & BOQ</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Tambahkan rincian item kuantitas dan harga satuan anggaran proyek.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveBoq} className="space-y-3 text-xs">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label htmlFor="boq-code" className="font-semibold block mb-1">
+                  Kode Item
+                </label>
+                <Input
+                  id="boq-code"
+                  value={boqCode}
+                  onChange={(e) => setBoqCode(e.target.value)}
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+              <div className="col-span-2">
+                <label htmlFor="boq-name" className="font-semibold block mb-1">
+                  Uraian Pekerjaan <span className="text-rose-600">*</span>
+                </label>
+                <Input
+                  id="boq-name"
+                  value={boqName}
+                  onChange={(e) => setBoqName(e.target.value)}
+                  placeholder="Contoh: Beton K-225 Gorong-Gorong"
+                  className="h-9 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label htmlFor="boq-vol" className="font-semibold block mb-1">
+                  Volume
+                </label>
+                <Input
+                  id="boq-vol"
+                  type="number"
+                  min="0.01"
+                  step="any"
+                  value={boqVolume}
+                  onChange={(e) => setBoqVolume(Number(e.target.value))}
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+              <div>
+                <label htmlFor="boq-unit" className="font-semibold block mb-1">
+                  Satuan
+                </label>
+                <Input
+                  id="boq-unit"
+                  value={boqUnit}
+                  onChange={(e) => setBoqUnit(e.target.value)}
+                  placeholder="M3 / M1 / Unit"
+                  className="h-9 text-xs"
+                />
+              </div>
+              <div>
+                <label htmlFor="boq-weight" className="font-semibold block mb-1">
+                  Bobot (%)
+                </label>
+                <Input
+                  id="boq-weight"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={boqWeight}
+                  onChange={(e) => setBoqWeight(Number(e.target.value))}
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="boq-price" className="font-semibold block mb-1">
+                Harga Satuan (Rp)
+              </label>
+              <Input
+                id="boq-price"
+                type="number"
+                min="0"
+                value={boqUnitPrice}
+                onChange={(e) => setBoqUnitPrice(Number(e.target.value))}
+                className="h-9 text-xs font-mono"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Estimasi Total: <strong className="text-foreground">{formatIDR(boqVolume * boqUnitPrice)}</strong>
+              </p>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setBoqDialogOpen(false)}
+                className="h-9 text-xs"
+              >
+                Batal
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isSavingBoq}
+                className="h-9 text-xs bg-emerald-700 hover:bg-emerald-800 text-white"
+              >
+                {isSavingBoq ? "Menyimpan..." : "Simpan Item BOQ"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Konfirmasi Hapus WBS / BOQ */}
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold">Konfirmasi Hapus Data</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1">
+              Hapus <strong>{deleteTarget?.label}</strong> dari proyek ini? Tindakan ini tidak dapat dibatalkan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isDeleting}
+              onClick={() => setDeleteTarget(null)}
+              className="h-9 text-xs"
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={isDeleting}
+              onClick={handleConfirmDelete}
+              className="h-9 text-xs"
+            >
+              Ya, Hapus
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Modals Progres & Revisi */}
       <DailyProgressDialog
         open={dailyDialogOpen}
         onOpenChange={setDailyDialogOpen}
@@ -760,5 +1703,19 @@ export default function UnifiedExecutionHub() {
         project={project}
       />
     </div>
+  );
+}
+
+export default function UnifiedExecutionHub() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-6 text-xs text-muted-foreground">
+          Memuat hub pelaksanaan proyek...
+        </div>
+      }
+    >
+      <UnifiedExecutionHubContent />
+    </Suspense>
   );
 }

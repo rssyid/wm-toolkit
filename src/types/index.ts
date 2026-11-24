@@ -67,7 +67,7 @@ export interface ScheduleRevision {
 
 export interface ScheduleGanttCell {
   type: "plan" | "revised" | "extended-revised" | "this-week-revised" | "empty";
-  symbol?: "#" | "✓" | null;
+  symbol?: "#" | "DONE" | null;
   note?: string;
 }
 
@@ -93,6 +93,8 @@ export interface Project {
   code: string;
   name: string;
   description: string;
+  picId?: string;
+  picName?: string;
   afceNumber: string;
   afceValue: number;
   afceStatus: AFCEStatus;
@@ -215,6 +217,7 @@ export interface PurchaseRequisition {
   linkedPoCount: number;
   sapPrNumber: string;
   attachmentName?: string;
+  deletedAt?: string | null;
   createdAt: string;
 }
 
@@ -250,8 +253,9 @@ export interface PurchaseOrder {
   poValue: number;
   status: POStatus;
   items: POMaterialItem[];
-  receiptProgressPercent: number; // calculated from items received vs total vol
+  receiptProgressPercent: number;
   attachmentName?: string;
+  deletedAt?: string | null;
 }
 
 export interface GoodsReceipt {
@@ -513,6 +517,8 @@ export interface AppUser {
   systemRole?: SystemRole;
   jabatan?: string;
   estateName?: string;
+  bio?: string;
+  timeZone?: "WIB" | "WITA" | "WIT" | string;
   avatarUrl?: string;
   status: "Active" | "Inactive";
   updatedAt: string;
@@ -551,8 +557,7 @@ export interface ApprovalMatrixRule {
   tierName: string;
   minValue: number;
   maxValue: number;
-  /** Array of 9 slots (index 0 = Level 1 WM … index 8 = Level 9 Chairman).
-   *  null means that level is not required for this tier. */
+  /** Array 9 slot (index 0 = Level 1 WM ... index 8 = Level 9 Chairman). Null jika level tidak wajib. */
   levels: (ApprovalLevel | null)[];
   active: boolean;
   updatedAt: string;
@@ -659,14 +664,14 @@ export interface SystemSettings {
 }
 
 export const DEFAULT_USER_PROFILE: UserProfile = {
-  fullName: "Budi Santoso, S.T.",
-  email: "budi.santoso@perkebunan.co.id",
-  username: "budisantoso",
-  role: "Manager Estate",
-  systemRole: "PIC",
+  fullName: "",
+  email: "",
+  username: "",
+  role: "",
+  systemRole: "VIEWER",
   timeZone: "WIB",
-  selectedLocation: "Kebun Sei Silau",
-  bio: "Penanggung jawab operasional sipil, infrastruktur jalan kebun, tata air, dan sarana pemeliharaan aset di lingkungan Estate Sei Silau.",
+  selectedLocation: "",
+  bio: "",
 };
 
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
@@ -684,7 +689,6 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   emailDigest: "weekly",
 };
 
-// Notification Types sesuai docs/DATA-MODEL.md & docs/PRD.md (F7)
 export type NotificationType =
   | "LATE_PROJECT"
   | "PENDING_APPROVAL"
@@ -713,9 +717,6 @@ export interface NotificationSetting {
   isEnabled: boolean;
 }
 
-// ==========================================
-// AUDIT LOG TYPES (docs/DATA-MODEL.md & docs/PRD.md F10)
-// ==========================================
 export type AuditLogAction =
   | "CREATE"
   | "UPDATE"
@@ -738,7 +739,14 @@ export type AuditEntityType =
   | "TECHNICAL_EVALUATION"
   | "SPK"
   | "PROGRESS_LOG"
-  | "SCHEDULE_REVISION";
+  | "SCHEDULE_REVISION"
+  | "WORK_ITEM"
+  | "BOQ_ITEM"
+  | "COMMENT"
+  | "ATTACHMENT"
+  | "USER"
+  | "MASTER_DATA"
+  | "SYSTEM";
 
 export interface AuditLog {
   id: string; // UUID PK

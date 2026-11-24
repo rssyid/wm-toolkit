@@ -11,7 +11,7 @@ import {
   Lock,
   ShieldCheck,
   Loader2,
-  Sparkles,
+  Smile,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -125,11 +125,13 @@ export function ProfileTab() {
     setIsUploadingAvatar(true);
     try {
       const compressedDataUrl = await compressImage(file);
-      setAvatarUrl(compressedDataUrl);
-      updateUserProfile({ avatarUrl: compressedDataUrl });
-      toast.success("Foto profil berhasil diperbarui!");
-    } catch (err: any) {
-      toast.error(err?.message || "Gagal memproses foto profil");
+      const ok = await updateUserProfile({ avatarUrl: compressedDataUrl });
+      if (ok) {
+        setAvatarUrl(compressedDataUrl);
+        toast.success("Foto profil berhasil diperbarui.");
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal memproses foto profil.");
     } finally {
       setIsUploadingAvatar(false);
       if (fileInputRef.current) {
@@ -138,37 +140,42 @@ export function ProfileTab() {
     }
   };
 
-  const handleRemoveAvatar = () => {
-    setAvatarUrl("");
-    updateUserProfile({ avatarUrl: "" });
-    toast.info("Foto profil dihapus, kembali ke inisial nama.");
+  const handleRemoveAvatar = async () => {
+    const ok = await updateUserProfile({ avatarUrl: "" });
+    if (ok) {
+      setAvatarUrl("");
+      toast.info("Foto profil dihapus, kembali ke inisial nama.");
+    }
   };
 
-  const handleSelectDiceBearAvatar = (newAvatarUrl: string) => {
-    setAvatarUrl(newAvatarUrl);
-    updateUserProfile({ avatarUrl: newAvatarUrl });
-    toast.success("Avatar DiceBear berhasil dipilih dan diperbarui!");
+  const handleSelectDiceBearAvatar = async (newAvatarUrl: string) => {
+    const ok = await updateUserProfile({ avatarUrl: newAvatarUrl });
+    if (ok) {
+      setAvatarUrl(newAvatarUrl);
+      toast.success("Avatar profil berhasil diperbarui.");
+    }
   };
 
   const handleSaveProfile = async () => {
     if (!fullName.trim() || !email.trim()) {
-      toast.error("Nama lengkap dan email tidak boleh kosong");
+      toast.error("Nama lengkap dan email tidak boleh kosong.");
       return;
     }
 
     setIsSavingProfile(true);
     try {
-      updateUserProfile({
+      const ok = await updateUserProfile({
         fullName: fullName.trim(),
         email: email.trim(),
-        username: username.trim(),
         role: role as AFCEApprovalRole | "Procurement Officer",
         timeZone: timeZone as "WIB" | "WITA" | "WIT",
         selectedLocation,
         bio: bio.trim(),
         avatarUrl,
       });
-      toast.success("Profil akun berhasil diperbarui dan disimpan!");
+      if (ok) {
+        toast.success("Profil akun berhasil diperbarui dan disimpan.");
+      }
     } finally {
       setIsSavingProfile(false);
     }
@@ -245,7 +252,7 @@ export function ProfileTab() {
   return (
     <div className="space-y-6">
       {/* Card 1: Profil Pengguna */}
-      <div className="rounded-xl border bg-card text-card-foreground shadow-xs overflow-hidden">
+      <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
         {/* Card Header */}
         <div className="p-5 border-b bg-card">
           <h2 className="text-base font-semibold tracking-tight text-foreground">
@@ -276,7 +283,7 @@ export function ProfileTab() {
               </span>
             </div>
             <div className="md:w-2/3 flex items-center gap-3">
-              <Avatar className="h-14 w-14 border-2 border-emerald-500/20 shadow-xs shrink-0">
+              <Avatar className="h-14 w-14 border-2 border-emerald-500/20 shadow-sm shrink-0">
                 {avatarUrl ? (
                   <AvatarImage
                     src={avatarUrl}
@@ -284,7 +291,7 @@ export function ProfileTab() {
                     className="object-cover"
                   />
                 ) : null}
-                <AvatarFallback className="bg-emerald-600 text-white font-semibold text-base">
+                <AvatarFallback className="bg-emerald-700 text-white font-semibold text-base">
                   {getInitials(fullName)}
                 </AvatarFallback>
               </Avatar>
@@ -293,10 +300,10 @@ export function ProfileTab() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-8 text-xs gap-1.5 shadow-xs border-emerald-600/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                  className="h-9 text-xs gap-1.5 shadow-sm border-emerald-700/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
                   onClick={() => setIsAvatarPickerOpen(true)}
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  <Smile className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
                   Pilih Avatar Karakter
                 </Button>
                 <Button
@@ -304,7 +311,7 @@ export function ProfileTab() {
                   variant="outline"
                   size="sm"
                   disabled={isUploadingAvatar}
-                  className="h-8 text-xs gap-1.5 shadow-xs"
+                  className="h-9 text-xs gap-1.5 shadow-sm"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   {isUploadingAvatar ? (
@@ -319,7 +326,7 @@ export function ProfileTab() {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-8 text-xs text-muted-foreground hover:text-destructive gap-1"
+                    className="h-9 text-xs text-muted-foreground hover:text-destructive gap-1"
                     onClick={handleRemoveAvatar}
                   >
                     <X className="w-3.5 h-3.5" />
@@ -330,70 +337,68 @@ export function ProfileTab() {
             </div>
           </div>
 
-          {/* Row 2: Nama Lengkap */}
           <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="md:w-1/3">
-              <span className="font-medium text-foreground block text-xs">Nama Lengkap</span>
+              <label htmlFor="profile-full-name" className="font-medium text-foreground block text-xs">
+                Nama Lengkap
+              </label>
               <span className="text-[11px] text-muted-foreground">
                 Nama lengkap beserta gelar resmi untuk pengesahan dokumen proyek.
               </span>
             </div>
             <div className="md:w-2/3">
               <Input
+                id="profile-full-name"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 className="h-9 text-xs max-w-lg"
-                placeholder="Contoh: Ir. Budi Santoso, M.M."
+                placeholder="Nama lengkap dan gelar"
               />
             </div>
           </div>
 
-          {/* Row 3: Alamat Email */}
           <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="md:w-1/3">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-foreground text-xs">Alamat Email</span>
-                <Badge
-                  variant="outline"
-                  className="text-[10px] font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 gap-1 py-0 px-1.5"
-                >
-                  <CheckCircle2 className="w-2.5 h-2.5" /> Terverifikasi
-                </Badge>
-              </div>
+              <label htmlFor="profile-email" className="font-medium text-foreground block text-xs">
+                Alamat Email
+              </label>
               <span className="text-[11px] text-muted-foreground">
-                Alamat email SSO resmi holding untuk notifikasi transaksi proyek.
+                Alamat email akun untuk masuk aplikasi dan pencatatan riwayat transaksi.
               </span>
             </div>
             <div className="md:w-2/3">
               <Input
+                id="profile-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="h-9 text-xs max-w-lg font-mono"
-                placeholder="nama@perkebunan.co.id"
+                placeholder="nama@perusahaan.co.id"
               />
             </div>
           </div>
 
-          {/* Row 4: Username / ID Pengguna */}
           <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="md:w-1/3">
-              <span className="font-medium text-foreground block text-xs">ID Pengguna (Username)</span>
+              <label htmlFor="profile-username" className="font-medium text-foreground block text-xs">
+                ID Pengguna (Sistem)
+              </label>
               <span className="text-[11px] text-muted-foreground">
-                Pengenal akun unik untuk tag penugasan inspeksi dan histori revisi.
+                Pengenal unik akun pada database (dikelola otomatis oleh sistem).
               </span>
             </div>
             <div className="md:w-2/3">
-              <div className="flex items-center max-w-lg rounded-md border bg-background shadow-xs focus-within:ring-1 focus-within:ring-ring">
-                <span className="px-3 text-xs text-muted-foreground select-none bg-muted/40 border-r py-2">
+              <div className="flex items-center max-w-lg rounded-md border bg-muted/40 shadow-sm">
+                <span className="px-3 text-xs text-muted-foreground select-none border-r py-2">
                   @
                 </span>
                 <input
+                  id="profile-username"
                   type="text"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-transparent px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none"
-                  placeholder="username"
+                  readOnly
+                  aria-readonly="true"
+                  className="w-full bg-transparent px-3 py-2 text-xs text-muted-foreground focus:outline-none cursor-default"
                 />
               </div>
             </div>
@@ -431,33 +436,37 @@ export function ProfileTab() {
                 </div>
 
                 <div className="p-3 rounded-lg border bg-muted/40 space-y-1">
-                  <div className="flex items-center justify-between text-xs font-medium">
-                    <span className="text-muted-foreground">Jabatan Kedinasan:</span>
+                  <div className="flex items-center justify-between text-xs font-medium gap-2">
+                    <label htmlFor="profile-jabatan" className="text-muted-foreground">
+                      Jabatan Kedinasan:
+                    </label>
                     <Input
+                      id="profile-jabatan"
                       value={role}
                       onChange={(e) => setRole(e.target.value)}
-                      className="h-7 text-xs w-48 font-semibold text-foreground"
-                      placeholder="Manager Estate"
+                      className="h-8 text-xs w-48 font-semibold text-foreground"
+                      placeholder="Contoh: Estate Manager"
                     />
                   </div>
                   <div className="flex items-center justify-between text-xs font-medium pt-1">
                     <span className="text-muted-foreground">Status Wewenang:</span>
-                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                    <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
                       <CheckCircle2 className="w-3.5 h-3.5" /> Terdaftar di Sistem
                     </span>
                   </div>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
-                  Peran sistem (Admin, PIC, Approver, Viewer) dikelola oleh Administrator holding melalui modul Master Data Pengguna.
+                <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
+                  Peran sistem (Admin, PIC, Approver, Viewer) dikelola oleh Administrator melalui Master Data Pengguna.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">
+                  <label htmlFor="profile-timezone" className="text-[11px] font-medium text-muted-foreground block mb-1">
                     Zona Waktu Kerja
                   </label>
                   <SearchableSelect
+                    id="profile-timezone"
                     value={timeZone}
                     onValueChange={(val) => setTimeZone(val as "WIB" | "WITA" | "WIT")}
                     placeholder="Zona Waktu"
@@ -472,40 +481,39 @@ export function ProfileTab() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">
+                  <label htmlFor="profile-location" className="text-[11px] font-medium text-muted-foreground block mb-1">
                     Unit Kerja / Kebun Terdaftar
                   </label>
                   <SearchableSelect
+                    id="profile-location"
                     value={selectedLocation}
                     onValueChange={setSelectedLocation}
                     placeholder="Pilih Kebun"
                     searchPlaceholder="Cari kebun..."
                     triggerClassName="h-9 text-xs"
-                    options={[
-                      ...locations.map((loc) => ({
-                        value: loc.name,
-                        label: loc.name,
-                        subLabel: loc.district,
-                      })),
-                      { value: "Kantor Direksi Medan", label: "Kantor Direksi Medan" },
-                      { value: "Direktorat HO Jakarta", label: "Direktorat HO Jakarta" },
-                    ]}
+                    options={locations.map((loc) => ({
+                      value: loc.name,
+                      label: loc.name,
+                      subLabel: loc.district,
+                    }))}
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Row 6: Bio & Catatan Penugasan */}
           <div className="p-5 flex flex-col md:flex-row md:items-start justify-between gap-4">
             <div className="md:w-1/3">
-              <span className="font-medium text-foreground block text-xs">Catatan Lingkup Kerja (Bio)</span>
+              <label htmlFor="profile-bio" className="font-medium text-foreground block text-xs">
+                Catatan Lingkup Kerja (Bio)
+              </label>
               <span className="text-[11px] text-muted-foreground">
                 Keterangan ringkas deskripsi tanggung jawab teknik untuk referensi tim internal.
               </span>
             </div>
             <div className="md:w-2/3 max-w-lg">
               <Textarea
+                id="profile-bio"
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 rows={3}
@@ -516,7 +524,6 @@ export function ProfileTab() {
           </div>
         </div>
 
-        {/* Card Footer Actions */}
         <div className="p-4 bg-muted/20 border-t flex items-center justify-end gap-2">
           <Button
             type="button"
@@ -524,7 +531,7 @@ export function ProfileTab() {
             size="sm"
             onClick={handleResetProfile}
             disabled={isSavingProfile}
-            className="h-8 text-xs"
+            className="h-9 text-xs"
           >
             Batal
           </Button>
@@ -533,18 +540,17 @@ export function ProfileTab() {
             size="sm"
             onClick={handleSaveProfile}
             disabled={isSavingProfile}
-            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs font-medium"
+            className="h-9 text-xs bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm font-medium"
           >
             {isSavingProfile ? "Menyimpan..." : "Simpan Perubahan Profil"}
           </Button>
         </div>
       </div>
 
-      {/* Card 2: Keamanan Akun & Ganti Kata Sandi */}
-      <div className="rounded-xl border bg-card text-card-foreground shadow-xs overflow-hidden">
+      <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
         <div className="p-5 border-b bg-card">
           <div className="flex items-center gap-2">
-            <KeyRound className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            <KeyRound className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
             <h2 className="text-base font-semibold tracking-tight text-foreground">
               Keamanan Akun & Ganti Kata Sandi
             </h2>
@@ -556,22 +562,23 @@ export function ProfileTab() {
 
         <form onSubmit={handleChangePassword} className="p-5 space-y-4 text-xs max-w-lg">
           <div>
-            <label className="font-semibold text-foreground block mb-1">
-              Kata Sandi Saat Ini <span className="text-rose-500">*</span>
+            <label htmlFor="pass-current" className="font-semibold text-foreground block mb-1">
+              Kata Sandi Saat Ini <span className="text-rose-600">*</span>
             </label>
             <div className="relative">
               <Input
+                id="pass-current"
                 type={showCurrentPass ? "text" : "password"}
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 placeholder="Masukkan kata sandi lama Anda"
-                className="pr-9 text-xs h-9"
+                className="pr-10 text-xs h-9"
               />
               <button
                 type="button"
+                aria-label={showCurrentPass ? "Sembunyikan kata sandi saat ini" : "Tampilkan kata sandi saat ini"}
                 onClick={() => setShowCurrentPass(!showCurrentPass)}
-                className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
-                tabIndex={-1}
+                className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
               >
                 {showCurrentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -580,22 +587,23 @@ export function ProfileTab() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="font-semibold text-foreground block mb-1">
-                Kata Sandi Baru <span className="text-rose-500">*</span>
+              <label htmlFor="pass-new" className="font-semibold text-foreground block mb-1">
+                Kata Sandi Baru <span className="text-rose-600">*</span>
               </label>
               <div className="relative">
                 <Input
+                  id="pass-new"
                   type={showNewPass ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Minimal 6 karakter"
-                  className="pr-9 text-xs h-9"
+                  className="pr-10 text-xs h-9"
                 />
                 <button
                   type="button"
+                  aria-label={showNewPass ? "Sembunyikan kata sandi baru" : "Tampilkan kata sandi baru"}
                   onClick={() => setShowNewPass(!showNewPass)}
-                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                 >
                   {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -603,22 +611,23 @@ export function ProfileTab() {
             </div>
 
             <div>
-              <label className="font-semibold text-foreground block mb-1">
-                Konfirmasi Kata Sandi Baru <span className="text-rose-500">*</span>
+              <label htmlFor="pass-confirm" className="font-semibold text-foreground block mb-1">
+                Konfirmasi Kata Sandi Baru <span className="text-rose-600">*</span>
               </label>
               <div className="relative">
                 <Input
+                  id="pass-confirm"
                   type={showConfirmPass ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Ketik ulang kata sandi baru"
-                  className="pr-9 text-xs h-9"
+                  className="pr-10 text-xs h-9"
                 />
                 <button
                   type="button"
+                  aria-label={showConfirmPass ? "Sembunyikan konfirmasi kata sandi" : "Tampilkan konfirmasi kata sandi"}
                   onClick={() => setShowConfirmPass(!showConfirmPass)}
-                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                 >
                   {showConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -635,7 +644,7 @@ export function ProfileTab() {
               type="submit"
               size="sm"
               disabled={isSubmittingPass}
-              className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs font-medium gap-1.5"
+              className="h-9 text-xs bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm font-medium gap-1.5"
             >
               {isSubmittingPass ? (
                 <>

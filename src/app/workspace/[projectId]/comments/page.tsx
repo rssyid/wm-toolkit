@@ -43,7 +43,7 @@ export default function CommentsPage() {
     <div className="space-y-4">
       {/* KPI Cards Ringkasan */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card className="shadow-xs">
+        <Card className="shadow-sm">
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
@@ -62,7 +62,7 @@ export default function CommentsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs">
+        <Card className="shadow-sm">
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
@@ -81,7 +81,7 @@ export default function CommentsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs">
+        <Card className="shadow-sm">
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
@@ -100,7 +100,7 @@ export default function CommentsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs">
+        <Card className="shadow-sm">
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">

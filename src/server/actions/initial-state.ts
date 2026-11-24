@@ -1,9 +1,13 @@
 "use server";
 
 import { db } from "@/server/db";
+import { requireAuth } from "@/server/auth-guard";
+import { formatActionError } from "@/server/errors";
 
 export async function getInitialAppStateAction() {
   try {
+    const currentUser = await requireAuth();
+
     const [
       dbProjects,
       dbAfces,
@@ -36,9 +40,10 @@ export async function getInitialAppStateAction() {
     ] = await Promise.all([
       db.project.findMany({
         include: {
+          pic: { select: { id: true, name: true } },
           workItems: true,
           boqItems: true,
-          revisions: true,
+          revisions: { orderBy: { revisionNumber: "asc" } },
         },
         orderBy: { projectCode: "asc" },
       }),
@@ -70,7 +75,10 @@ export async function getInitialAppStateAction() {
         include: { workItem: true },
         orderBy: { logDate: "desc" },
       }),
-      db.projectComment.findMany({ orderBy: { createdAt: "desc" } }),
+      db.projectComment.findMany({
+        include: { attachments: true },
+        orderBy: { createdAt: "desc" },
+      }),
       db.projectAttachment.findMany({ orderBy: { uploadedAt: "desc" } }),
       db.region.findMany({ orderBy: { code: "asc" } }),
       db.company.findMany({ orderBy: { code: "asc" } }),
@@ -78,48 +86,94 @@ export async function getInitialAppStateAction() {
       db.estateBlock.findMany({ orderBy: { code: "asc" } }),
       db.materialCatalogItem.findMany({ orderBy: { sapCode: "asc" } }),
       db.supplier.findMany({ orderBy: { code: "asc" } }),
-      db.user.findMany({ orderBy: { name: "asc" } }),
+      db.user.findMany({
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          jabatan: true,
+          estateName: true,
+          bio: true,
+          timeZone: true,
+          avatarUrl: true,
+          isActive: true,
+          updatedAt: true,
+        },
+        orderBy: { name: "asc" },
+      }),
       db.approvalMatrixRule.findMany({ orderBy: { minValue: "asc" } }),
       db.projectCategoryItem.findMany({ orderBy: { code: "asc" } }),
       db.projectTypeItem.findMany({ orderBy: { code: "asc" } }),
       db.procurementTypeItem.findMany({ orderBy: { code: "asc" } }),
-      db.auditLog.findMany({ take: 100, orderBy: { createdAt: "desc" } }),
-      db.notification.findMany({ orderBy: { createdAt: "desc" } }),
-      db.notificationSetting.findMany(),
+      db.auditLog.findMany({ take: 200, orderBy: { createdAt: "desc" } }),
+      db.notification.findMany({
+        where: { userId: currentUser.id },
+        orderBy: { createdAt: "desc" },
+      }),
+      db.notificationSetting.findMany({
+        where: { userId: currentUser.id },
+      }),
     ]);
 
-    // Map projects to UI format
+    const statusMap: Record<string, string> = {
+      PLANNED: "Planned",
+      IN_PROGRESS: "In Progress",
+      ON_HOLD: "On Hold",
+      COMPLETED: "Completed",
+      CANCELLED: "Cancelled",
+    };
+
     const projects = dbProjects.map((p) => {
-      const statusMap: Record<string, any> = {
-        PLANNED: "Planned",
-        IN_PROGRESS: "In Progress",
-        ON_HOLD: "On Hold",
-        COMPLETED: "Completed",
-        CANCELLED: "Cancelled",
-      };
+      const locIds = Array.isArray(p.locationIds)
+        ? (p.locationIds as string[])
+        : p.locationId
+        ? [p.locationId]
+        : [];
+      const locNames = Array.isArray(p.locationNames)
+        ? (p.locationNames as string[])
+        : p.locationName
+        ? [p.locationName]
+        : [];
+      const blkIds = Array.isArray(p.blockIds)
+        ? (p.blockIds as string[])
+        : p.blockId
+        ? [p.blockId]
+        : [];
+      const blkCodes = Array.isArray(p.blockCodes)
+        ? (p.blockCodes as string[])
+        : p.blockCode
+        ? [p.blockCode]
+        : [];
 
       return {
         id: p.id,
         code: p.projectCode,
         name: p.name,
         description: p.description || "",
+        picId: p.picId || undefined,
+        picName: p.pic?.name || undefined,
         afceNumber: "",
         afceValue: 0,
         afceStatus: "Draft" as any,
         approvalStatus: "",
-        locationId: p.locationId || "",
-        locationName: p.locationName || "",
+        locationId: p.locationId || locIds[0] || "",
+        locationName: p.locationName || locNames[0] || "",
+        locationIds: locIds,
+        locationNames: locNames,
         companyId: p.companyId || "",
         companyName: p.companyName || "",
         regionId: p.regionId || "",
         regionName: p.regionName || "",
-        blockId: p.blockId || "",
-        blockCode: p.blockCode || "",
+        blockId: p.blockId || blkIds[0] || "",
+        blockCode: p.blockCode || blkCodes[0] || "",
+        blockIds: blkIds,
+        blockCodes: blkCodes,
         projectCategoryId: p.projectCategoryId || "",
         projectCategoryName: p.projectCategoryName || "",
         projectType: p.projectType as any,
         procurementType: p.procurementType as any,
-        status: statusMap[p.status] || "Planned",
+        status: (statusMap[p.status] || "Planned") as any,
         progress: p.progressPercent,
         baselineStartDate: p.baselineStartDate.toISOString().slice(0, 10),
         baselineEndDate: p.baselineEndDate.toISOString().slice(0, 10),
@@ -141,7 +195,7 @@ export async function getInitialAppStateAction() {
           procurementType: wi.procurementType as any,
           progressMode: wi.progressMode as any,
           progress: wi.progress,
-          status: statusMap[wi.status] || "Planned",
+          status: (statusMap[wi.status] || "Planned") as any,
           phase: wi.phase as any,
           notes: wi.notes || undefined,
         })),
@@ -173,18 +227,16 @@ export async function getInitialAppStateAction() {
       };
     });
 
-    // Map AFCEs to UI format
+    const afceStatusMap: Record<string, string> = {
+      DRAFT: "Draft",
+      PENDING_APPROVAL: "Pending Approval",
+      APPROVED: "Approved",
+      REJECTED: "Rejected",
+      NEED_REVISION: "Need Revision",
+    };
+
     const afces = dbAfces.map((a) => {
-      const statusMap: Record<string, any> = {
-        DRAFT: "Draft",
-        PENDING_APPROVAL: "Pending Approval",
-        APPROVED: "Approved",
-        REJECTED: "Rejected",
-        NEED_REVISION: "Need Revision",
-      };
-
       const project = projects.find((p) => p.id === a.projectId);
-
       return {
         id: a.id,
         afceNumber: a.afceNumber,
@@ -192,10 +244,10 @@ export async function getInitialAppStateAction() {
         projectCode: project?.code || "",
         projectName: project?.name || "",
         value: Number(a.amount),
-        status: statusMap[a.status] || "Draft",
+        status: (afceStatusMap[a.status] || "Draft") as any,
         currentLevel: a.currentLevel,
         requiredLevels: a.requiredLevels,
-        currentApproverRole: a.currentApproverRole || "Manager Estate",
+        currentApproverRole: a.currentApproverRole || "Water Management",
         submittedAt: a.submittedAt ? a.submittedAt.toISOString().slice(0, 10) : undefined,
         approvedAt: a.approvedAt ? a.approvedAt.toISOString().slice(0, 10) : undefined,
         sapDocNumber: a.sapDocNumber || "",
@@ -225,8 +277,8 @@ export async function getInitialAppStateAction() {
           timestamp: h.timestamp.toISOString(),
           approvalDate: h.approvalDate ? h.approvalDate.toISOString().slice(0, 10) : undefined,
           note: h.note || "",
-          previousStatus: h.previousStatus as any,
-          newStatus: h.newStatus as any,
+          previousStatus: (afceStatusMap[h.previousStatus] || h.previousStatus) as any,
+          newStatus: (afceStatusMap[h.newStatus] || h.newStatus) as any,
           sapDocNumber: h.sapDocNumber || undefined,
           sapEvidenceUrl: h.sapEvidenceUrl || undefined,
         })),
@@ -234,28 +286,42 @@ export async function getInitialAppStateAction() {
       };
     });
 
-    // Populate AFCE summaries back into projects
     for (const p of projects) {
-      const projectAfce = afces.find((a) => a.projectId === p.id);
+      const projectAfce = afces.find((a) => a.projectId === p.id && !a.deletedAt) || afces.find((a) => a.projectId === p.id);
       if (projectAfce) {
         p.afceNumber = projectAfce.afceNumber;
         p.afceValue = projectAfce.value;
         p.afceStatus = projectAfce.status;
-        p.approvalStatus = projectAfce.status === "Approved" ? "Approved by Direksi" : "Waiting Approval";
+        p.approvalStatus =
+          projectAfce.status === "Approved"
+            ? "Disetujui Direksi"
+            : projectAfce.status === "Rejected"
+            ? "Ditolak"
+            : projectAfce.status === "Need Revision"
+            ? "Perlu Revisi"
+            : projectAfce.status === "Draft"
+            ? "Penyusunan Draf"
+            : "Menunggu Persetujuan";
       }
     }
 
-    // Map PRs
+    const poCountByPr = new Map<string, number>();
+    for (const po of dbPos) {
+      if (po.prId && !po.deletedAt) {
+        poCountByPr.set(po.prId, (poCountByPr.get(po.prId) || 0) + 1);
+      }
+    }
+
+    const prStatusMap: Record<string, string> = {
+      DRAFT: "Draft",
+      RELEASED: "Released",
+      CLOSED: "Closed",
+      CANCELLED: "Cancelled",
+    };
+
     const prs = dbPrs.map((pr) => {
-      const prStatusMap: Record<string, any> = {
-        DRAFT: "Draft",
-        RELEASED: "Released",
-        CLOSED: "Closed",
-        CANCELLED: "Cancelled",
-      };
       const project = projects.find((p) => p.id === pr.projectId);
       const workItem = project?.workItems?.find((w) => w.id === pr.workItemId);
-
       return {
         id: pr.id,
         prNumber: pr.prNumber,
@@ -266,25 +332,25 @@ export async function getInitialAppStateAction() {
         releaseDate: pr.releaseDate ? pr.releaseDate.toISOString().slice(0, 10) : "",
         prType: (pr.prType || "Material") as any,
         description: pr.description,
-        status: prStatusMap[pr.status] || "Draft",
-        linkedPoCount: 0,
+        status: (prStatusMap[pr.status] || "Draft") as any,
+        linkedPoCount: poCountByPr.get(pr.id) || 0,
         sapPrNumber: pr.sapPrNumber || "",
         attachmentName: pr.attachmentName || undefined,
+        deletedAt: pr.deletedAt ? pr.deletedAt.toISOString() : null,
         createdAt: pr.createdAt.toISOString().slice(0, 10),
       };
     });
 
-    // Map POs
+    const poStatusMap: Record<string, string> = {
+      DRAFT: "Draft",
+      RELEASED: "Released",
+      CLOSED: "Closed",
+      CANCELLED: "Cancelled",
+    };
+
     const pos = dbPos.map((po) => {
-      const poStatusMap: Record<string, any> = {
-        DRAFT: "Draft",
-        RELEASED: "Released",
-        CLOSED: "Closed",
-        CANCELLED: "Cancelled",
-      };
       const project = projects.find((p) => p.id === po.projectId);
       const pr = prs.find((item) => item.id === po.prId);
-
       return {
         id: po.id,
         poNumber: po.poNumber,
@@ -298,9 +364,10 @@ export async function getInitialAppStateAction() {
         poDate: po.poDate.toISOString().slice(0, 10),
         releaseDate: po.releaseDate ? po.releaseDate.toISOString().slice(0, 10) : "",
         poValue: Number(po.poValue),
-        status: poStatusMap[po.status] || "Draft",
+        status: (poStatusMap[po.status] || "Draft") as any,
         receiptProgressPercent: po.receiptProgressPercent,
         attachmentName: po.attachmentName || undefined,
+        deletedAt: po.deletedAt ? po.deletedAt.toISOString() : null,
         items: po.items.map((it) => ({
           id: it.id,
           poId: it.poId,
@@ -317,7 +384,6 @@ export async function getInitialAppStateAction() {
       };
     });
 
-    // Map GRs
     const grs = dbGrs.map((g) => {
       const po = pos.find((p) => p.id === g.poId);
       return {
@@ -336,7 +402,6 @@ export async function getInitialAppStateAction() {
       };
     });
 
-    // Map Goods Handovers
     const goodsHandovers = dbGoodsHandovers.map((gh) => {
       const po = pos.find((p) => p.id === gh.poId);
       return {
@@ -359,7 +424,6 @@ export async function getInitialAppStateAction() {
       };
     });
 
-    // Map USPKs
     const uspks = dbUspks.map((u) => {
       const project = projects.find((p) => p.id === u.projectId);
       const workItem = project?.workItems?.find((w) => w.id === u.workItemId);
@@ -384,11 +448,11 @@ export async function getInitialAppStateAction() {
         decidedAt: u.decidedAt ? u.decidedAt.toISOString().slice(0, 10) : undefined,
         createdBy: u.createdBy,
         attachmentName: u.attachmentName || undefined,
+        deletedAt: u.deletedAt ? u.deletedAt.toISOString() : null,
         createdAt: u.createdAt.toISOString().slice(0, 10),
       };
     });
 
-    // Map SPKs
     const spkContracts = dbSpks.map((spk) => {
       const uspk = uspks.find((u) => u.id === spk.uspkId);
       const project = projects.find((p) => p.id === spk.projectId);
@@ -414,11 +478,11 @@ export async function getInitialAppStateAction() {
         attachmentName: spk.attachmentName || undefined,
         notes: spk.notes || undefined,
         createdBy: spk.createdBy,
+        deletedAt: spk.deletedAt ? spk.deletedAt.toISOString() : null,
         createdAt: spk.createdAt.toISOString().slice(0, 10),
       };
     });
 
-    // Map Daily Progress
     const dailyProgress = dbDailyLogs.map((dp) => ({
       id: dp.id,
       projectId: dp.projectId,
@@ -442,7 +506,6 @@ export async function getInitialAppStateAction() {
       recordedAt: dp.recordedAt.toISOString(),
     }));
 
-    // Map Weekly Progress
     const weeklyProgress = dbWeeklyLogs.map((wp) => ({
       id: wp.id,
       projectId: wp.projectId,
@@ -461,7 +524,6 @@ export async function getInitialAppStateAction() {
       recordedAt: wp.recordedAt.toISOString(),
     }));
 
-    // Map Master Data
     const regions = dbRegions.map((r) => ({
       id: r.id,
       code: r.code,
@@ -537,10 +599,27 @@ export async function getInitialAppStateAction() {
       systemRole: u.role as any,
       jabatan: u.jabatan || undefined,
       estateName: u.estateName || undefined,
+      bio: u.bio || undefined,
+      timeZone: (u.timeZone as "WIB" | "WITA" | "WIT") || "WIB",
       avatarUrl: u.avatarUrl || undefined,
       status: (u.isActive ? "Active" : "Inactive") as any,
       updatedAt: u.updatedAt.toISOString().slice(0, 10),
     }));
+
+    const activeUserRecord = dbUsers.find((u) => u.id === currentUser.id);
+    const activeUserProfile = activeUserRecord
+      ? {
+          fullName: activeUserRecord.name,
+          email: activeUserRecord.email,
+          username: activeUserRecord.id,
+          role: activeUserRecord.jabatan || "",
+          systemRole: activeUserRecord.role,
+          timeZone: ((activeUserRecord.timeZone as "WIB" | "WITA" | "WIT") || "WIB"),
+          selectedLocation: activeUserRecord.estateName || "",
+          bio: activeUserRecord.bio || "",
+          avatarUrl: activeUserRecord.avatarUrl || undefined,
+        }
+      : undefined;
 
     const approvalMatrix = dbMatrixRules.map((m) => ({
       id: m.id,
@@ -588,6 +667,21 @@ export async function getInitialAppStateAction() {
       userAvatar: c.userAvatar || undefined,
       content: c.content,
       mentionedUserIds: (c.mentionedUserIds as any) || [],
+      attachments: c.attachments.map((att) => ({
+        id: att.id,
+        projectId: att.projectId,
+        commentId: att.commentId || undefined,
+        source: att.source as any,
+        fileName: att.fileName,
+        fileUrl: att.fileUrl,
+        fileSize: att.fileSize || "",
+        mimeType: att.mimeType || undefined,
+        category: att.category || undefined,
+        docNumber: att.docNumber || undefined,
+        googleDriveFileId: att.googleDriveFileId || undefined,
+        uploadedBy: att.uploadedBy,
+        uploadedAt: att.uploadedAt.toISOString(),
+      })),
       createdAt: c.createdAt.toISOString(),
     }));
 
@@ -598,7 +692,7 @@ export async function getInitialAppStateAction() {
       source: att.source as any,
       fileName: att.fileName,
       fileUrl: att.fileUrl,
-      fileSize: att.fileSize || "1.2 MB",
+      fileSize: att.fileSize || "",
       mimeType: att.mimeType || undefined,
       category: att.category || undefined,
       docNumber: att.docNumber || undefined,
@@ -609,7 +703,7 @@ export async function getInitialAppStateAction() {
 
     const auditLogs = dbAuditLogs.map((al) => ({
       id: al.id,
-      userId: al.userId || "usr-1",
+      userId: al.userId || "",
       userName: al.userName,
       userRole: al.userRole || undefined,
       userJabatan: al.userJabatan || undefined,
@@ -652,47 +746,54 @@ export async function getInitialAppStateAction() {
     return {
       success: true,
       hasDbData: true,
+      activeUserProfile,
       data: {
         projects,
         afces,
         prs,
         pos,
         grs,
-        vendorEvaluations: dbVendorEvals.map((v) => ({
-          id: v.id,
-          prId: v.prId,
-          prNumber: "",
-          projectId: v.projectId || "",
-          supplierId: v.supplierId || "",
-          supplierName: v.supplierName,
-          evaluatorId: v.evaluatorId || undefined,
-          evaluatorName: v.evaluatorName,
-          evaluatorJabatan: v.evaluatorJabatan || undefined,
-          evaluationDate: v.evaluationDate.toISOString().slice(0, 10),
-          result: v.result as any,
-          notes: v.notes,
-          score: v.score || undefined,
-          attachmentName: v.attachmentName || undefined,
-          createdAt: v.createdAt.toISOString().slice(0, 10),
-        })),
+        vendorEvaluations: dbVendorEvals.map((v) => {
+          const pr = prs.find((item) => item.id === v.prId);
+          return {
+            id: v.id,
+            prId: v.prId,
+            prNumber: pr?.prNumber || "",
+            projectId: v.projectId || pr?.projectId || "",
+            supplierId: v.supplierId || "",
+            supplierName: v.supplierName,
+            evaluatorId: v.evaluatorId || undefined,
+            evaluatorName: v.evaluatorName,
+            evaluatorJabatan: v.evaluatorJabatan || undefined,
+            evaluationDate: v.evaluationDate.toISOString().slice(0, 10),
+            result: v.result as any,
+            notes: v.notes,
+            score: v.score || undefined,
+            attachmentName: v.attachmentName || undefined,
+            createdAt: v.createdAt.toISOString().slice(0, 10),
+          };
+        }),
         goodsHandovers,
         uspks,
-        technicalEvaluations: dbTechEvals.map((te) => ({
-          id: te.id,
-          uspkId: te.uspkId,
-          uspkNumber: "",
-          projectId: te.projectId || "",
-          evaluatorId: te.evaluatorId || undefined,
-          evaluatorName: te.evaluatorName,
-          evaluatorJabatan: te.evaluatorJabatan || undefined,
-          evaluationDate: te.evaluationDate.toISOString().slice(0, 10),
-          result: te.result as any,
-          rekomendasi: te.rekomendasi || undefined,
-          notes: te.notes,
-          score: te.score || undefined,
-          attachmentName: te.attachmentName || undefined,
-          createdAt: te.createdAt.toISOString().slice(0, 10),
-        })),
+        technicalEvaluations: dbTechEvals.map((te) => {
+          const uspk = uspks.find((item) => item.id === te.uspkId);
+          return {
+            id: te.id,
+            uspkId: te.uspkId,
+            uspkNumber: uspk?.uspkNumber || "",
+            projectId: te.projectId || uspk?.projectId || "",
+            evaluatorId: te.evaluatorId || undefined,
+            evaluatorName: te.evaluatorName,
+            evaluatorJabatan: te.evaluatorJabatan || undefined,
+            evaluationDate: te.evaluationDate.toISOString().slice(0, 10),
+            result: te.result as any,
+            rekomendasi: te.rekomendasi || undefined,
+            notes: te.notes,
+            score: te.score || undefined,
+            attachmentName: te.attachmentName || undefined,
+            createdAt: te.createdAt.toISOString().slice(0, 10),
+          };
+        }),
         spkContracts,
         dailyProgress,
         weeklyProgress,
@@ -714,12 +815,12 @@ export async function getInitialAppStateAction() {
         notificationSettings,
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Gagal mengambil initial app state dari database:", error);
     return {
       success: false,
       hasDbData: false,
-      error: error.message,
+      error: formatActionError(error, "Gagal memuat data awal dari server."),
     };
   }
 }

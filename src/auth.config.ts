@@ -5,29 +5,54 @@ export const authConfig: NextAuthConfig = {
     signIn: "/login",
   },
   callbacks: {
-    jwt({ token, user }) {
+    jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
-        token.role = (user as any).role;
-        token.jabatan = (user as any).jabatan;
-        token.estateName = (user as any).estateName;
-        token.avatarUrl = (user as any).avatarUrl;
+        token.role = (user as { role?: string }).role;
+        token.jabatan = (user as { jabatan?: string | null }).jabatan;
+        token.estateName = (user as { estateName?: string | null }).estateName;
+      }
+      if (trigger === "update" && session) {
+        const s = session as {
+          name?: string;
+          email?: string;
+          jabatan?: string | null;
+          estateName?: string | null;
+        };
+        if (s.name !== undefined) token.name = s.name;
+        if (s.email !== undefined) token.email = s.email;
+        if (s.jabatan !== undefined) token.jabatan = s.jabatan;
+        if (s.estateName !== undefined) token.estateName = s.estateName;
       }
       return token;
     },
     session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string;
-        (session.user as any).role = token.role;
-        (session.user as any).jabatan = token.jabatan;
-        (session.user as any).estateName = token.estateName;
-        (session.user as any).avatarUrl = token.avatarUrl;
-        session.user.image = (token.avatarUrl as string) || (token as any).picture || null;
+        if (token.name) session.user.name = token.name as string;
+        if (token.email) session.user.email = token.email as string;
+        const userObj = session.user as unknown as Record<string, unknown>;
+        userObj.role = token.role;
+        userObj.jabatan = token.jabatan;
+        userObj.estateName = token.estateName;
       }
       return session;
     },
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
+      const pathname = nextUrl.pathname;
+
+      if (pathname === "/") {
+        return Response.redirect(new URL(isLoggedIn ? "/dashboard" : "/login", nextUrl));
+      }
+
+      if (pathname === "/login") {
+        if (isLoggedIn) {
+          return Response.redirect(new URL("/dashboard", nextUrl));
+        }
+        return true;
+      }
+
       const protectedPaths = [
         "/dashboard",
         "/workspace",
@@ -35,20 +60,19 @@ export const authConfig: NextAuthConfig = {
         "/settings",
         "/notifications",
       ];
-      const isProtected = protectedPaths.some((p) => nextUrl.pathname.startsWith(p));
+      const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
       if (isProtected) {
         if (!isLoggedIn) return false;
 
-        // RBAC: Hanya role ADMIN yang diizinkan mengakses /master-data
-        if (nextUrl.pathname.startsWith("/master-data")) {
-          const userRole = (auth?.user as any)?.role;
+        if (pathname.startsWith("/master-data")) {
+          const userRole = (auth?.user as { role?: string } | undefined)?.role;
           if (userRole !== "ADMIN") {
             return Response.redirect(new URL("/dashboard", nextUrl));
           }
         }
-
         return true;
       }
+
       return true;
     },
   },

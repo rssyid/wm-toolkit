@@ -3,19 +3,14 @@
 import React, { useState, useMemo, useRef } from "react";
 import {
   Calendar,
-  Clock,
-  Layers,
   ChevronDown,
-  Filter,
   Check,
   MapPin,
   Info,
-  Maximize2,
   CalendarCheck,
   Edit2,
-  CheckCircle2,
 } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -32,15 +27,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Project, ScheduleGanttGroup, ScheduleGanttTask, ScheduleGanttCell, WorkItem } from "@/types";
 import { cn } from "@/lib/utils";
@@ -131,7 +118,7 @@ function generateFallbackScheduleMatrix(
         }
 
         if (item.status === "Completed") {
-          symbol = isTaskEndWeek ? "✓" : "#";
+          symbol = isTaskEndWeek ? "DONE" : "#";
         } else if (item.status === "In Progress") {
           if (isPastWeek || isCurrentWeek) {
             symbol = "#";
@@ -176,23 +163,29 @@ export function ScheduleGanttMatrix({
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>("all");
   const [editingTask, setEditingTask] = useState<{
-    groupIndex: number;
+    groupId: string;
     task: ScheduleGanttTask;
     weekKey?: string;
   } | null>(null);
 
   // Form states for quick update dialog
   const [cellType, setCellType] = useState<"plan" | "revised" | "extended-revised" | "this-week-revised" | "empty">("revised");
-  const [cellSymbol, setCellSymbol] = useState<"none" | "#" | "✓">("none");
+  const [cellSymbol, setCellSymbol] = useState<"none" | "#" | "DONE">("none");
   const [cellNote, setCellNote] = useState<string>("");
 
-  // System current date (2026-10-26 based on workspace runtime)
-  const today = useMemo(() => new Date("2026-10-26T00:00:00"), []);
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 
-  // 1. Calculate dynamic week columns starting exactly from project baselineStartDate
+  // 1. Calculate dynamic week columns starting from project baselineStartDate
   const weeks = useMemo<WeekColumn[]>(() => {
-    const start = new Date(project.baselineStartDate || "2026-08-01T00:00:00");
-    const end = new Date(project.targetEndDate || "2026-11-20T00:00:00");
+    const fallbackStart = new Date(today);
+    const start = new Date(project.baselineStartDate || fallbackStart);
+    const fallbackEnd = new Date(start);
+    fallbackEnd.setDate(fallbackEnd.getDate() + 16 * 7);
+    const end = new Date(project.targetEndDate || fallbackEnd);
 
     const result: WeekColumn[] = [];
     let currentStart = new Date(start);
@@ -231,9 +224,9 @@ export function ScheduleGanttMatrix({
     return result;
   }, [project.baselineStartDate, project.targetEndDate, today]);
 
-  // Find index of current week (W13)
+  // Find active current week or default to first week
   const currentWeek = useMemo(() => {
-    return weeks.find((w) => w.isCurrentWeek) || weeks[12] || weeks[0];
+    return weeks.find((w) => w.isCurrentWeek) || weeks[0];
   }, [weeks]);
 
   // Groups data: uses custom scheduleMatrix or auto-generated from project.workItems
@@ -276,24 +269,23 @@ export function ScheduleGanttMatrix({
 
   // Open cell update dialog
   const handleCellClick = (
-    groupIndex: number,
+    groupId: string,
     task: ScheduleGanttTask,
     weekKey: string
   ) => {
     const existing = task.cells[weekKey];
-    setEditingTask({ groupIndex, task, weekKey });
+    setEditingTask({ groupId, task, weekKey });
 
     const targetWeek = weeks.find((w) => w.key === weekKey);
     const isCurrent = targetWeek?.isCurrentWeek;
 
     if (!existing || existing.type === "empty") {
-      // Secara default perubahan jadwal warna Kuning (Revised Target) atau Oranye bila minggu berjalan
       setCellType(isCurrent ? "this-week-revised" : "revised");
       setCellSymbol("#");
       setCellNote("");
     } else {
       setCellType(existing.type);
-      setCellSymbol(existing.symbol === "#" ? "#" : existing.symbol === "✓" ? "✓" : "none");
+      setCellSymbol(existing.symbol === "#" ? "#" : existing.symbol === "DONE" ? "DONE" : "none");
       setCellNote(existing.note || "");
     }
   };
@@ -301,7 +293,7 @@ export function ScheduleGanttMatrix({
   // Save cell updates
   const handleSaveCell = () => {
     if (!editingTask || !editingTask.weekKey) return;
-    const { groupIndex, task, weekKey } = editingTask;
+    const { groupId, task, weekKey } = editingTask;
 
     const newCells = { ...task.cells };
     if (cellType === "empty" && cellSymbol === "none") {
@@ -314,8 +306,8 @@ export function ScheduleGanttMatrix({
       };
     }
 
-    const updatedGroups = groups.map((grp, gIdx) => {
-      if (gIdx !== groupIndex) return grp;
+    const updatedGroups = groups.map((grp) => {
+      if (grp.id !== groupId) return grp;
       return {
         ...grp,
         tasks: grp.tasks.map((t) =>
@@ -333,7 +325,7 @@ export function ScheduleGanttMatrix({
 
   return (
     <TooltipProvider delayDuration={150}>
-      <Card className="shadow-xs border-slate-300 dark:border-slate-800 overflow-hidden">
+      <Card className="shadow-sm border-slate-300 dark:border-slate-800 overflow-hidden">
         {/* Header toolbar */}
         <CardHeader className="p-3.5 border-b bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -382,8 +374,8 @@ export function ScheduleGanttMatrix({
               onClick={handleScrollToCurrentWeek}
               className="h-8 text-xs gap-1.5 border-rose-300 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/40"
             >
-              <MapPin className="w-3.5 h-3.5 text-rose-600 animate-pulse" />
-              <span>Fokus Minggu Ini ({currentWeek.label})</span>
+              <MapPin className="w-3.5 h-3.5 text-rose-600" />
+              <span>Fokus Minggu Ini ({currentWeek?.label || "-"})</span>
             </Button>
           </div>
         </CardHeader>
@@ -491,7 +483,7 @@ export function ScheduleGanttMatrix({
                   </td>
                 </tr>
               ) : (
-                filteredGroups.map((group, groupIdx) => (
+                filteredGroups.map((group) => (
                   <React.Fragment key={group.id}>
                   {/* Category Group Header Row (Light Green strip matching reference #e2efda) */}
                   <tr className="border-y border-emerald-300 dark:border-emerald-800 bg-[#e2efda] dark:bg-emerald-950/50 text-[#1f4e1f] dark:text-emerald-200">
@@ -570,28 +562,30 @@ export function ScheduleGanttMatrix({
                         return (
                           <td
                             key={w.key}
-                            onClick={() => handleCellClick(groupIdx, task, w.key)}
                             className={cn(
-                              "w-11 min-w-11 max-w-11 h-8 p-0 text-center border-r border-b border-slate-300 dark:border-slate-700 relative cursor-pointer select-none transition-colors",
+                              "w-11 min-w-11 max-w-11 h-8 p-0 text-center border-r border-b border-slate-300 dark:border-slate-700 relative select-none transition-colors",
                               cellBg,
                               borderExtra
                             )}
                           >
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <div
+                                <button
+                                  type="button"
+                                  onClick={() => handleCellClick(group.id, task, w.key)}
+                                  aria-label={`Ubah jadwal ${task.code}. ${task.name} minggu ${w.label}`}
                                   className={cn(
-                                    "w-full h-full min-h-8 flex items-center justify-center transition-colors hover:brightness-95 dark:hover:brightness-110",
+                                    "w-full h-full min-h-8 flex items-center justify-center cursor-pointer transition-colors hover:brightness-95 dark:hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-600",
                                     textColor
                                   )}
                                 >
                                   {cell?.symbol === "#" && (
                                     <span className="font-bold text-xs select-none">#</span>
                                   )}
-                                  {cell?.symbol === "✓" && (
+                                  {cell?.symbol === "DONE" && (
                                     <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-950 dark:text-emerald-950" />
                                   )}
-                                </div>
+                                </button>
                               </TooltipTrigger>
                               <TooltipContent side="top" className="max-w-xs text-xs space-y-1">
                                 <div className="font-bold text-foreground">
@@ -599,7 +593,7 @@ export function ScheduleGanttMatrix({
                                 </div>
                                 <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] font-mono">
                                   <span>{w.label}</span>
-                                  <span>•</span>
+                                  <span>|</span>
                                   <span>
                                     {w.startDate.toLocaleDateString("id-ID", {
                                       day: "numeric",
@@ -616,14 +610,15 @@ export function ScheduleGanttMatrix({
                                   <span className="font-semibold">Status: </span>
                                   {cell?.type === "plan" && "Rencana Awal (Plan Baseline)"}
                                   {cell?.type === "revised" && "Target Revisi (Addendum)"}
-                                  {cell?.type === "this-week-revised" && "Target Revisi Minggu Berjalan (This Week)"}
+                                  {cell?.type === "extended-revised" && "Revisi Lanjutan (Perpanjangan Tambahan)"}
+                                  {cell?.type === "this-week-revised" && "Target Revisi Minggu Berjalan"}
                                   {!cell?.type || cell.type === "empty" ? "Tidak ada jadwal" : ""}
                                 </div>
                                 {cell?.symbol && (
                                   <div className="text-[11px]">
                                     <span className="font-semibold">Aktivitas: </span>
                                     {cell.symbol === "#" && "Sedang Berjalan (In Progress)"}
-                                    {cell.symbol === "✓" && "Selesai (Completed)"}
+                                    {cell.symbol === "DONE" && "Selesai (Completed)"}
                                   </div>
                                 )}
                                 {cell?.note && (
@@ -689,7 +684,7 @@ export function ScheduleGanttMatrix({
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-5 bg-rose-600 rounded-none inline-block" />
               <span className="text-rose-700 dark:text-rose-400 font-semibold">
-                Posisi Hari Ini ({currentWeek.label} - {currentWeek.dateLabel})
+                Posisi Hari Ini ({currentWeek?.label || "-"} - {currentWeek?.dateLabel || "-"})
               </span>
             </div>
           </div>
@@ -748,7 +743,7 @@ export function ScheduleGanttMatrix({
                     options={[
                       { value: "none", label: "Tanpa Simbol (Hanya Blok Warna)" },
                       { value: "#", label: "# (Progress - Sedang Dikerjakan)" },
-                      { value: "✓", label: "[✓] Selesai (Completed - Pekerjaan Selesai)" },
+                      { value: "DONE", label: "[Tuntas] Selesai (Completed)" },
                     ]}
                   />
                 </div>
@@ -778,7 +773,7 @@ export function ScheduleGanttMatrix({
                 <Button
                   size="sm"
                   onClick={handleSaveCell}
-                  className="text-xs h-8 bg-emerald-600 hover:bg-emerald-700 text-white"
+                  className="text-xs h-8 bg-emerald-700 hover:bg-emerald-800 text-white"
                 >
                   Simpan Perubahan
                 </Button>

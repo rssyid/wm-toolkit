@@ -22,7 +22,6 @@ import {
   Briefcase,
   CheckCircle2,
   ShieldCheck,
-  Sparkles,
   Construction,
   Droplets,
   Sprout,
@@ -99,63 +98,108 @@ function CircularProgressRing({ currentStep, totalSteps = 4 }: { currentStep: nu
 export default function AddProjectWizard() {
   const router = useRouter();
   const {
+    isLoading,
+    canEditProjects,
+    activeUserId,
     projects,
     regions,
     companies,
     locations,
     blocks,
+    users,
     projectCategories,
     approvalMatrix,
     addProject,
   } = useAppState();
 
   const [currentStep, setCurrentStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const todayStr = React.useMemo(() => new Date().toISOString().split("T")[0], []);
+  const defaultEndStr = React.useMemo(
+    () => new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+    []
+  );
 
   // Step 1: Basic Information & Classification
-  const [code, setCode] = useState(`PRJ-2026-${String(projects.length + 1).padStart(3, "0")}`);
+  const [code, setCode] = useState(`PRJ-${new Date().getFullYear()}-${String(projects.length + 1).padStart(3, "0")}`);
   const [name, setName] = useState("");
-  const [categoryId, setCategoryId] = useState(projectCategories[0]?.id || "cat-1");
+  const [categoryId, setCategoryId] = useState("");
   const [projectType, setProjectType] = useState<ProjectType>("Physical Work");
+  const [picId, setPicId] = useState("");
   const [description, setDescription] = useState("");
 
   // Hierarchy Lokasi: Wilayah & Perusahaan
-  const initialRegId = regions[0]?.id || "reg-1";
-  const [regionId, setRegionId] = useState(initialRegId);
-
-  // Initial company & location strictly within the initial region
-  const initialAvailCompanies = companies.filter((c) =>
-    locations.some((loc) => loc.regionId === initialRegId && loc.companyId === c.id)
-  );
-  const initialCompId = initialAvailCompanies[0]?.id || companies[0]?.id || "cmp-1";
-  const [companyId, setCompanyId] = useState(initialCompId);
-
-  // Initial estates strictly for initial region and initial company
-  const initialAvailEstates = locations.filter(
-    (loc) => loc.regionId === initialRegId && loc.companyId === initialCompId
-  );
-  const initialLocId = initialAvailEstates[0]?.id || locations[0]?.id || "loc-1";
+  const [regionId, setRegionId] = useState("");
+  const [companyId, setCompanyId] = useState("");
 
   // Multi-Select Kebun (Estate) & Blok Tanam (2 atau lebih)
-  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([initialLocId]);
+  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>(["all"]);
   const [estatePopoverOpen, setEstatePopoverOpen] = useState(false);
   const [blockPopoverOpen, setBlockPopoverOpen] = useState(false);
 
-  // Inisiasi Dokumen AFCE Langsung (tanpa pilihan terdaftar)
-  const [newAfceNumber, setNewAfceNumber] = useState(`AFCE-2026-0${120 + projects.length}`);
+  // Inisiasi Dokumen AFCE
+  const [newAfceNumber, setNewAfceNumber] = useState(
+    `AFCE-${new Date().getFullYear()}-0${120 + projects.length}`
+  );
   const [newAfceValue, setNewAfceValue] = useState<number>(350000000);
-  const [newSapDocNumber, setNewSapDocNumber] = useState(`AFCE-SAP-9902${10 + projects.length}`);
+  const [newSapDocNumber, setNewSapDocNumber] = useState("");
   const [newAfceStatus, setNewAfceStatus] = useState<"Pending Approval" | "Draft">("Pending Approval");
-  const [afceDate, setAfceDate] = useState(new Date().toISOString().split("T")[0]);
+  const [afceDate, setAfceDate] = useState(() => new Date().toISOString().split("T")[0]);
 
   // Dynamic Approval Matrix Preview based on nominal AFCE
   const matchedTier = findMatchingApprovalTier(newAfceValue, approvalMatrix);
   const activeCodes = (matchedTier?.levels.filter(Boolean) as ApprovalLevel[]) || ["WM"];
 
   // Step 2: Schedule & Baseline
-  const [startDate, setStartDate] = useState("2026-11-01");
-  const [endDate, setEndDate] = useState("2027-01-31");
+  const [startDate, setStartDate] = useState(todayStr);
+  const [endDate, setEndDate] = useState(defaultEndStr);
   const [scheduleNotes, setScheduleNotes] = useState("");
+
+  // Sinkronkan nilai awal setelah Master Data dimuat dari PostgreSQL
+  useEffect(() => {
+    if (isLoading) return;
+    if (!regionId && regions.length > 0) {
+      const firstReg = regions[0].id;
+      setRegionId(firstReg);
+      const firstComp =
+        companies.find((c) =>
+          locations.some((loc) => loc.regionId === firstReg && loc.companyId === c.id)
+        )?.id || companies[0]?.id || "";
+      if (firstComp) {
+        setCompanyId(firstComp);
+        const firstLoc =
+          locations.find((loc) => loc.regionId === firstReg && loc.companyId === firstComp)?.id ||
+          locations[0]?.id;
+        if (firstLoc && selectedLocationIds.length === 0) {
+          setSelectedLocationIds([firstLoc]);
+        }
+      }
+    }
+    if (!categoryId && projectCategories.length > 0) {
+      setCategoryId(projectCategories[0].id);
+    }
+    if (!picId) {
+      const defaultPic =
+        activeUserId ||
+        users.find((u) => u.status === "Active" && (u.role === "PIC" || u.role === "ADMIN"))?.id ||
+        "";
+      if (defaultPic) setPicId(defaultPic);
+    }
+  }, [
+    isLoading,
+    regionId,
+    categoryId,
+    picId,
+    selectedLocationIds.length,
+    regions,
+    companies,
+    locations,
+    projectCategories,
+    users,
+    activeUserId,
+  ]);
 
   // Step 3: Work Items
   const [workItems, setWorkItems] = useState<WorkItem[]>([
@@ -476,7 +520,13 @@ export default function AddProjectWizard() {
     setDescription(tmpl.description);
     setProjectType(tmpl.projectType);
     setNewAfceValue(tmpl.afceValue);
-    setWorkItems(tmpl.workItems);
+    setWorkItems(
+      tmpl.workItems.map((wi) => ({
+        ...wi,
+        startDate,
+        endDate,
+      }))
+    );
     if (projectCategories.length > 0) {
       const matchCat = projectCategories.find((c) =>
         c.name.toLowerCase().includes(tmpl.categoryName.toLowerCase())
@@ -701,7 +751,8 @@ export default function AddProjectWizard() {
     }
   };
 
-  const handleSaveProject = () => {
+  const handleSaveProject = async () => {
+    if (isSubmitting) return;
     if (!validateStep1() || !validateStep2() || !validateStep3()) {
       toast.error("Silakan periksa kembali kelengkapan formulir");
       return;
@@ -716,45 +767,66 @@ export default function AddProjectWizard() {
       : selectedBlocks.map((b) => `${b.code} (${b.name})`);
     const joinedBlockCodes = blockCodesList.join(", ");
 
-    const newProjectId = addProject({
-      code: code.trim(),
-      name: name.trim(),
-      description: description.trim(),
-      projectCategoryId: selectedCategory?.id,
-      projectCategoryName: selectedCategory?.name,
-      afceNumber: newAfceNumber.trim(),
-      afceValue: newAfceValue,
-      afceStatus: newAfceStatus,
-      sapDocNumber: newSapDocNumber.trim(),
-      locationId: primaryLocation.id,
-      locationName: joinedLocationNames,
-      locationIds: selectedLocationIds,
-      locationNames: locationNamesList,
-      regionId,
-      regionName: selectedRegion?.name || "Region 1 - Sumatera Utara",
-      companyId,
-      companyName: selectedCompany?.name || "PT Perkebunan Nusantara IV (PalmCo)",
-      blockId: selectedBlockIds.includes("all") ? undefined : selectedBlockIds[0],
-      blockCode: joinedBlockCodes,
-      blockIds: selectedBlockIds.includes("all") ? undefined : selectedBlockIds,
-      blockCodes: blockCodesList,
-      projectType,
-      procurementType: workItems[0]?.procurementType || "Tender",
-      status: "Planned",
-      progress: 0,
-      baselineStartDate: startDate,
-      baselineEndDate: endDate,
-      targetEndDate: endDate,
-      durationDays: calculatedDuration,
-      scheduleVarianceDays: 0,
-      ewsStatus: "Normal",
-      workItems: workItems.map((w) => ({ ...w, projectId: "" })),
-      revisions: [],
-      surveyAndBoq: [],
-    });
+    const composedDescription = [
+      description.trim(),
+      scheduleNotes.trim() ? `Catatan Jadwal: ${scheduleNotes.trim()}` : "",
+      afceDate ? `Tanggal Dokumen AFCE: ${afceDate}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
 
-    toast.success("Proyek dan dokumen AFCE berhasil diinisiasi!");
-    router.push(`/workspace/${newProjectId}`);
+    setIsSubmitting(true);
+    try {
+      const newProjectId = await addProject({
+        code: code.trim(),
+        name: name.trim(),
+        description: composedDescription,
+        picId: picId || undefined,
+        projectCategoryId: selectedCategory?.id,
+        projectCategoryName: selectedCategory?.name,
+        afceNumber: newAfceNumber.trim(),
+        afceValue: newAfceValue,
+        afceStatus: newAfceStatus,
+        sapDocNumber: newSapDocNumber.trim(),
+        locationId: primaryLocation?.id || "",
+        locationName: joinedLocationNames,
+        locationIds: selectedLocationIds,
+        locationNames: locationNamesList,
+        regionId,
+        regionName: selectedRegion?.name || "",
+        companyId,
+        companyName: selectedCompany?.name || "",
+        blockId: selectedBlockIds.includes("all") ? undefined : selectedBlockIds[0],
+        blockCode: joinedBlockCodes,
+        blockIds: selectedBlockIds.includes("all") ? undefined : selectedBlockIds,
+        blockCodes: blockCodesList,
+        projectType,
+        procurementType: workItems[0]?.procurementType || "Tender",
+        status: "Planned",
+        progress: 0,
+        baselineStartDate: startDate,
+        baselineEndDate: endDate,
+        targetEndDate: endDate,
+        durationDays: calculatedDuration,
+        scheduleVarianceDays: 0,
+        ewsStatus: "Normal",
+        workItems: workItems.map((w) => ({
+          ...w,
+          startDate: w.startDate || startDate,
+          endDate: w.endDate || endDate,
+          projectId: "",
+        })),
+        revisions: [],
+        surveyAndBoq: [],
+      });
+
+      if (newProjectId) {
+        toast.success("Proyek dan dokumen AFCE berhasil diinisiasi.");
+        router.push(`/workspace/${newProjectId}`);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const stepMeta = [
@@ -788,6 +860,21 @@ export default function AddProjectWizard() {
     },
   ];
 
+  if (!isLoading && !canEditProjects) {
+    return (
+      <div className="max-w-xl mx-auto my-12 rounded-lg border bg-card p-6 text-center space-y-3 shadow-sm">
+        <ShieldCheck className="w-8 h-8 mx-auto text-rose-700 dark:text-rose-400" />
+        <h1 className="text-lg font-bold text-foreground">Akses Dibatasi</h1>
+        <p className="text-xs text-muted-foreground">
+          Hanya peran PIC Proyek dan Administrator yang dapat menginisiasi proyek baru.
+        </p>
+        <Button asChild size="sm" variant="outline">
+          <Link href="/workspace">Kembali ke Workspace</Link>
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-4 pb-12">
       {/* Top Header Navigation */}
@@ -814,7 +901,7 @@ export default function AddProjectWizard() {
       </div>
 
       {/* Modern Header Card without Horizontal Scrollbar */}
-      <Card className="border border-border/80 bg-card shadow-xs overflow-hidden">
+      <Card className="border border-border/80 bg-card shadow-sm overflow-hidden">
         <CardContent className="p-3.5 sm:p-4">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
             {/* Left Side: Compact Circular Ring + Step Title */}
@@ -849,7 +936,7 @@ export default function AddProjectWizard() {
                       }}
                       className={cn(
                         "flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-colors shrink-0",
-                        isCurrent && "bg-emerald-50 text-emerald-900 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 font-semibold shadow-2xs",
+                        isCurrent && "bg-emerald-50 text-emerald-900 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 font-semibold shadow-sm",
                         isCompleted && "text-foreground hover:bg-muted/70 cursor-pointer",
                         !isCurrent && !isCompleted && "text-muted-foreground/50 cursor-not-allowed"
                       )}
@@ -878,7 +965,7 @@ export default function AddProjectWizard() {
       </Card>
 
       {/* Main Form Step Card */}
-      <Card className="border border-border/80 shadow-xs">
+      <Card className="border border-border/80 shadow-sm">
         {/* Step 1: Informasi Dasar, Klasifikasi & Inisiasi AFCE */}
         {currentStep === 1 && (
           <>
@@ -886,11 +973,11 @@ export default function AddProjectWizard() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base font-bold flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-emerald-600" />
+                    <FileText className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
                     Langkah 1: Informasi Dasar & Klasifikasi Proyek
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Isi detail identitas proyek, penetapan hierarki lokasi kebun (mendukung pemilihan 2 atau lebih kebun/blok), kategori, tipe, serta inisiasi dokumen AFCE baru.
+                    Isi detail identitas proyek, penetapan lokasi kebun, kategori, tipe, PIC proyek, serta dokumen AFCE.
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className="text-xs font-mono font-normal shrink-0 whitespace-nowrap">
@@ -900,15 +987,15 @@ export default function AddProjectWizard() {
             </CardHeader>
 
             <CardContent className="space-y-5 pt-5">
-              {/* Preset Template Proyek Sawit (Isi Cepat 1-Klik) */}
+              {/* Preset Template Proyek Sawit */}
               <div className="p-3.5 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                    <Layers className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
                     Preset Template Proyek Sawit (Isi Cepat 1-Klik)
                   </span>
-                  <span className="text-[10px] text-muted-foreground hidden sm:inline">
-                    Pilih template untuk mengisi otomatis Work Items 100% & nilai AFCE
+                  <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                    Pilih template untuk mengisi otomatis Work Items 100% &amp; estimasi nilai AFCE
                   </span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -920,7 +1007,7 @@ export default function AddProjectWizard() {
                       className={cn(
                         "p-2.5 rounded-md border text-left text-xs transition-all flex flex-col justify-between h-20",
                         selectedTemplateId === tmpl.id
-                          ? "border-emerald-600 bg-emerald-100/70 dark:bg-emerald-900/40 text-emerald-950 dark:text-emerald-100 font-semibold shadow-xs"
+                          ? "border-emerald-700 bg-emerald-100/70 dark:bg-emerald-900/40 text-emerald-950 dark:text-emerald-100 font-semibold shadow-sm"
                           : "border-border/80 bg-card hover:bg-muted/50 text-foreground"
                       )}
                     >
@@ -938,20 +1025,20 @@ export default function AddProjectWizard() {
                 </div>
               </div>
 
-              {/* Section 1: Identitas Proyek */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-xs font-bold text-foreground uppercase tracking-wider">
-                  <span className="w-1.5 h-3.5 bg-emerald-600 rounded-xs"></span>
+                  <span className="w-1.5 h-3.5 bg-emerald-700 rounded-sm"></span>
                   Identitas Proyek
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {/* Kode Proyek */}
                   <div>
-                    <label className="text-xs font-semibold text-foreground mb-1 block">
+                    <label htmlFor="new-proj-code" className="text-xs font-semibold text-foreground mb-1 block">
                       Kode Proyek <span className="text-rose-500">*</span>
                     </label>
                     <Input
+                      id="new-proj-code"
                       value={code}
                       onChange={(e) => setCode(e.target.value)}
                       placeholder="Contoh: PRJ-2026-009"
@@ -966,13 +1053,14 @@ export default function AddProjectWizard() {
 
                   {/* Nama Proyek */}
                   <div>
-                    <label className="text-xs font-semibold text-foreground mb-1 block">
+                    <label htmlFor="new-proj-name" className="text-xs font-semibold text-foreground mb-1 block">
                       Nama Proyek <span className="text-rose-500">*</span>
                     </label>
                     <Input
+                      id="new-proj-name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="Contoh: Pembangunan Pintu Air Sekunder & Tanggul Blok G"
+                      placeholder="Contoh: Pembangunan Pintu Air Sekunder"
                       className={cn(errors.name && "border-rose-500 focus-visible:ring-rose-500", "text-xs")}
                     />
                     {errors.name && (
@@ -980,6 +1068,27 @@ export default function AddProjectWizard() {
                         <AlertCircle className="w-3 h-3" /> {errors.name}
                       </p>
                     )}
+                  </div>
+
+                  {/* PIC Proyek */}
+                  <div>
+                    <label htmlFor="new-proj-pic" className="text-xs font-semibold text-foreground mb-1 block">
+                      PIC Proyek
+                    </label>
+                    <Select value={picId} onValueChange={setPicId}>
+                      <SelectTrigger id="new-proj-pic" className="h-9 text-xs">
+                        <SelectValue placeholder="Pilih PIC Proyek" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users
+                          .filter((u) => u.status === "Active" && (u.role === "PIC" || u.role === "ADMIN"))
+                          .map((u) => (
+                            <SelectItem key={u.id} value={u.id} className="text-xs">
+                              {u.name} ({u.jabatan})
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
@@ -1063,7 +1172,7 @@ export default function AddProjectWizard() {
                           role="combobox"
                           disabled={!companyId || availableEstates.length === 0}
                           className={cn(
-                            "flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-2.5 py-1 text-xs font-normal shadow-xs hover:bg-background",
+                            "flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-2.5 py-1 text-xs font-normal shadow-sm hover:bg-background",
                             errors.location && "border-rose-500",
                             (selectedLocationIds.length === 0 || !companyId) && "text-muted-foreground"
                           )}
@@ -1083,7 +1192,7 @@ export default function AddProjectWizard() {
                           </div>
                           <div className="flex items-center gap-1 shrink-0 ml-1">
                             {selectedLocationIds.length > 1 && (
-                              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                                 {selectedLocationIds.length}
                               </span>
                             )}
@@ -1186,7 +1295,7 @@ export default function AddProjectWizard() {
                           variant="outline"
                           role="combobox"
                           disabled={selectedLocationIds.length === 0}
-                          className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-2.5 py-1 text-xs font-normal shadow-xs hover:bg-background"
+                          className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-2.5 py-1 text-xs font-normal shadow-sm hover:bg-background"
                         >
                           <span className="truncate">
                             {selectedLocationIds.length === 0
@@ -1199,7 +1308,7 @@ export default function AddProjectWizard() {
                           </span>
                           <div className="flex items-center gap-1 shrink-0 ml-1">
                             {!selectedBlockIds.includes("all") && selectedBlockIds.length > 1 && (
-                              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-muted text-foreground">
+                              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-muted text-foreground">
                                 {selectedBlockIds.length}
                               </span>
                             )}
@@ -1684,7 +1793,10 @@ export default function AddProjectWizard() {
               </div>
 
               {errors.weight && (
-                <p className="text-xs text-rose-500 font-medium">{errors.weight}</p>
+                <p className="text-xs text-rose-600 font-medium">{errors.weight}</p>
+              )}
+              {errors.workItems && (
+                <p className="text-xs text-rose-600 font-medium">{errors.workItems}</p>
               )}
 
               {/* Work Item List */}
@@ -1696,24 +1808,24 @@ export default function AddProjectWizard() {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                        <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
+                        <span className="w-4 h-4 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[10px] font-bold">
                           {index + 1}
                         </span>
                         Item Pekerjaan #{index + 1}
                       </span>
                       <Button
+                        type="button"
                         size="icon"
                         variant="ghost"
+                        aria-label={`Hapus item pekerjaan ${index + 1}`}
                         onClick={() => handleRemoveWorkItem(wi.id)}
-                        className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-100 dark:hover:bg-rose-950"
-                        title="Hapus item pekerjaan"
+                        className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-100 dark:hover:bg-rose-950"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs">
-                      {/* Name */}
                       <div className="sm:col-span-6">
                         <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
                           Nama Item Pekerjaan
@@ -1722,11 +1834,18 @@ export default function AddProjectWizard() {
                           value={wi.name}
                           onChange={(e) => handleUpdateWorkItem(wi.id, "name", e.target.value)}
                           placeholder="Nama pekerjaan..."
-                          className="text-xs"
+                          className={cn(
+                            "text-xs",
+                            errors[`wi_name_${index}`] && "border-rose-500"
+                          )}
                         />
+                        {errors[`wi_name_${index}`] && (
+                          <p className="text-[11px] text-rose-600 mt-1">
+                            {errors[`wi_name_${index}`]}
+                          </p>
+                        )}
                       </div>
 
-                      {/* Type */}
                       <div className="sm:col-span-3">
                         <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
                           Tipe
@@ -1745,7 +1864,6 @@ export default function AddProjectWizard() {
                         </Select>
                       </div>
 
-                      {/* Weight % */}
                       <div className="sm:col-span-3">
                         <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
                           Bobot (%)
@@ -1758,8 +1876,16 @@ export default function AddProjectWizard() {
                           onChange={(e) =>
                             handleUpdateWorkItem(wi.id, "weight", Number(e.target.value))
                           }
-                          className="font-mono font-bold text-xs"
+                          className={cn(
+                            "font-mono font-bold text-xs",
+                            errors[`wi_weight_${index}`] && "border-rose-500"
+                          )}
                         />
+                        {errors[`wi_weight_${index}`] && (
+                          <p className="text-[11px] text-rose-600 mt-1">
+                            {errors[`wi_weight_${index}`]}
+                          </p>
+                        )}
                       </div>
 
                       {/* Procurement Type */}
@@ -2067,17 +2193,18 @@ export default function AddProjectWizard() {
                   type="button"
                   size="sm"
                   variant="outline"
+                  disabled={isSubmitting}
                   onClick={handleSaveProject}
-                  className="hidden sm:inline-flex gap-1.5 border-emerald-500 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950 text-xs font-semibold"
+                  className="hidden sm:inline-flex gap-1.5 border-emerald-700 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950 text-xs font-semibold h-9"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                  Simpan Cepat (1-Klik)
+                  <Save className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                  Simpan Cepat
                 </Button>
               )}
               <Button
                 size="sm"
                 onClick={handleNext}
-                className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs"
+                className="h-9 gap-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold shadow-sm"
               >
                 Lanjutkan <ChevronRight className="w-3.5 h-3.5" />
               </Button>
@@ -2085,10 +2212,12 @@ export default function AddProjectWizard() {
           ) : (
             <Button
               size="sm"
+              disabled={isSubmitting}
               onClick={handleSaveProject}
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs"
+              className="h-9 gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold shadow-sm"
             >
-              <Save className="w-4 h-4" /> Simpan Proyek & Ajukan AFCE
+              <Save className="w-4 h-4" />
+              {isSubmitting ? "Menyimpan..." : "Simpan Proyek & Ajukan AFCE"}
             </Button>
           )}
         </CardFooter>

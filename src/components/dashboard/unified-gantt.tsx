@@ -10,7 +10,8 @@ import {
   Calendar,
 } from "lucide-react";
 import { Project } from "@/types";
-import { formatIDDate, cn } from "@/lib/utils";
+import { formatIDDate, isProjectDelayed, cn } from "@/lib/utils";
+import { EmptyState } from "@/components/shared/empty-state";
 import {
   Tooltip,
   TooltipContent,
@@ -77,10 +78,10 @@ function getQuarterLabel(date: Date): string {
 // ─── Konstanta ──────────────────────────────────────────────────────────────
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const LABEL_COL_WIDTH = 280;
-const COL_MIN_WIDTH_WEEKLY = 52;
-const COL_MIN_WIDTH_MONTHLY = 80;
-const COL_MIN_WIDTH_QUARTERLY = 100;
+const LABEL_COL_WIDTH = 260;
+const COL_MIN_WIDTH_WEEKLY = 48;
+const COL_MIN_WIDTH_MONTHLY = 20;
+const COL_MIN_WIDTH_QUARTERLY = 11;
 
 // ─── Komponen Utama ─────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
 
   const filteredProjects = projects.filter((p) => {
     if (filter === "Running") return p.status === "In Progress";
-    if (filter === "Delayed") return p.scheduleVarianceDays > 7;
+    if (filter === "Delayed") return isProjectDelayed(p);
     if (filter === "Pending Approval") return p.afceStatus === "Pending Approval";
     return true;
   });
@@ -202,15 +203,14 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
     };
   }, [projects]);
 
-  // ─── Display Columns per Zoom ───────────────────────────────────────────
+  // ─── Column Scaling per Zoom ────────────────────────────────────────────
 
-  const displayColCount = useMemo(() => {
-    if (zoom === "Monthly") return monthGroups.length;
-    if (zoom === "Quarterly") return quarterGroups.length;
-    return weekColumns.length;
-  }, [zoom, weekColumns, monthGroups, quarterGroups]);
-
-  const colMinWidth = zoom === "Quarterly" ? COL_MIN_WIDTH_QUARTERLY : zoom === "Monthly" ? COL_MIN_WIDTH_MONTHLY : COL_MIN_WIDTH_WEEKLY;
+  const colMinWidth =
+    zoom === "Quarterly"
+      ? COL_MIN_WIDTH_QUARTERLY
+      : zoom === "Monthly"
+      ? COL_MIN_WIDTH_MONTHLY
+      : COL_MIN_WIDTH_WEEKLY;
 
   // ─── Today Indicator ───────────────────────────────────────────────────
 
@@ -289,7 +289,7 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                 className={cn(
                   "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors",
                   filter === f
-                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    ? "bg-background text-foreground shadow-sm font-semibold"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -307,7 +307,7 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                 className={cn(
                   "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors",
                   zoom === z
-                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    ? "bg-background text-foreground shadow-sm font-semibold"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -345,6 +345,18 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
       </div>
 
       {/* Gantt Matrix Grid */}
+      {filteredProjects.length === 0 ? (
+        <div className="p-6">
+          <EmptyState
+            title="Tidak ada proyek pada filter timeline ini"
+            description="Ubah filter status Gantt di atas atau tambahkan proyek baru untuk melihat grafik jadwal."
+            icon={<Calendar className="w-8 h-8 text-muted-foreground/60" />}
+            actionLabel="Tampilkan Semua"
+            onAction={() => setFilter("All")}
+          />
+        </div>
+      ) : (
+      <TooltipProvider delayDuration={150}>
       <div ref={scrollContainerRef} className="overflow-x-auto">
         <div style={{ minWidth: `${containerMinWidth}px` }}>
 
@@ -353,7 +365,7 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
             className="grid border-b bg-muted/50 text-[11px] font-semibold text-muted-foreground"
             style={{ gridTemplateColumns: gridTemplate }}
           >
-            <div className="p-2 pl-4 border-r flex items-center uppercase tracking-wider text-[10px]">
+            <div className="sticky left-0 z-20 bg-card p-2 pl-4 border-r flex items-center uppercase tracking-wider text-[10px] shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)]">
               Proyek / Item Pekerjaan
             </div>
             {zoom === "Quarterly"
@@ -377,13 +389,13 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                 ))}
           </div>
 
-          {/* ═══ Header Tier 2: Minggu + Tanggal (hanya Weekly & Monthly) ═══ */}
-          {zoom !== "Quarterly" && (
+          {/* ═══ Header Tier 2: Minggu + Tanggal (hanya pada zoom Weekly) ═══ */}
+          {zoom === "Weekly" && (
             <div
               className="grid border-b bg-muted/30 text-[10px] text-muted-foreground"
               style={{ gridTemplateColumns: gridTemplate }}
             >
-              <div className="border-r" />
+              <div className="sticky left-0 z-20 bg-card border-r shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)]" />
               {weekColumns.map((col) => {
                 // Cek apakah minggu ini adalah minggu aktif (hanya setelah mounted di client)
                 const isCurrentWeek =
@@ -396,7 +408,7 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                     key={col.key}
                     className={cn(
                       "py-1.5 px-0.5 text-center border-r",
-                      isCurrentWeek && "bg-rose-50 dark:bg-rose-950/30 font-semibold text-rose-600 dark:text-rose-400"
+                      isCurrentWeek && "bg-rose-50 dark:bg-rose-950/30 font-semibold text-rose-700 dark:text-rose-400"
                     )}
                   >
                     <div className="font-semibold leading-tight">{col.key}</div>
@@ -409,21 +421,12 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
 
           {/* ═══ Timeline Rows ═══ */}
           <div className="divide-y divide-border/60 relative">
-            {/* Today Indicator Line */}
-            {todayPosition !== null && (
-              <div
-                className="absolute top-0 bottom-0 z-20 pointer-events-none"
-                style={{
-                  left: `calc(${LABEL_COL_WIDTH}px + ${todayPosition}% * (100% - ${LABEL_COL_WIDTH}px) / 100)`,
-                }}
-              >
-                {/* Kita pakai approach berbeda: hitung left dari area timeline */}
-              </div>
-            )}
-
             {filteredProjects.map((project) => {
               const isExpanded = !!expandedProjects[project.id];
               const hasRevision = project.revisions.length > 0;
+              const lastRevision = hasRevision
+                ? project.revisions[project.revisions.length - 1]
+                : null;
               const revisionExtensionWeeks = hasRevision
                 ? project.revisions.reduce((acc, r) => acc + r.extendedWeeks, 0)
                 : 0;
@@ -451,9 +454,11 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                     style={{ gridTemplateColumns: gridTemplate }}
                   >
                     {/* Label kolom */}
-                    <div className="pl-3 pr-2 py-2.5 flex items-center gap-1.5 border-r truncate">
+                    <div className="sticky left-0 z-20 bg-card pl-3 pr-2 py-2.5 flex items-center gap-1.5 border-r truncate shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)]">
                       <button
+                        type="button"
                         onClick={() => toggleExpand(project.id)}
+                        aria-label={isExpanded ? `Tutup detail ${project.name}` : `Buka detail ${project.name}`}
                         className="p-1 hover:bg-muted rounded text-muted-foreground shrink-0"
                       >
                         {isExpanded ? (
@@ -464,7 +469,7 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                       </button>
                       <Link
                         href={`/workspace/${project.id}`}
-                        className="truncate text-xs font-semibold text-foreground hover:text-emerald-600 transition-colors"
+                        className="truncate text-xs font-semibold text-foreground hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors"
                         title={project.name}
                       >
                         {project.code}: {project.name}
@@ -504,7 +509,6 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                       )}
 
                       {/* Gantt Bar */}
-                      <TooltipProvider>
                         <Tooltip delayDuration={150}>
                           <TooltipTrigger asChild>
                             <div
@@ -563,7 +567,7 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                             </div>
                             <div className="flex justify-between text-[11px]">
                               <span>Target Akhir:</span>
-                              <span className="font-mono font-semibold text-emerald-600">
+                              <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">
                                 {formatIDDate(project.targetEndDate)}
                               </span>
                             </div>
@@ -571,14 +575,13 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                               <span>Progress:</span>
                               <span className="font-mono font-bold">{project.progress}%</span>
                             </div>
-                            {hasRevision && (
-                              <div className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-1 rounded mt-1">
-                                Revisi Terakhir: {project.revisions[0].reason}
+                            {lastRevision && (
+                              <div className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-1 rounded mt-1">
+                                Revisi Terakhir: {lastRevision.reason}
                               </div>
                             )}
                           </TooltipContent>
                         </Tooltip>
-                      </TooltipProvider>
 
                       {/* Label progress di luar bar jika bar terlalu kecil */}
                       {project.progress > 0 && fullBar.width < 6 && (
@@ -604,7 +607,7 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                           className="grid items-center bg-muted/10 hover:bg-muted/30 transition-colors text-xs text-muted-foreground"
                           style={{ gridTemplateColumns: gridTemplate }}
                         >
-                          <div className="pl-8 pr-2 py-1.5 flex items-center justify-between border-r truncate">
+                          <div className="sticky left-0 z-20 bg-card pl-8 pr-2 py-1.5 flex items-center justify-between border-r truncate shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)]">
                             <div className="flex items-center gap-1.5 truncate">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/70 shrink-0" />
                               <span className="truncate" title={wi.name}>
@@ -644,7 +647,6 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                             )}
 
                             {/* Work Item Bar */}
-                            <TooltipProvider>
                               <Tooltip delayDuration={150}>
                                 <TooltipTrigger asChild>
                                   <div
@@ -684,7 +686,6 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
                                   </p>
                                 </TooltipContent>
                               </Tooltip>
-                            </TooltipProvider>
                           </div>
                         </div>
                       );
@@ -695,6 +696,8 @@ export function UnifiedGantt({ projects }: UnifiedGanttProps) {
           </div>
         </div>
       </div>
+      </TooltipProvider>
+      )}
     </div>
   );
 }

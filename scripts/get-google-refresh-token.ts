@@ -23,9 +23,9 @@ async function main() {
   }
 
   if (clientId === clientSecret || clientSecret.includes(".apps.googleusercontent.com")) {
-    console.error("⚠️ PERINGATAN: Client Secret yang dimasukkan sama dengan Client ID!");
-    console.error("👉 Parameter 1: Client ID (berakhiran .apps.googleusercontent.com)");
-    console.error("👉 Parameter 2: Client Secret (biasanya berawalan GOCSPX-...)");
+    console.error("[WARN] PERINGATAN: Client Secret yang dimasukkan sama dengan Client ID!");
+    console.error("Parameter 1: Client ID (berakhiran .apps.googleusercontent.com)");
+    console.error("Parameter 2: Client Secret (biasanya berawalan GOCSPX-...)");
     console.error("\nSilakan salin Client Secret dari Google Cloud Console dan coba kembali.\n");
     return;
   }
@@ -39,7 +39,7 @@ async function main() {
     scope: ["https://www.googleapis.com/auth/drive"],
   });
 
-  console.log("👉 Buka URL berikut di browser Anda untuk memberikan izin akses Google Drive:\n");
+  console.log("Buka URL berikut di browser Anda untuk memberikan izin akses Google Drive:\n");
   console.log(authUrl + "\n");
   console.log("Menunggu otorisasi di browser (localhost:3099)...");
 
@@ -59,7 +59,7 @@ async function main() {
         if (error) {
           res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
           res.end(`<h1>Otorisasi Ditolak</h1><p>Pesan error: ${error}</p>`);
-          console.error("❌ Otorisasi ditolak oleh pengguna atau Google:", error);
+          console.error("[FAIL] Otorisasi ditolak oleh pengguna atau Google:", error);
           server.close();
           process.exit(1);
           return;
@@ -73,7 +73,7 @@ async function main() {
             res.end("<h1>Otorisasi Berhasil!</h1><p>Anda dapat menutup tab ini dan kembali ke terminal Anda.</p>");
 
             console.log("\n========================================================");
-            console.log("✅ BERHASIL MENDAPATKAN REFRESH TOKEN!");
+            console.log("[PASS] BERHASIL MENDAPATKAN REFRESH TOKEN!");
             console.log("========================================================");
             console.log(`GOOGLE_CLIENT_ID="${clientId}"`);
             console.log(`GOOGLE_CLIENT_SECRET="${clientSecret}"`);
@@ -86,8 +86,8 @@ async function main() {
           } catch (tokenErr: any) {
             res.writeHead(500, { "Content-Type": "text/html; charset=utf-8" });
             res.end(`<h1>Gagal Mendapatkan Token</h1><p>${tokenErr.message}</p>`);
-            console.error("❌ Gagal menukar kode otorisasi:", tokenErr.message);
-            console.error("💡 Pastikan Client Secret yang Anda masukkan benar!");
+            console.error("[FAIL] Gagal menukar kode otorisasi:", tokenErr.message);
+            console.error("[INFO] Pastikan Client Secret yang Anda masukkan benar!");
             server.close();
             process.exit(1);
           }

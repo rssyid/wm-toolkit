@@ -133,7 +133,7 @@ export function CollaborationDrawer({
               className="flex-1 flex flex-col min-h-0 p-4 space-y-4 m-0 overflow-y-auto"
             >
               {!isViewerOnly && (
-                <div className="border rounded-lg p-3 bg-card shadow-xs">
+                <div className="border rounded-lg p-3 bg-card shadow-sm">
                   <CommentForm projectId={project.id} />
                 </div>
               )}

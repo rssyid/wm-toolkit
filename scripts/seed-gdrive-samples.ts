@@ -60,7 +60,7 @@ startxref
 }
 
 async function main() {
-  console.log("🚀 Mengunggah berkas sampel resmi ke Google Drive...");
+  console.log("[UPLOAD] Mengunggah berkas sampel resmi ke Google Drive...");
 
   const files = [
     {
@@ -107,14 +107,14 @@ async function main() {
         fileName: f.fileName,
         mimeType: f.mimeType,
       });
-      console.log(`✅ Berhasil: ID=${res.fileId}`);
+      console.log(`[PASS] Berhasil: ID=${res.fileId}`);
       results.push(res);
     } catch (err: any) {
-      console.error(`❌ Gagal mengunggah ${f.fileName}:`, err.message);
+      console.error(`[FAIL] Gagal mengunggah ${f.fileName}:`, err.message);
     }
   }
 
-  console.log("\n📋 Ringkasan Berkas Unggahan:");
+  console.log("\n[SUMMARY] Ringkasan Berkas Unggahan:");
   console.log(JSON.stringify(results, null, 2));
 }
 

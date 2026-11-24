@@ -31,6 +31,8 @@ interface GDriveUploadDialogProps {
   onSaveAttachment?: (attachment: Omit<ProjectAttachment, "id" | "uploadedAt">) => void;
 }
 
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+
 const CATEGORY_OPTIONS = [
   "Survey Lapangan & Kontur",
   "Spesifikasi Teknis Material",
@@ -57,45 +59,50 @@ export function GDriveUploadDialog({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [category, setCategory] = useState("Berita Acara (BAST)");
   const [docNumber, setDocNumber] = useState("");
-  const [fileSize, setFileSize] = useState("2.4 MB");
+  const [fileSize, setFileSize] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      setFileName(file.name);
-      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-      setFileSize(`${sizeMb} MB`);
+    if (!file) return;
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      toast.error("Ukuran berkas melebihi batas maksimal 15 MB.");
+      e.target.value = "";
+      return;
     }
+
+    setSelectedFile(file);
+    setFileName(file.name);
+    const sizeKb = file.size / 1024;
+    setFileSize(
+      sizeKb >= 1024 ? `${(sizeKb / 1024).toFixed(2)} MB` : `${Math.max(1, Math.round(sizeKb))} KB`
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!selectedFile) {
+      toast.error("Pilih berkas nyata dari perangkat Anda terlebih dahulu.");
+      return;
+    }
+
     if (!fileName.trim()) {
-      toast.error("Nama berkas atau file wajib dipilih.");
+      toast.error("Nama berkas dokumen wajib diisi.");
       return;
     }
 
     setUploading(true);
-    setUploadProgress(20);
+    setUploadProgress(25);
 
     try {
-      setUploadProgress(45);
       const formData = new FormData();
-      if (selectedFile) {
-        formData.append("file", selectedFile);
-      } else {
-        const cleanName = fileName.includes(".") ? fileName : `${fileName}.pdf`;
-        const blob = new Blob(["Lampiran dokumen proyek WM-Toolkit: " + fileName], {
-          type: "application/pdf",
-        });
-        formData.append("file", blob, cleanName);
-      }
+      formData.append("file", selectedFile);
       formData.append("projectId", projectId);
 
+      setUploadProgress(55);
       const res = await fetch("/api/upload", {
         method: "POST",
         body: formData,
@@ -105,7 +112,7 @@ export function GDriveUploadDialog({
       const json = await res.json();
 
       if (!res.ok || !json.success) {
-        throw new Error(json.error || "Gagal mengunggah berkas ke Google Drive API.");
+        throw new Error(json.error || "Gagal mengunggah berkas ke Google Drive.");
       }
 
       setUploadProgress(100);
@@ -114,10 +121,10 @@ export function GDriveUploadDialog({
       const newAttachmentData: Omit<ProjectAttachment, "id" | "uploadedAt"> = {
         projectId,
         source: "UPLOAD",
-        fileName: uploadedData.fileName || fileName,
+        fileName: fileName.trim() || uploadedData.fileName,
         fileUrl: uploadedData.webViewLink,
-        fileSize: uploadedData.fileSize || fileSize || "1.5 MB",
-        mimeType: uploadedData.mimeType || "application/pdf",
+        fileSize: uploadedData.fileSize || fileSize,
+        mimeType: uploadedData.mimeType || selectedFile.type || "application/octet-stream",
         category,
         docNumber: docNumber.trim() || undefined,
         googleDriveFileId: uploadedData.fileId,
@@ -127,11 +134,14 @@ export function GDriveUploadDialog({
       if (onSaveAttachment) {
         onSaveAttachment(newAttachmentData);
       } else {
-        addAttachment(newAttachmentData);
+        const saved = await addAttachment(newAttachmentData);
+        if (!saved) {
+          throw new Error("Berkas terunggah, namun gagal mencatat metadata lampiran.");
+        }
         toast.success(
-          uploadedData.isMock
-            ? "Dokumen tersimpan (mode simulasi link)!"
-            : `Dokumen berhasil diunggah ke folder Google Drive: ${uploadedData.folderName || project?.name || "Proyek"}!`
+          `Dokumen berhasil diunggah ke folder Google Drive: ${
+            uploadedData.folderName || project?.name || "Proyek"
+          }.`
         );
       }
 
@@ -139,11 +149,14 @@ export function GDriveUploadDialog({
       setUploadProgress(0);
       setFileName("");
       setDocNumber("");
+      setFileSize("");
       setSelectedFile(null);
       onOpenChange(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Upload error:", err);
-      toast.error(err.message || "Terjadi kesalahan saat mengunggah berkas.");
+      toast.error(
+        err instanceof Error ? err.message : "Terjadi kesalahan saat mengunggah berkas."
+      );
       setUploading(false);
       setUploadProgress(0);
     }
@@ -154,13 +167,13 @@ export function GDriveUploadDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center text-emerald-600">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center text-emerald-700 dark:text-emerald-300">
               <UploadCloud className="w-4 h-4" />
             </div>
             <div>
               <DialogTitle className="text-base">Unggah Berkas ke Google Drive</DialogTitle>
               <DialogDescription className="text-xs">
-                Simpan dokumen ke folder Google Drive:{" "}
+                Direktori tujuan:{" "}
                 <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">
                   [{project?.code || "PROYEK"}] {project?.name || ""}
                 </span>
@@ -170,19 +183,20 @@ export function GDriveUploadDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-3.5 py-1 text-xs">
-          {/* File input / Dropzone */}
           <div className="p-4 border-2 border-dashed rounded-lg text-center bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer relative">
             <input
               type="file"
+              aria-label="Pilih berkas untuk diunggah"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv,.docx,.doc,.dwg"
               onChange={handleFileSelect}
               className="absolute inset-0 opacity-0 cursor-pointer"
             />
-            <UploadCloud className="w-7 h-7 text-emerald-600 mx-auto mb-1.5" />
-            {fileName ? (
+            <UploadCloud className="w-7 h-7 text-emerald-700 dark:text-emerald-400 mx-auto mb-1.5" />
+            {selectedFile ? (
               <div className="space-y-1">
                 <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
                   <File className="w-3.5 h-3.5" />
-                  <span className="truncate max-w-[220px]">{fileName}</span>
+                  <span className="truncate max-w-[220px]">{selectedFile.name}</span>
                   <span className="text-[11px] text-muted-foreground">({fileSize})</span>
                 </div>
                 <p className="text-[11px] text-muted-foreground">Klik untuk mengganti berkas</p>
@@ -193,32 +207,33 @@ export function GDriveUploadDialog({
                   Pilih berkas dari perangkat Anda
                 </p>
                 <p className="text-[11px] text-muted-foreground">
-                  Mendukung format PDF, PNG, JPG, DWG, XLSX hingga 25 MB
+                  Mendukung PDF, PNG, JPG, WebP, XLSX, CSV, DOCX, DWG maksimal 15 MB
                 </p>
               </div>
             )}
           </div>
 
           <div>
-            <label className="font-semibold text-foreground block mb-1">
-              Nama Berkas Dokumen <span className="text-rose-500">*</span>
+            <label htmlFor="gdrive-upload-name" className="font-semibold text-foreground block mb-1">
+              Nama Tampilan Berkas <span className="text-rose-600">*</span>
             </label>
             <Input
+              id="gdrive-upload-name"
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
               placeholder="Contoh: Berita_Acara_Serah_Terima_BAST.pdf"
-              className="text-xs"
+              className="text-xs h-9"
               required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="font-semibold text-foreground block mb-1">
+              <label htmlFor="gdrive-upload-cat" className="font-semibold text-foreground block mb-1">
                 Kategori Dokumen
               </label>
               <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger className="text-xs h-9">
+                <SelectTrigger id="gdrive-upload-cat" className="text-xs h-9">
                   <SelectValue placeholder="Pilih kategori" />
                 </SelectTrigger>
                 <SelectContent>
@@ -232,14 +247,15 @@ export function GDriveUploadDialog({
             </div>
 
             <div>
-              <label className="font-semibold text-foreground block mb-1">
+              <label htmlFor="gdrive-upload-doc" className="font-semibold text-foreground block mb-1">
                 Nomor Registrasi / SAP
               </label>
               <Input
+                id="gdrive-upload-doc"
                 value={docNumber}
                 onChange={(e) => setDocNumber(e.target.value)}
                 placeholder="Contoh: BAST-01/2026"
-                className="text-xs font-mono"
+                className="text-xs font-mono h-9"
               />
             </div>
           </div>
@@ -248,8 +264,8 @@ export function GDriveUploadDialog({
             <div className="space-y-1.5 pt-1">
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1.5 font-medium text-foreground">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
-                  Mengunggah ke Google Drive Storage...
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-700" />
+                  Mengunggah ke Google Drive...
                 </span>
                 <span className="font-mono">{uploadProgress}%</span>
               </div>
@@ -258,9 +274,9 @@ export function GDriveUploadDialog({
           )}
 
           <div className="rounded-md border p-3 bg-muted/30 flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
             <div className="text-[11px] text-muted-foreground leading-relaxed">
-              Berkas akan otomatis disimpan ke direktori Google Drive terkelola perkebunan dan terdaftar pada tabel arsip proyek.
+              Unggahan memerlukan konfigurasi kredensial Google Drive server yang aktif. Maksimal ukuran berkas adalah 15 MB.
             </div>
           </div>
 
@@ -271,18 +287,19 @@ export function GDriveUploadDialog({
               size="sm"
               disabled={uploading}
               onClick={() => onOpenChange(false)}
+              className="h-9 text-xs"
             >
               Batal
             </Button>
             <Button
               type="submit"
               size="sm"
-              disabled={uploading || !fileName.trim()}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+              disabled={uploading || !selectedFile || !fileName.trim()}
+              className="h-9 text-xs bg-emerald-700 hover:bg-emerald-800 text-white gap-1"
             >
               {uploading ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menyimpan...
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Mengunggah...
                 </>
               ) : (
                 "Unggah Sekarang"

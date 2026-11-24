@@ -25,12 +25,13 @@ export function CommentForm({ projectId }: CommentFormProps) {
   const [stagedAttachments, setStagedAttachments] = useState<ProjectAttachment[]>([]);
   const [gdriveLinkOpen, setGdriveLinkOpen] = useState(false);
   const [gdriveUploadOpen, setGdriveUploadOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (isViewerOnly) {
     return (
-      <Card className="shadow-xs border-dashed bg-muted/20">
+      <Card className="shadow-sm border-dashed bg-muted/20">
         <CardContent className="p-4 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
-          <Eye className="w-4 h-4 text-blue-500" />
+          <Eye className="w-4 h-4 text-blue-600" />
           <span>Mode Viewer Aktif: Anda dapat membaca riwayat diskusi proyek dalam mode baca saja.</span>
         </CardContent>
       </Card>
@@ -38,10 +39,8 @@ export function CommentForm({ projectId }: CommentFormProps) {
   }
 
   const handleSelectUser = (user: AppUser) => {
-    // Append mention to content
     const mentionTag = `@${user.name} `;
     setContent((prev) => {
-      // If ends with @ replace with mentionTag, else append
       if (prev.endsWith("@")) {
         return prev.slice(0, -1) + mentionTag;
       }
@@ -67,7 +66,7 @@ export function CommentForm({ projectId }: CommentFormProps) {
     setStagedAttachments((prev) => prev.filter((a) => a.id !== attId));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!content.trim() && stagedAttachments.length === 0) {
@@ -75,26 +74,36 @@ export function CommentForm({ projectId }: CommentFormProps) {
       return;
     }
 
-    // Auto detect any user names mentioned in text with @
-    const detectedUserIds = [...mentionedUserIds];
-    users.forEach((u) => {
-      if (content.includes(`@${u.name}`) && !detectedUserIds.includes(u.id)) {
-        detectedUserIds.push(u.id);
-      }
-    });
+    const activeMentionedUserIds = users
+      .filter(
+        (u) =>
+          content.includes(`@${u.name}`) ||
+          (mentionedUserIds.includes(u.id) && content.includes(`@${u.name}`))
+      )
+      .map((u) => u.id);
 
-    addComment(projectId, content.trim(), detectedUserIds, stagedAttachments);
-    toast.success("Komentar berhasil dipublikasikan!");
+    setIsSubmitting(true);
+    try {
+      const created = await addComment(
+        projectId,
+        content.trim(),
+        activeMentionedUserIds,
+        stagedAttachments
+      );
+      if (!created) return;
 
-    // Reset
-    setContent("");
-    setMentionedUserIds([]);
-    setStagedAttachments([]);
+      toast.success("Komentar berhasil dipublikasikan!");
+      setContent("");
+      setMentionedUserIds([]);
+      setStagedAttachments([]);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <>
-      <Card className="shadow-xs border-border/80">
+      <Card className="shadow-sm border-border/80">
         <CardContent className="p-3 sm:p-4 space-y-3">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span className="font-medium text-foreground flex items-center gap-1.5">
@@ -108,10 +117,19 @@ export function CommentForm({ projectId }: CommentFormProps) {
 
           <Textarea
             value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Tulis instruksi teknis, koordinasi lapangan, atau mention rekan kerja dengan @ (contoh: @Ir. Ahmad Dahlan)..."
+            onChange={(e) => {
+              const nextVal = e.target.value;
+              setContent(nextVal);
+              setMentionedUserIds((prev) =>
+                prev.filter((id) => {
+                  const u = users.find((usr) => usr.id === id);
+                  return u ? nextVal.includes(`@${u.name}`) : false;
+                })
+              );
+            }}
+            placeholder="Tulis instruksi teknis, koordinasi lapangan, atau mention rekan kerja dengan @ (contoh: @Nama Rekan)..."
             rows={3}
-            className="text-xs resize-none focus-visible:ring-emerald-500"
+            className="text-xs resize-none focus-visible:ring-emerald-600"
           />
 
           {/* Staged Attachments Chips */}
@@ -181,11 +199,11 @@ export function CommentForm({ projectId }: CommentFormProps) {
               type="button"
               size="sm"
               onClick={handleSubmit}
-              disabled={!content.trim() && stagedAttachments.length === 0}
-              className="h-8 gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+              disabled={isSubmitting || (!content.trim() && stagedAttachments.length === 0)}
+              className="h-8 gap-1.5 text-xs bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>Kirim Komentar</span>
+              <span>{isSubmitting ? "Mengirim..." : "Kirim Komentar"}</span>
             </Button>
           </div>
         </CardContent>

@@ -21,7 +21,6 @@ import {
   ChevronRight,
   FolderGit2,
   Bell,
-  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppState } from "@/context/app-state-context";
@@ -29,11 +28,18 @@ import { useAppState } from "@/context/app-state-context";
 interface AppSidebarProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
+  onNavigate?: () => void;
+  isMobileDrawer?: boolean;
 }
 
-export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
+export function AppSidebar({
+  collapsed,
+  onToggleCollapse,
+  onNavigate,
+  isMobileDrawer = false,
+}: AppSidebarProps) {
   const pathname = usePathname() || "";
-  const { unreadNotificationCount, canManageSystem, activeRole } = useAppState();
+  const { unreadNotificationCount, canManageSystem } = useAppState();
   const [masterDataOpen, setMasterDataOpen] = useState(pathname.startsWith("/master-data"));
 
   React.useEffect(() => {
@@ -80,14 +86,19 @@ export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
   return (
     <aside
       className={cn(
-        "relative flex flex-col border-r bg-card transition-all duration-300 ease-in-out shrink-0 select-none",
-        collapsed ? "w-16" : "w-64"
+        "relative flex-col border-r bg-card transition-all duration-300 ease-in-out shrink-0 select-none h-full",
+        isMobileDrawer ? "flex w-full border-r-0" : "hidden lg:flex",
+        !isMobileDrawer && (collapsed ? "w-16" : "w-64")
       )}
     >
       {/* Brand Header */}
       <div className="flex h-14 items-center justify-between border-b px-3.5">
-        <Link href="/dashboard" className="flex items-center gap-2.5 overflow-hidden">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white font-bold text-sm shadow-sm shrink-0">
+        <Link
+          href="/dashboard"
+          onClick={() => onNavigate?.()}
+          className="flex items-center gap-2.5 overflow-hidden"
+        >
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-700 text-white font-bold text-sm shadow-sm shrink-0">
             WM
           </div>
           {!collapsed && (
@@ -104,13 +115,15 @@ export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
       </div>
 
       {/* Navigation List */}
-      <div className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
+      <nav aria-label="Navigasi utama" className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => onNavigate?.()}
+              aria-current={item.active ? "page" : undefined}
               className={cn(
                 "relative flex items-center gap-3 rounded-md px-3 py-2 text-xs font-medium transition-colors",
                 item.active
@@ -120,14 +133,14 @@ export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
               title={collapsed ? (item.badge && item.badge > 0 ? `${item.label} (${item.badge} baru)` : item.label) : undefined}
             >
               <div className="relative shrink-0">
-                <Icon className={cn("h-4 w-4", item.active && "text-emerald-600 dark:text-emerald-400")} />
+                <Icon className={cn("h-4 w-4", item.active && "text-emerald-700 dark:text-emerald-400")} />
                 {collapsed && item.badge && item.badge > 0 ? (
                   <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-rose-600" />
                 ) : null}
               </div>
               {!collapsed && <span className="flex-1">{item.label}</span>}
               {!collapsed && item.badge && item.badge > 0 ? (
-                <span className="flex h-4 px-1.5 items-center justify-center rounded-full bg-rose-600 text-[9px] font-bold text-white shadow-xs">
+                <span className="flex h-4 px-1.5 items-center justify-center rounded-full bg-rose-600 text-[9px] font-bold text-white shadow-sm">
                   {item.badge}
                 </span>
               ) : null}
@@ -141,6 +154,7 @@ export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
             <button
               type="button"
               onClick={() => setMasterDataOpen(!masterDataOpen)}
+              aria-expanded={masterDataOpen}
               className={cn(
                 "flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-medium transition-colors",
                 pathname.startsWith("/master-data")
@@ -173,6 +187,8 @@ export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
                     <Link
                       key={sub.href}
                       href={sub.href}
+                      onClick={() => onNavigate?.()}
+                      aria-current={isSubActive ? "page" : undefined}
                       className={cn(
                         "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors",
                         isSubActive
@@ -193,13 +209,15 @@ export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
         {/* Settings */}
         <Link
           href="/settings"
+          onClick={() => onNavigate?.()}
+          aria-current={pathname === "/settings" ? "page" : undefined}
           className={cn(
             "flex items-center gap-3 rounded-md px-3 py-2 text-xs font-medium transition-colors",
             pathname === "/settings"
               ? "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 font-semibold"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
-          title={collapsed ? "Settings" : undefined}
+          title={collapsed ? "Pengaturan" : undefined}
         >
           <Settings className="h-4 w-4 shrink-0" />
           {!collapsed && (
@@ -208,19 +226,22 @@ export function AppSidebar({ collapsed, onToggleCollapse }: AppSidebarProps) {
             </div>
           )}
         </Link>
-      </div>
+      </nav>
 
       {/* Collapse Toggle Footer */}
-      <div className="border-t p-2 flex items-center justify-end">
-        <button
-          onClick={onToggleCollapse}
-          className="w-full flex items-center justify-center gap-2 p-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          {!collapsed && <span className="text-[11px]">Perkecil Menu</span>}
-        </button>
-      </div>
+      {!isMobileDrawer && (
+        <div className="border-t p-2 flex items-center justify-end">
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="w-full flex items-center justify-center gap-2 p-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+            title={collapsed ? "Perluas sidebar" : "Perkecil sidebar"}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            {!collapsed && <span className="text-[11px]">Perkecil Menu</span>}
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

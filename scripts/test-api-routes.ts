@@ -2,7 +2,7 @@ import "dotenv/config";
 import { downloadFileFromGoogleDrive, getGoogleDriveFileMetadata } from "../src/server/google-drive";
 
 async function main() {
-  console.log("🧪 Menguji fungsi Google Drive dan download...");
+  console.log("[TEST] Menguji fungsi Google Drive dan download...");
 
   const testFileId = "1yDJdgVHfgWwTq21_XyXUkagtm8_Zsdv7";
 
@@ -34,11 +34,11 @@ async function main() {
     chunks.push(Buffer.from(chunk));
   }
   const totalBuffer = Buffer.concat(chunks);
-  console.log(`✅ Berhasil mengunduh media dari Google Drive: ${totalBuffer.length} bytes!`);
+  console.log(`[PASS] Berhasil mengunduh media dari Google Drive: ${totalBuffer.length} bytes!`);
   console.log(`Header PDF awal: ${totalBuffer.slice(0, 8).toString("utf-8")}`);
 }
 
 main().catch((err) => {
-  console.error("❌ Test gagal:", err);
+  console.error("[FAIL] Test gagal:", err);
   process.exit(1);
 });

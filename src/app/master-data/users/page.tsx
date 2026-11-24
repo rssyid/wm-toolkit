@@ -10,9 +10,7 @@ import {
   Trash2,
   ChevronLeft,
   Shield,
-  Briefcase,
-  Building,
-  Sparkles,
+  Camera,
   X,
 } from "lucide-react";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
@@ -89,7 +87,7 @@ function getInitials(name?: string) {
 }
 
 export default function MasterDataUsersPage() {
-  const { users, addMasterDataUser, updateMasterDataUser, deleteMasterDataUser } = useAppState();
+  const { users, locations, activeUserId, addMasterDataUser, updateMasterDataUser, deleteMasterDataUser } = useAppState();
 
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -97,13 +95,14 @@ export default function MasterDataUsersPage() {
   const [editingItem, setEditingItem] = useState<AppUser | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   // Form states
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<SystemRole>("PIC");
   const [jabatan, setJabatan] = useState("");
-  const [estateName, setEstateName] = useState("Kebun Sei Silau");
+  const [estateName, setEstateName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
 
@@ -124,10 +123,10 @@ export default function MasterDataUsersPage() {
   const handleOpenAdd = () => {
     setEditingItem(null);
     setName("");
-    setEmail("@perkebunan.co.id");
+    setEmail("");
     setRole("PIC");
-    setJabatan("Estate Engineer");
-    setEstateName("Kebun Sei Silau");
+    setJabatan("");
+    setEstateName(locations[0]?.name || "");
     setAvatarUrl("");
     setDialogOpen(true);
   };
@@ -159,15 +158,28 @@ export default function MasterDataUsersPage() {
   };
 
   const handleToggleStatus = async (user: AppUser) => {
+    if (activeUserId && user.id === activeUserId) {
+      toast.error("Anda tidak dapat menonaktifkan akun yang sedang Anda gunakan.");
+      return;
+    }
     const newStatus = user.status === "Active" ? "Inactive" : "Active";
-    const ok = await updateMasterDataUser(user.id, { status: newStatus });
-    if (ok) {
-      toast.success(`Status pengguna ${user.name} diubah menjadi ${newStatus}`);
+    setTogglingId(user.id);
+    try {
+      const ok = await updateMasterDataUser(user.id, { status: newStatus });
+      if (ok) {
+        toast.success(`Status pengguna ${user.name} diubah menjadi ${newStatus}`);
+      }
+    } finally {
+      setTogglingId(null);
     }
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
+    if (activeUserId && deleteTarget.id === activeUserId) {
+      toast.error("Anda tidak dapat menghapus akun yang sedang Anda gunakan.");
+      return;
+    }
     setIsDeleting(true);
     try {
       const ok = await deleteMasterDataUser(deleteTarget.id);
@@ -183,6 +195,14 @@ export default function MasterDataUsersPage() {
   const handleSave = async () => {
     if (!name.trim() || !email.trim()) {
       toast.error("Nama dan email pengguna wajib diisi");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast.error("Format alamat email tidak valid");
+      return;
+    }
+    if (editingItem && activeUserId && editingItem.id === activeUserId && role !== "ADMIN") {
+      toast.error("Anda tidak dapat menurunkan peran akun ADMIN yang sedang digunakan.");
       return;
     }
 
@@ -243,19 +263,20 @@ export default function MasterDataUsersPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Link href="/master-data/rbac">
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 border-emerald-600/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-            >
-              <Shield className="w-3.5 h-3.5 text-emerald-600" /> Atur Matriks RBAC
-            </Button>
-          </Link>
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="gap-1.5 border-emerald-600/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+          >
+            <Link href="/master-data/rbac">
+              <Shield className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" /> Atur Matriks RBAC
+            </Link>
+          </Button>
           <Button
             size="sm"
             onClick={handleOpenAdd}
-            className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+            className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" /> Tambah Pengguna Baru
           </Button>
@@ -263,7 +284,7 @@ export default function MasterDataUsersPage() {
       </div>
 
       {/* Table Card */}
-      <Card className="shadow-xs overflow-hidden">
+      <Card className="shadow-sm overflow-hidden">
         <CardHeader className="p-3.5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="relative w-full sm:w-72">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -362,11 +383,12 @@ export default function MasterDataUsersPage() {
                           <Button
                             size="sm"
                             variant="ghost"
+                            disabled={togglingId === u.id || (Boolean(activeUserId) && u.id === activeUserId)}
                             onClick={() => handleToggleStatus(u)}
                             className={`h-7 text-xs px-2 ${
                               u.status === "Active"
-                                ? "text-amber-600 hover:text-amber-700"
-                                : "text-emerald-600 hover:text-emerald-700"
+                                ? "text-amber-700 dark:text-amber-400"
+                                : "text-emerald-700 dark:text-emerald-400"
                             }`}
                           >
                             {u.status === "Active" ? "Nonaktifkan" : "Aktifkan"}
@@ -374,8 +396,9 @@ export default function MasterDataUsersPage() {
                           <Button
                             size="sm"
                             variant="ghost"
+                            disabled={Boolean(activeUserId) && u.id === activeUserId}
                             onClick={() => setDeleteTarget(u)}
-                            className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                            className="h-7 text-xs px-2 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
@@ -428,7 +451,7 @@ export default function MasterDataUsersPage() {
                     className="h-7 text-[11px] gap-1 border-emerald-600/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
                     onClick={() => setIsAvatarPickerOpen(true)}
                   >
-                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                    <Camera className="w-3 h-3 text-emerald-700 dark:text-emerald-400" />
                     {avatarUrl ? "Ganti Avatar" : "Pilih Avatar"}
                   </Button>
                   {avatarUrl && (
@@ -466,8 +489,13 @@ export default function MasterDataUsersPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="nama@perkebunan.co.id"
+                placeholder="nama@perusahaan.co.id"
               />
+              {!editingItem && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Akun baru akan menggunakan sandi bawaan sistem (default) untuk login perdana.
+                </p>
+              )}
             </div>
 
             <div>
@@ -529,7 +557,7 @@ export default function MasterDataUsersPage() {
                 <Input
                   value={estateName}
                   onChange={(e) => setEstateName(e.target.value)}
-                  placeholder="Contoh: Kebun Sei Silau"
+                  placeholder="Nama kebun atau unit kerja"
                 />
               </div>
             </div>
@@ -548,7 +576,7 @@ export default function MasterDataUsersPage() {
               size="sm"
               onClick={handleSave}
               disabled={isSubmitting}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white"
             >
               {isSubmitting ? "Menyimpan..." : "Simpan Pengguna"}
             </Button>

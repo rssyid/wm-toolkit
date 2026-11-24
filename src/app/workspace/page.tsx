@@ -23,6 +23,7 @@ import {
   Activity,
   ListTodo,
   Trash2,
+  ArrowUpDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,7 +71,7 @@ function ProjectExpandedRow({
   const [hideCompleted, setHideCompleted] = useState(false);
   const [visibleLimit, setVisibleLimit] = useState(3);
 
-  const workItems = project.workItems || [];
+  const workItems = useMemo(() => project.workItems || [], [project.workItems]);
   const completedCount = workItems.filter(
     (w) => w.status === "Completed" || w.progress >= 100
   ).length;
@@ -99,7 +100,7 @@ function ProjectExpandedRow({
 
   return (
     <TableRow className="bg-muted/30 hover:bg-muted/30 transition-colors border-b">
-      <TableCell colSpan={9} className="p-4 sm:p-6 pl-6 sm:pl-12">
+      <TableCell colSpan={10} className="p-4 sm:p-6 pl-6 sm:pl-12">
         <div className="space-y-4 max-w-7xl">
           {/* Header Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-border/60">
@@ -133,11 +134,11 @@ function ProjectExpandedRow({
               <p className="text-xs text-muted-foreground">
                 Belum ada Work Item (WI) yang terdaftar untuk proyek ini.
               </p>
-              <Link href={`/workspace/${project.id}/work-items`}>
-                <Button size="sm" variant="outline" className="h-7 text-xs">
+              <Button asChild size="sm" variant="outline" className="h-8 text-xs">
+                <Link href={`/workspace/${project.id}/execution?tab=work-items`}>
                   + Buat Work Item
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </div>
           ) : filteredWorkItems.length === 0 ? (
             <div className="rounded-lg border border-dashed p-5 text-center bg-card/60">
@@ -166,7 +167,7 @@ function ProjectExpandedRow({
                     <div
                       key={wi.id}
                       className={cn(
-                        "bg-card text-card-foreground rounded-lg border border-l-4 p-3.5 shadow-xs flex flex-col justify-between gap-3 transition-shadow hover:shadow-sm",
+                        "bg-card text-card-foreground rounded-lg border border-l-4 p-3.5 shadow-sm flex flex-col justify-between gap-3 transition-shadow hover:shadow-md",
                         borderClass
                       )}
                     >
@@ -254,7 +255,7 @@ function ProjectExpandedRow({
           )}
 
           {/* Bottom Panel: AFCE & Approval Audit */}
-          <div className="rounded-lg border bg-card p-3.5 shadow-xs space-y-3">
+          <div className="rounded-lg border bg-card p-3.5 shadow-sm space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <FileCheck2 className="w-4 h-4 text-emerald-600" />
@@ -262,25 +263,25 @@ function ProjectExpandedRow({
                   Informasi Dokumen AFCE & Riwayat Persetujuan
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <Link href={`/workspace/${project.id}/work-items`}>
-                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1">
+                  <Link href={`/workspace/${project.id}/execution?tab=work-items`}>
                     <ListTodo className="w-3.5 h-3.5" />
                     <span>Kelola WI</span>
-                  </Button>
-                </Link>
-                <Link href={`/workspace/${project.id}/afce`}>
-                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="sm" className="h-8 text-xs gap-1">
+                  <Link href={`/workspace/${project.id}/afce`}>
                     <FileText className="w-3.5 h-3.5" />
                     <span>Dokumen AFCE</span>
-                  </Button>
-                </Link>
-                <Link href={`/workspace/${project.id}`}>
-                  <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
+                  </Link>
+                </Button>
+                <Button asChild size="sm" className="h-8 text-xs bg-emerald-700 hover:bg-emerald-800 text-white gap-1">
+                  <Link href={`/workspace/${project.id}`}>
                     <span>Buka Proyek</span>
                     <ArrowUpRight className="w-3.5 h-3.5" />
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </div>
             </div>
 
@@ -351,6 +352,7 @@ function WorkspaceContent() {
     regions,
     companies,
     locations,
+    users,
     tableDensity,
     setTableDensity,
     deleteProject,
@@ -381,7 +383,14 @@ function WorkspaceContent() {
   const [regionFilter, setRegionFilter] = useState("ALL");
   const [companyFilter, setCompanyFilter] = useState("ALL");
   const [locationFilter, setLocationFilter] = useState("ALL");
+  const [picFilter, setPicFilter] = useState("ALL");
+  const [startDateFrom, setStartDateFrom] = useState("");
+  const [endDateTo, setEndDateTo] = useState("");
   const [yearFilter, setYearFilter] = useState("ALL");
+  const [sortField, setSortField] = useState<
+    "code" | "name" | "pic" | "status" | "progress" | "targetEndDate" | "ews" | "afceValue"
+  >("code");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
@@ -412,6 +421,8 @@ function WorkspaceContent() {
     const statusParam = searchParams?.get("status");
     const afceParam = searchParams?.get("afceStatus");
     const locParam = searchParams?.get("location");
+    const procParam = searchParams?.get("procurement");
+    const picParam = searchParams?.get("pic");
     const queryParam = searchParams?.get("q");
 
     if (statusParam) {
@@ -423,6 +434,8 @@ function WorkspaceContent() {
     }
     if (afceParam) setAfceStatusFilter(afceParam);
     if (locParam) setLocationFilter(locParam);
+    if (procParam) setProcurementFilter(procParam);
+    if (picParam) setPicFilter(picParam);
     if (queryParam) setSearch(queryParam);
   }, [searchParams]);
 
@@ -435,9 +448,24 @@ function WorkspaceContent() {
     setRegionFilter("ALL");
     setCompanyFilter("ALL");
     setLocationFilter("ALL");
+    setPicFilter("ALL");
+    setStartDateFrom("");
+    setEndDateTo("");
     setYearFilter("ALL");
     setPage(1);
     router.replace("/workspace");
+  };
+
+  const handleToggleSort = (
+    field: "code" | "name" | "pic" | "status" | "progress" | "targetEndDate" | "ews" | "afceValue"
+  ) => {
+    if (sortField === field) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+    setPage(1);
   };
 
   // Counts for active vs deleted and quick status pills
@@ -456,37 +484,62 @@ function WorkspaceContent() {
     return { total, inProgress, delayed, planned, completed };
   }, [viewMode, activeProjects, deletedProjects]);
 
-  // Count active advanced filters
   const activeAdvancedFilterCount = useMemo(() => {
     let count = 0;
     if (regionFilter !== "ALL") count++;
     if (companyFilter !== "ALL") count++;
     if (locationFilter !== "ALL") count++;
+    if (picFilter !== "ALL") count++;
     if (workTypeFilter !== "ALL") count++;
     if (procurementFilter !== "ALL") count++;
     if (afceStatusFilter !== "ALL") count++;
     if (yearFilter !== "ALL") count++;
+    if (startDateFrom) count++;
+    if (endDateTo) count++;
     return count;
   }, [
     regionFilter,
     companyFilter,
     locationFilter,
+    picFilter,
     workTypeFilter,
     procurementFilter,
     afceStatusFilter,
     yearFilter,
+    startDateFrom,
+    endDateTo,
   ]);
 
-  // Filtered dataset
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set<string>();
+    projects.forEach((p) => {
+      const yr = p.baselineStartDate?.split("-")[0];
+      if (yr) yearsSet.add(yr);
+    });
+    if (yearsSet.size === 0) {
+      yearsSet.add(String(new Date().getFullYear()));
+    }
+    return Array.from(yearsSet).sort();
+  }, [projects]);
+
+  const picFilterOptions = useMemo(
+    () =>
+      users
+        .filter((u) => u.status === "Active" && (u.role === "PIC" || u.role === "ADMIN"))
+        .map((u) => ({ value: u.id, label: u.name, subLabel: u.jabatan })),
+    [users]
+  );
+
+  // Filtered & sorted dataset
   const filteredProjects = useMemo(() => {
     const baseProjects = viewMode === "ACTIVE" ? activeProjects : deletedProjects;
-    return baseProjects.filter((p) => {
-      // Free text search
+    const filtered = baseProjects.filter((p) => {
       if (search.trim()) {
         const query = search.toLowerCase();
         const matchesCode = p.code.toLowerCase().includes(query);
         const matchesName = p.name.toLowerCase().includes(query);
         const matchesAfce = p.afceNumber.toLowerCase().includes(query);
+        const matchesPic = p.picName?.toLowerCase().includes(query) || false;
         const matchesLoc =
           p.locationName.toLowerCase().includes(query) ||
           (p.locationNames?.some((l) => l.toLowerCase().includes(query)) ?? false);
@@ -500,6 +553,7 @@ function WorkspaceContent() {
           !matchesCode &&
           !matchesName &&
           !matchesAfce &&
+          !matchesPic &&
           !matchesLoc &&
           !matchesComp &&
           !matchesReg &&
@@ -510,7 +564,6 @@ function WorkspaceContent() {
         }
       }
 
-      // Status
       if (statusFilter !== "ALL") {
         if (statusFilter === "DELAYED") {
           if (p.scheduleVarianceDays <= 7 && p.ewsStatus === "Normal") return false;
@@ -519,32 +572,16 @@ function WorkspaceContent() {
         }
       }
 
-      // Work Type
-      if (workTypeFilter !== "ALL" && p.projectType !== workTypeFilter) {
-        return false;
-      }
+      if (workTypeFilter !== "ALL" && p.projectType !== workTypeFilter) return false;
+      if (procurementFilter !== "ALL" && p.procurementType !== procurementFilter) return false;
+      if (afceStatusFilter !== "ALL" && p.afceStatus !== afceStatusFilter) return false;
+      if (regionFilter !== "ALL" && p.regionId !== regionFilter) return false;
+      if (companyFilter !== "ALL" && p.companyId !== companyFilter) return false;
+      if (picFilter !== "ALL" && p.picId !== picFilter) return false;
 
-      // Procurement
-      if (procurementFilter !== "ALL" && p.procurementType !== procurementFilter) {
-        return false;
-      }
+      if (startDateFrom && p.baselineStartDate < startDateFrom) return false;
+      if (endDateTo && p.targetEndDate > endDateTo) return false;
 
-      // AFCE Status
-      if (afceStatusFilter !== "ALL" && p.afceStatus !== afceStatusFilter) {
-        return false;
-      }
-
-      // Region
-      if (regionFilter !== "ALL" && p.regionId !== regionFilter) {
-        return false;
-      }
-
-      // Company
-      if (companyFilter !== "ALL" && p.companyId !== companyFilter) {
-        return false;
-      }
-
-      // Location
       if (locationFilter !== "ALL") {
         const matchesSingle = p.locationId === locationFilter;
         const matchesMulti =
@@ -556,13 +593,36 @@ function WorkspaceContent() {
         }
       }
 
-      // Year
       if (yearFilter !== "ALL") {
         const year = p.baselineStartDate.split("-")[0];
         if (year !== yearFilter) return false;
       }
 
       return true;
+    });
+
+    const factor = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      switch (sortField) {
+        case "code":
+          return a.code.localeCompare(b.code) * factor;
+        case "name":
+          return a.name.localeCompare(b.name) * factor;
+        case "pic":
+          return (a.picName || "").localeCompare(b.picName || "") * factor;
+        case "status":
+          return a.status.localeCompare(b.status) * factor;
+        case "progress":
+          return (a.progress - b.progress) * factor;
+        case "targetEndDate":
+          return a.targetEndDate.localeCompare(b.targetEndDate) * factor;
+        case "ews":
+          return (a.scheduleVarianceDays - b.scheduleVarianceDays) * factor;
+        case "afceValue":
+          return (a.afceValue - b.afceValue) * factor;
+        default:
+          return 0;
+      }
     });
   }, [
     viewMode,
@@ -576,7 +636,12 @@ function WorkspaceContent() {
     regionFilter,
     companyFilter,
     locationFilter,
+    picFilter,
+    startDateFrom,
+    endDateTo,
     yearFilter,
+    sortField,
+    sortDir,
   ]);
 
   // Pagination
@@ -601,12 +666,12 @@ function WorkspaceContent() {
 
         {canEditProjects && (
           <div className="flex items-center gap-2">
-            <Link href="/workspace/new">
-              <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs">
+            <Button asChild size="sm" className="h-9 gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm">
+              <Link href="/workspace/new">
                 <PlusCircle className="w-4 h-4" />
-                <span>+ Tambah Proyek</span>
-              </Button>
-            </Link>
+                <span>Tambah Proyek</span>
+              </Link>
+            </Button>
           </div>
         )}
       </div>
@@ -623,7 +688,7 @@ function WorkspaceContent() {
             className={cn(
               "px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-2",
               viewMode === "ACTIVE"
-                ? "bg-emerald-600 text-white shadow-xs"
+                ? "bg-emerald-700 text-white shadow-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
@@ -642,7 +707,7 @@ function WorkspaceContent() {
             className={cn(
               "px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-2",
               viewMode === "RECYCLE_BIN"
-                ? "bg-rose-600 text-white shadow-xs"
+                ? "bg-rose-700 text-white shadow-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
@@ -687,7 +752,7 @@ function WorkspaceContent() {
             className={cn(
               "px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5",
               statusFilter === "ALL"
-                ? "bg-card text-foreground shadow-xs font-semibold"
+                ? "bg-card text-foreground shadow-sm font-semibold"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
@@ -706,7 +771,7 @@ function WorkspaceContent() {
             className={cn(
               "px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5",
               statusFilter === "In Progress"
-                ? "bg-card text-foreground shadow-xs font-semibold"
+                ? "bg-card text-foreground shadow-sm font-semibold"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
@@ -726,7 +791,7 @@ function WorkspaceContent() {
             className={cn(
               "px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5",
               statusFilter === "DELAYED"
-                ? "bg-card text-foreground shadow-xs font-semibold"
+                ? "bg-card text-foreground shadow-sm font-semibold"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
@@ -746,7 +811,7 @@ function WorkspaceContent() {
             className={cn(
               "px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5",
               statusFilter === "Planned"
-                ? "bg-card text-foreground shadow-xs font-semibold"
+                ? "bg-card text-foreground shadow-sm font-semibold"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
@@ -766,7 +831,7 @@ function WorkspaceContent() {
             className={cn(
               "px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5",
               statusFilter === "Completed"
-                ? "bg-card text-foreground shadow-xs font-semibold"
+                ? "bg-card text-foreground shadow-sm font-semibold"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
@@ -779,7 +844,7 @@ function WorkspaceContent() {
         </div>
 
         {/* Toolbar: Search + Filter Lanjutan Popover + Actions */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-card p-2.5 rounded-lg border shadow-xs">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-card p-2.5 rounded-lg border shadow-sm">
           {/* Search Box */}
           <div className="relative flex-1 max-w-lg">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -996,11 +1061,12 @@ function WorkspaceContent() {
                   </div>
 
                   {/* Year */}
-                  <div className="sm:col-span-2">
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
+                  <div>
+                    <label htmlFor="ws-filter-year" className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
                       Tahun Anggaran
                     </label>
                     <SearchableSelect
+                      id="ws-filter-year"
                       value={yearFilter}
                       onValueChange={(val) => {
                         setYearFilter(val);
@@ -1011,9 +1077,60 @@ function WorkspaceContent() {
                       triggerClassName="h-8 text-xs bg-background"
                       options={[
                         { value: "ALL", label: "Semua Tahun" },
-                        { value: "2026", label: "2026" },
-                        { value: "2027", label: "2027" },
+                        ...availableYears.map((yr) => ({ value: yr, label: yr })),
                       ]}
+                    />
+                  </div>
+
+                  {/* PIC Proyek */}
+                  <div>
+                    <label htmlFor="ws-filter-pic" className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
+                      PIC Proyek
+                    </label>
+                    <SearchableSelect
+                      id="ws-filter-pic"
+                      value={picFilter}
+                      onValueChange={(val) => {
+                        setPicFilter(val);
+                        setPage(1);
+                      }}
+                      placeholder="Semua PIC"
+                      searchPlaceholder="Cari PIC..."
+                      triggerClassName="h-8 text-xs bg-background"
+                      options={[{ value: "ALL", label: "Semua PIC" }, ...picFilterOptions]}
+                    />
+                  </div>
+
+                  {/* Rentang Tanggal */}
+                  <div>
+                    <label htmlFor="ws-filter-start" className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
+                      Mulai Dari Tanggal
+                    </label>
+                    <Input
+                      id="ws-filter-start"
+                      type="date"
+                      value={startDateFrom}
+                      onChange={(e) => {
+                        setStartDateFrom(e.target.value);
+                        setPage(1);
+                      }}
+                      className="h-8 text-xs font-mono bg-background"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="ws-filter-end" className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">
+                      Target Selesai Hingga
+                    </label>
+                    <Input
+                      id="ws-filter-end"
+                      type="date"
+                      value={endDateTo}
+                      onChange={(e) => {
+                        setEndDateTo(e.target.value);
+                        setPage(1);
+                      }}
+                      className="h-8 text-xs font-mono bg-background"
                     />
                   </div>
                 </div>
@@ -1028,7 +1145,7 @@ function WorkspaceContent() {
                 className={cn(
                   "px-2 py-1 text-[11px] rounded transition-all",
                   tableDensity === "comfortable"
-                    ? "bg-card text-foreground font-semibold shadow-xs"
+                    ? "bg-card text-foreground font-semibold shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 )}
                 title="Tampilan Reguler"
@@ -1041,7 +1158,7 @@ function WorkspaceContent() {
                 className={cn(
                   "px-2 py-1 text-[11px] rounded transition-all",
                   tableDensity === "compact"
-                    ? "bg-card text-foreground font-semibold shadow-xs"
+                    ? "bg-card text-foreground font-semibold shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 )}
                 title="Tampilan Padat"
@@ -1051,7 +1168,7 @@ function WorkspaceContent() {
             </div>
 
             {/* Quick Multi-Expand Controls */}
-            <div className="hidden md:flex items-center gap-1 border-l pl-2">
+            <div className="hidden xl:flex items-center gap-1 border-l pl-2">
               <Button
                 variant="ghost"
                 size="sm"
@@ -1150,7 +1267,34 @@ function WorkspaceContent() {
             {yearFilter !== "ALL" && (
               <Badge variant="secondary" className="gap-1 pl-2 pr-1 py-0.5 text-[11px]">
                 <span>Tahun: {yearFilter}</span>
-                <button type="button" onClick={() => setYearFilter("ALL")}>
+                <button type="button" aria-label="Hapus filter tahun" onClick={() => setYearFilter("ALL")}>
+                  <X className="w-3 h-3 hover:text-foreground" />
+                </button>
+              </Badge>
+            )}
+
+            {picFilter !== "ALL" && (
+              <Badge variant="secondary" className="gap-1 pl-2 pr-1 py-0.5 text-[11px]">
+                <span>PIC: {users.find((u) => u.id === picFilter)?.name || picFilter}</span>
+                <button type="button" aria-label="Hapus filter PIC" onClick={() => setPicFilter("ALL")}>
+                  <X className="w-3 h-3 hover:text-foreground" />
+                </button>
+              </Badge>
+            )}
+
+            {startDateFrom && (
+              <Badge variant="secondary" className="gap-1 pl-2 pr-1 py-0.5 text-[11px]">
+                <span>Mulai &gt;= {startDateFrom}</span>
+                <button type="button" aria-label="Hapus filter tanggal mulai" onClick={() => setStartDateFrom("")}>
+                  <X className="w-3 h-3 hover:text-foreground" />
+                </button>
+              </Badge>
+            )}
+
+            {endDateTo && (
+              <Badge variant="secondary" className="gap-1 pl-2 pr-1 py-0.5 text-[11px]">
+                <span>Selesai &lt;= {endDateTo}</span>
+                <button type="button" aria-label="Hapus filter tanggal selesai" onClick={() => setEndDateTo("")}>
                   <X className="w-3 h-3 hover:text-foreground" />
                 </button>
               </Badge>
@@ -1162,10 +1306,13 @@ function WorkspaceContent() {
                 setRegionFilter("ALL");
                 setCompanyFilter("ALL");
                 setLocationFilter("ALL");
+                setPicFilter("ALL");
                 setWorkTypeFilter("ALL");
                 setProcurementFilter("ALL");
                 setAfceStatusFilter("ALL");
                 setYearFilter("ALL");
+                setStartDateFrom("");
+                setEndDateTo("");
               }}
               className="text-[11px] text-emerald-700 dark:text-emerald-400 hover:underline ml-1"
             >
@@ -1176,67 +1323,139 @@ function WorkspaceContent() {
       </div>
 
       {/* Projects Table (Datatable Expansion 03 layout) */}
-      <div className="rounded-lg border bg-card shadow-xs overflow-hidden">
+      <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+        {paginatedProjects.length === 0 ? (
+          <div className="p-6 sm:p-10 flex items-center justify-center">
+            {viewMode === "RECYCLE_BIN" ? (
+              <EmptyState
+                title="Recycle Bin Kosong"
+                description="Tidak ada proyek yang sedang berada di dalam keranjang sampah."
+                icon={<Trash2 className="w-8 h-8 opacity-40 text-muted-foreground" />}
+              />
+            ) : activeProjects.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-6 sm:p-8 text-center rounded-lg border border-dashed border-border/70 bg-card/40 w-full max-w-lg mx-auto">
+                <div className="p-3 bg-muted/60 rounded-full text-muted-foreground mb-3">
+                  <Layers className="w-8 h-8 opacity-80 text-emerald-700" />
+                </div>
+                <h2 className="text-sm font-semibold tracking-tight text-foreground mb-1">
+                  Workspace Bersih - Siap Digunakan
+                </h2>
+                <p className="text-xs text-muted-foreground max-w-sm mb-4 leading-relaxed">
+                  Workspace Anda bersih dan siap digunakan. Mulai pencatatan proyek perkebunan Anda dengan membuat proyek baru.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {canEditProjects && (
+                    <Button asChild size="sm" className="h-9 text-xs gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-medium">
+                      <Link href="/workspace/new">
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        <span>Buat Proyek Baru</span>
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <EmptyState
+                title="Tidak ada proyek yang cocok dengan filter"
+                description="Cobalah mengatur ulang filter atau gunakan kata kunci pencarian yang lebih umum."
+                actionLabel="Reset Semua Filter"
+                onAction={resetFilters}
+              />
+            )}
+          </div>
+        ) : (
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="w-[44px] text-center px-2">
                 <span className="sr-only">Expand</span>
               </TableHead>
-              <TableHead className="w-[130px]">Kode & Kategori</TableHead>
-              <TableHead className="min-w-[240px]">Nama Proyek & Lokasi</TableHead>
-              <TableHead className="w-[120px]">Status</TableHead>
-              <TableHead className="w-[160px]">Realisasi Progress</TableHead>
-              <TableHead className="w-[120px]">Target Selesai</TableHead>
-              <TableHead className="w-[110px]">Deviasi / EWS</TableHead>
-              <TableHead className="w-[140px]">Status & Nilai AFCE</TableHead>
-              <TableHead className="text-right w-[80px] pr-4">Aksi</TableHead>
+              <TableHead className="w-[130px]">
+                <button
+                  type="button"
+                  onClick={() => handleToggleSort("code")}
+                  className="inline-flex items-center gap-1 hover:text-foreground font-semibold"
+                >
+                  <span>Kode &amp; Kategori</span>
+                  <ArrowUpDown className="w-3 h-3" />
+                </button>
+              </TableHead>
+              <TableHead className="min-w-[220px]">
+                <button
+                  type="button"
+                  onClick={() => handleToggleSort("name")}
+                  className="inline-flex items-center gap-1 hover:text-foreground font-semibold"
+                >
+                  <span>Nama Proyek &amp; Lokasi</span>
+                  <ArrowUpDown className="w-3 h-3" />
+                </button>
+              </TableHead>
+              <TableHead className="w-[140px]">
+                <button
+                  type="button"
+                  onClick={() => handleToggleSort("pic")}
+                  className="inline-flex items-center gap-1 hover:text-foreground font-semibold"
+                >
+                  <span>PIC Proyek</span>
+                  <ArrowUpDown className="w-3 h-3" />
+                </button>
+              </TableHead>
+              <TableHead className="w-[120px]">
+                <button
+                  type="button"
+                  onClick={() => handleToggleSort("status")}
+                  className="inline-flex items-center gap-1 hover:text-foreground font-semibold"
+                >
+                  <span>Status</span>
+                  <ArrowUpDown className="w-3 h-3" />
+                </button>
+              </TableHead>
+              <TableHead className="w-[150px]">
+                <button
+                  type="button"
+                  onClick={() => handleToggleSort("progress")}
+                  className="inline-flex items-center gap-1 hover:text-foreground font-semibold"
+                >
+                  <span>Realisasi Progres</span>
+                  <ArrowUpDown className="w-3 h-3" />
+                </button>
+              </TableHead>
+              <TableHead className="w-[120px]">
+                <button
+                  type="button"
+                  onClick={() => handleToggleSort("targetEndDate")}
+                  className="inline-flex items-center gap-1 hover:text-foreground font-semibold"
+                >
+                  <span>Target Selesai</span>
+                  <ArrowUpDown className="w-3 h-3" />
+                </button>
+              </TableHead>
+              <TableHead className="w-[110px]">
+                <button
+                  type="button"
+                  onClick={() => handleToggleSort("ews")}
+                  className="inline-flex items-center gap-1 hover:text-foreground font-semibold"
+                >
+                  <span>Deviasi / EWS</span>
+                  <ArrowUpDown className="w-3 h-3" />
+                </button>
+              </TableHead>
+              <TableHead className="w-[140px]">
+                <button
+                  type="button"
+                  onClick={() => handleToggleSort("afceValue")}
+                  className="inline-flex items-center gap-1 hover:text-foreground font-semibold"
+                >
+                  <span>Status &amp; Nilai AFCE</span>
+                  <ArrowUpDown className="w-3 h-3" />
+                </button>
+              </TableHead>
+              <TableHead className="text-right w-[100px] pr-4">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedProjects.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} className="h-56 text-center p-0">
-                  {viewMode === "RECYCLE_BIN" ? (
-                    <EmptyState
-                      title="Recycle Bin Kosong"
-                      description="Tidak ada proyek yang sedang berada di dalam keranjang sampah."
-                      icon={<Trash2 className="w-8 h-8 opacity-40 text-muted-foreground" />}
-                    />
-                  ) : activeProjects.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center p-8 text-center rounded-lg border border-dashed border-border/70 bg-card/40 my-4 max-w-lg mx-auto">
-                      <div className="p-3 bg-muted/60 rounded-full text-muted-foreground mb-3">
-                        <Layers className="w-8 h-8 opacity-80 text-emerald-600" />
-                      </div>
-                      <h4 className="text-sm font-semibold tracking-tight text-foreground mb-1">
-                        Workspace Bersih - Siap Digunakan
-                      </h4>
-                      <p className="text-xs text-muted-foreground max-w-sm mb-4 leading-relaxed">
-                        Workspace Anda bersih dan siap digunakan. Mulai pencatatan proyek perkebunan Anda dengan membuat proyek baru.
-                      </p>
-                      <div className="flex flex-wrap items-center justify-center gap-2">
-                        {canEditProjects && (
-                          <Link href="/workspace/new">
-                            <Button size="sm" className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium">
-                              <PlusCircle className="w-3.5 h-3.5" />
-                              <span>+ Buat Proyek Baru</span>
-                            </Button>
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <EmptyState
-                      title="Tidak ada proyek yang cocok dengan filter"
-                      description="Cobalah mengatur ulang filter atau gunakan kata kunci pencarian yang lebih umum."
-                      actionLabel="Reset Semua Filter"
-                      onAction={resetFilters}
-                    />
-                  )}
-                </TableCell>
-              </TableRow>
-            ) : (
-              paginatedProjects.map((p) => {
+            {paginatedProjects.map((p) => {
                 const isExpanded = !!expandedRows[p.id];
                 const isDelayed = p.scheduleVarianceDays > 7;
                 const workItemsCount = p.workItems?.length || 0;
@@ -1254,26 +1473,20 @@ function WorkspaceContent() {
                     <TableRow
                       data-state={isExpanded ? "expanded" : undefined}
                       className={cn(
-                        "group transition-colors cursor-pointer",
+                        "group transition-colors",
                         isExpanded ? "bg-muted/20 hover:bg-muted/25" : "hover:bg-muted/40",
                         tableDensity === "compact" ? "h-11" : "h-14"
                       )}
-                      onClick={() => toggleRow(p.id)}
                     >
-                      {/* Chevron Expand Toggle */}
-                      <TableCell
-                        className="px-2 text-center"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleRow(p.id);
-                        }}
-                      >
+                      <TableCell className="px-2 text-center">
                         <Button
+                          type="button"
                           variant="ghost"
                           size="icon"
+                          onClick={() => toggleRow(p.id)}
                           aria-label={isExpanded ? "Tutup rincian proyek" : "Buka rincian proyek"}
                           aria-expanded={isExpanded}
-                          className="w-7 h-7 p-0 text-muted-foreground hover:text-foreground"
+                          className="w-8 h-8 p-0 text-muted-foreground hover:text-foreground"
                         >
                           <ChevronDown
                             className={cn(
@@ -1284,26 +1497,28 @@ function WorkspaceContent() {
                         </Button>
                       </TableCell>
 
-                      {/* Code & Category */}
                       <TableCell className="py-2">
                         <div className="flex flex-col gap-0.5">
                           <span className="font-mono font-bold text-xs text-foreground tracking-tight">
                             {p.code}
                           </span>
                           {p.projectCategoryName && (
-                            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium truncate max-w-[120px]">
+                            <span className="text-[11px] text-amber-800 dark:text-amber-400 font-medium truncate max-w-[120px]">
                               {p.projectCategoryName}
                             </span>
                           )}
                         </div>
                       </TableCell>
 
-                      {/* Project Name & Hierarchy */}
                       <TableCell className="py-2">
                         <div className="flex flex-col">
-                          <span className="font-semibold text-xs text-foreground line-clamp-1 group-hover:text-primary transition-colors">
+                          <button
+                            type="button"
+                            onClick={() => toggleRow(p.id)}
+                            className="font-semibold text-xs text-left text-foreground line-clamp-1 group-hover:text-primary transition-colors hover:underline"
+                          >
                             {p.name}
-                          </span>
+                          </button>
                           <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground mt-0.5">
                             <span className="font-medium text-foreground/80">{p.locationName}</span>
                             {p.companyName && (
@@ -1326,6 +1541,10 @@ function WorkspaceContent() {
                             )}
                           </div>
                         </div>
+                      </TableCell>
+
+                      <TableCell className="py-2 text-xs text-foreground">
+                        {p.picName || "-"}
                       </TableCell>
 
                       {/* Project Status */}
@@ -1398,19 +1617,18 @@ function WorkspaceContent() {
                         </div>
                       </TableCell>
 
-                      {/* Action Button */}
                       <TableCell className="py-2 text-right pr-4">
-                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
                           {viewMode === "RECYCLE_BIN" ? (
                             <div className="flex items-center gap-1.5">
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => restoreProject(p.id)}
-                                className="h-7 text-xs px-2.5 gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 font-semibold"
+                                className="h-8 text-xs px-2.5 gap-1.5 text-emerald-800 border-emerald-300 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 font-semibold"
                                 title="Pulihkan proyek dari Recycle Bin"
                               >
-                                <RotateCcw className="w-3 h-3" />
+                                <RotateCcw className="w-3.5 h-3.5" />
                                 <span>Pulihkan</span>
                               </Button>
 
@@ -1422,38 +1640,38 @@ function WorkspaceContent() {
                                     setProjectToHardDelete(p);
                                     setHardDeleteDialogOpen(true);
                                   }}
-                                  className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950 font-medium gap-1"
+                                  className="h-8 text-xs px-2 text-rose-700 hover:text-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950 font-medium gap-1"
                                   title="Hapus proyek secara permanen dari basis data"
                                 >
-                                  <Trash2 className="w-3 h-3" />
+                                  <Trash2 className="w-3.5 h-3.5" />
                                   <span className="hidden sm:inline">Hapus Permanen</span>
                                 </Button>
                               )}
                             </div>
                           ) : (
                             <>
-                              <Link
-                                href={`/workspace/${p.id}`}
+                              <Button
+                                asChild
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs px-2.5 gap-1 hover:bg-primary/10 hover:text-primary transition-colors"
                               >
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs px-2.5 gap-1 hover:bg-primary/10 hover:text-primary transition-colors"
-                                >
+                                <Link href={`/workspace/${p.id}`}>
                                   <span>Buka</span>
                                   <ExternalLink className="w-3 h-3 text-muted-foreground" />
-                                </Button>
-                              </Link>
+                                </Link>
+                              </Button>
 
                               {canEditProjects && (
                                 <Button
-                                  size="sm"
+                                  size="icon"
                                   variant="ghost"
+                                  aria-label={`Pindahkan ${p.code} ke Recycle Bin`}
                                   onClick={() => {
                                     setProjectToDelete(p);
                                     setDeleteDialogOpen(true);
                                   }}
-                                  className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950"
+                                  className="h-8 w-8 text-muted-foreground hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950"
                                   title="Pindahkan ke Recycle Bin"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
@@ -1471,10 +1689,11 @@ function WorkspaceContent() {
                     )}
                   </React.Fragment>
                 );
-              })
-            )}
+              })}
           </TableBody>
         </Table>
+        </div>
+        )}
 
         {/* Pagination Bar */}
         <div className="p-3 border-t bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs text-muted-foreground">

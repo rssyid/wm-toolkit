@@ -264,7 +264,7 @@ const PERMISSION_MATRIX: { category: string; permissions: PermissionRow[] }[] = 
       {
         module: "Master Data",
         action: "Konfigurasi Matriks Approval AFCE",
-        description: "Mengatur aturan tier nilai anggaran dan batasan wewenang level 1 - 9.",
+        description: "Mengatur aturan tier nilai anggaran dan batasan wewenang WM, EM, GEM, RH, PH, MCA, CFO, COO, Chairman.",
         admin: true,
         pic: false,
         approver: false,
@@ -330,7 +330,7 @@ const ROLES_INFO: {
 ];
 
 export default function MasterDataRbacPage() {
-  const { users, updateMasterDataUser } = useAppState();
+  const { users, updateMasterDataUser, activeUserId } = useAppState();
 
   const [searchUser, setSearchUser] = useState("");
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
@@ -350,6 +350,10 @@ export default function MasterDataRbacPage() {
   });
 
   const handleRoleChange = async (user: AppUser, newRole: SystemRole) => {
+    if (activeUserId && user.id === activeUserId && newRole !== "ADMIN") {
+      toast.error("Anda tidak dapat menurunkan peran akun ADMIN yang sedang Anda gunakan sendiri.");
+      return;
+    }
     setUpdatingUserId(user.id);
     try {
       const ok = await updateMasterDataUser(user.id, {
@@ -391,15 +395,16 @@ export default function MasterDataRbacPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Link href="/master-data/users">
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 border-emerald-600/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-            >
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="gap-1.5 border-emerald-600/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+          >
+            <Link href="/master-data/users">
               <Users2 className="w-3.5 h-3.5" /> Kelola Data Pengguna
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -413,7 +418,7 @@ export default function MasterDataRbacPage() {
           });
 
           return (
-            <Card key={r.role} className={`shadow-xs border ${r.borderClass}`}>
+            <Card key={r.role} className={`shadow-sm border ${r.borderClass}`}>
               <CardHeader className="p-3.5 pb-2">
                 <div className="flex items-center justify-between">
                   <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 border ${r.badgeClass}`}>
@@ -475,7 +480,7 @@ export default function MasterDataRbacPage() {
 
         {/* Tab 1: Matriks Hak Akses Modul */}
         <TabsContent value="matrix" className="space-y-4">
-          <Card className="shadow-xs overflow-hidden">
+          <Card className="shadow-sm overflow-hidden">
             <CardHeader className="p-3.5 border-b bg-muted/20">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
@@ -593,7 +598,7 @@ export default function MasterDataRbacPage() {
 
         {/* Tab 2: Penetapan Peran Pengguna Cepat */}
         <TabsContent value="assignment" className="space-y-4">
-          <Card className="shadow-xs overflow-hidden">
+          <Card className="shadow-sm overflow-hidden">
             <CardHeader className="p-3.5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/20">
               <div>
                 <CardTitle className="text-sm font-semibold text-foreground">
@@ -658,7 +663,7 @@ export default function MasterDataRbacPage() {
                             <Select
                               value={currentRole}
                               onValueChange={(val: SystemRole) => handleRoleChange(u, val)}
-                              disabled={isUpdating}
+                              disabled={isUpdating || (Boolean(activeUserId) && u.id === activeUserId)}
                             >
                               <SelectTrigger className="h-7 w-[160px] text-xs">
                                 <SelectValue />

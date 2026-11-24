@@ -46,6 +46,7 @@ export default function MasterDataSuppliersPage() {
   const [editingItem, setEditingItem] = useState<Supplier | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   // Form states
   const [code, setCode] = useState("");
@@ -67,12 +68,13 @@ export default function MasterDataSuppliersPage() {
 
   const handleOpenAdd = () => {
     setEditingItem(null);
-    setCode(`VND-00${35 + suppliers.length}`);
+    const seq = String(suppliers.length + 1).padStart(4, "0");
+    setCode(`VND-${seq}`);
     setName("");
     setCategory("Kontraktor Sipil & Tata Air");
     setContactPerson("");
-    setPhone("0812-");
-    setNpwp("01.xxx.xxx.x-xxx.000");
+    setPhone("");
+    setNpwp("");
     setRating(4.5);
     setDialogOpen(true);
   };
@@ -91,9 +93,14 @@ export default function MasterDataSuppliersPage() {
 
   const handleToggleStatus = async (sup: Supplier) => {
     const newStatus = sup.status === "Active" ? "Inactive" : "Active";
-    const ok = await updateMasterDataSupplier(sup.id, { status: newStatus });
-    if (ok) {
-      toast.success(`Status rekanan ${sup.name} diubah menjadi ${newStatus}`);
+    setTogglingId(sup.id);
+    try {
+      const ok = await updateMasterDataSupplier(sup.id, { status: newStatus });
+      if (ok) {
+        toast.success(`Status rekanan ${sup.name} diubah menjadi ${newStatus}`);
+      }
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -114,6 +121,10 @@ export default function MasterDataSuppliersPage() {
   const handleSave = async () => {
     if (!code.trim() || !name.trim()) {
       toast.error("Kode dan nama rekanan wajib diisi");
+      return;
+    }
+    if (Number.isNaN(Number(rating)) || rating < 0 || rating > 5) {
+      toast.error("Rating kinerja harus bernilai antara 0 sampai 5");
       return;
     }
 
@@ -176,14 +187,14 @@ export default function MasterDataSuppliersPage() {
         <Button
           size="sm"
           onClick={handleOpenAdd}
-          className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+          className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm"
         >
           <Plus className="w-3.5 h-3.5" /> Tambah Rekanan Baru
         </Button>
       </div>
 
       {/* Table Card */}
-      <Card className="shadow-xs overflow-hidden">
+      <Card className="shadow-sm overflow-hidden">
         <CardHeader className="p-3.5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="relative w-full sm:w-72">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -266,11 +277,12 @@ export default function MasterDataSuppliersPage() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          disabled={togglingId === sup.id}
                           onClick={() => handleToggleStatus(sup)}
                           className={`h-7 text-xs px-2 ${
                             sup.status === "Active"
-                              ? "text-amber-600 hover:text-amber-700"
-                              : "text-emerald-600 hover:text-emerald-700"
+                              ? "text-amber-700 dark:text-amber-400"
+                              : "text-emerald-700 dark:text-emerald-400"
                           }`}
                         >
                           {sup.status === "Active" ? "Nonaktifkan" : "Aktifkan"}
@@ -279,7 +291,7 @@ export default function MasterDataSuppliersPage() {
                           size="sm"
                           variant="ghost"
                           onClick={() => setDeleteTarget(sup)}
-                          className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                          className="h-7 text-xs px-2 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
@@ -405,7 +417,7 @@ export default function MasterDataSuppliersPage() {
               size="sm"
               onClick={handleSave}
               disabled={isSubmitting}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white"
             >
               {isSubmitting ? "Menyimpan..." : "Simpan Data Rekanan"}
             </Button>

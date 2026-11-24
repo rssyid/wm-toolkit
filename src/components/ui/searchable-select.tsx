@@ -26,6 +26,8 @@ export interface SearchableSelectOption {
 }
 
 export interface SearchableSelectProps {
+  id?: string;
+  "aria-label"?: string;
   value?: string;
   onValueChange: (value: string) => void;
   options: (SearchableSelectOption | string)[];
@@ -40,6 +42,8 @@ export interface SearchableSelectProps {
 }
 
 export function SearchableSelect({
+  id,
+  "aria-label": ariaLabel,
   value,
   onValueChange,
   options,
@@ -82,6 +86,8 @@ export function SearchableSelect({
     <Popover open={open} onOpenChange={setOpen} modal={modal}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
+          aria-label={ariaLabel}
           ref={triggerRef}
           type="button"
           variant="outline"
@@ -126,10 +132,6 @@ export function SearchableSelect({
                       onValueChange(opt.value);
                       setOpen(false);
                     }}
-                    onClick={() => {
-                      onValueChange(opt.value);
-                      setOpen(false);
-                    }}
                     className={cn(
                       "flex items-center justify-between text-xs px-2.5 py-1.5 cursor-pointer rounded-sm hover:bg-accent hover:text-accent-foreground",
                       isSelected && "font-semibold bg-accent/60"
@@ -145,13 +147,13 @@ export function SearchableSelect({
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {opt.badge && (
-                        <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-muted text-muted-foreground">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground">
                           {opt.badge}
                         </span>
                       )}
                       <Check
                         className={cn(
-                          "h-3.5 w-3.5 text-emerald-600 transition-opacity",
+                          "h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 transition-opacity",
                           isSelected ? "opacity-100" : "opacity-0"
                         )}
                       />

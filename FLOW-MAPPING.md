@@ -1,8 +1,8 @@
 # Pemetaan Alur Kerja WM-Toolkit (FLOW-MAPPING)
 
 > **Dokumen Referensi:** `AUDIT.md`, `docs/WORKFLOW.md`, `docs/PRD.md`, `docs/DATA-MODEL.md`, `docs/MVP-SCOPE.md`, `CONTEXT.md`  
-> **Tanggal Pembaruan:** 9 November 2026  
-> **Status:** 100% Terimplementasi (UI Ready) - Seluruh alur end-to-end telah memiliki antarmuka pengguna interaktif pada mock state.
+> **Tanggal Pembaruan:** 24 November 2026  
+> **Status:** Terimplementasi Full-Stack - Seluruh alur end-to-end terhubung ke PostgreSQL (Prisma ORM), Server Actions Next.js, NextAuth v5, dan integrasi Google Drive API (fail-fast).
 
 ---
 
@@ -72,21 +72,23 @@ Menjawab kebutuhan penyederhanaan antarmuka agar pengguna tidak kewalahan berpin
 - Dapat dibuka kapan saja dari header proyek permanen melalui tombol **"Berkas & Diskusi"** (lengkap dengan badge jumlah komentar + lampiran).
 - Menampung 3 tab fungsional kolaborasi:
   1. **Tab Komentar & Diskusi:** Fitur percakapan tim dengan autokomplet mention `@user` dan cap waktu.
-  2. **Tab Berkas Digital:** Repositori dokumen proyek, dialog penautan tautan berkas Google Drive (`GDriveLinkDialog`), modal simulasi unggah Google Drive (`GDriveUploadDialog`), dan pratinjau berkas (`AttachmentPreview`).
+  2. **Tab Berkas Digital:** Repositori dokumen proyek, dialog penautan tautan berkas Google Drive (`GDriveLinkDialog`), dialog unggah berkas ke Google Drive melalui `/api/upload` (`GDriveUploadDialog`), dan pratinjau berkas (`AttachmentPreview`).
   3. **Tab Jejak Audit Proyek:** Rekaman riwayat aktivitas mutasi khusus untuk proyek bersangkutan.
 
-### C. Kompatibilitas Sub-Rute Mandiri (Backward Compatibility)
-Seluruh sub-rute lama tetap aktif dan berfungsi penuh untuk keperluan tautan langsung (*direct deep-linking*):
-- `/workspace/[projectId]/pr`
-- `/workspace/[projectId]/po`
-- `/workspace/[projectId]/services`
-- `/workspace/[projectId]/uspk`
-- `/workspace/[projectId]/technical-evaluation`
-- `/workspace/[projectId]/spk`
-- `/workspace/[projectId]/progress`
-- `/workspace/[projectId]/schedule`
-- `/workspace/[projectId]/survey-boq`
-- `/workspace/[projectId]/work-items`
+### C. Kompatibilitas Sub-Rute Lama (Redirect Kanonik)
+Hub kanonik proyek berada di `/workspace/[projectId]/procurement` (Barang & Jasa) dan `/workspace/[projectId]/execution` (Kurva-S/Progres, WBS, Jadwal, BOQ). Sepuluh sub-rute lama dipertahankan sebagai Server Component `redirect()` menuju tab/track hub kanonik untuk menjaga kompatibilitas tautan langsung (*direct deep-linking*):
+- `/workspace/[projectId]/pr` -> `/workspace/[projectId]/procurement?track=barang`
+- `/workspace/[projectId]/po` -> `/workspace/[projectId]/procurement?track=barang`
+- `/workspace/[projectId]/services` -> `/workspace/[projectId]/procurement?track=jasa`
+- `/workspace/[projectId]/uspk` -> `/workspace/[projectId]/procurement?track=jasa`
+- `/workspace/[projectId]/technical-evaluation` -> `/workspace/[projectId]/procurement?track=jasa`
+- `/workspace/[projectId]/spk` -> `/workspace/[projectId]/procurement?track=jasa`
+- `/workspace/[projectId]/progress` -> `/workspace/[projectId]/execution?tab=progress`
+- `/workspace/[projectId]/schedule` -> `/workspace/[projectId]/execution?tab=schedule`
+- `/workspace/[projectId]/survey-boq` -> `/workspace/[projectId]/execution?tab=boq`
+- `/workspace/[projectId]/work-items` -> `/workspace/[projectId]/execution?tab=wbs`
+
+Sedangkan rute kolaborasi berikut tetap berdiri sebagai halaman terpisah sekaligus dapat diakses melalui `CollaborationDrawer`:
 - `/workspace/[projectId]/documents`
 - `/workspace/[projectId]/comments`
 - `/workspace/[projectId]/history`
@@ -97,15 +99,15 @@ Seluruh sub-rute lama tetap aktif dan berfungsi penuh untuk keperluan tautan lan
 
 | No | Tahap Workflow (Sesuai `WORKFLOW.md`) | Status Coverage | Rute Halaman Utama | Komponen UI Utama |
 |---|---|---|---|---|
-| **1** | **Inisiasi Proyek Baru** (PLANNED) | **Lengkap (UI Ready)** | `/workspace/new`<br>`/workspace`<br>`/workspace/[projectId]` | `src/app/workspace/new/page.tsx`<br>`smart-action-stepper.tsx` |
-| **2** | **Pembuatan AFCE Awal** (DRAFT + Data SAP) | **Lengkap (UI Ready)** | `/workspace/new` (Step 3)<br>`/workspace/[projectId]/afce` | Step 3 Wizard & Header `/afce` |
-| **3** | **Pencatatan Approval AFCE Manual** (per level jabatan via SAP) | **Lengkap (UI Ready)** | `/workspace/[projectId]/afce` | `afce-action-dialog.tsx` |
-| **4A.1** | **Jalur Barang: PR Rilis** (Nomor internal & SAP) | **Lengkap (UI Ready)** | `/workspace/[projectId]/procurement`<br>`/workspace/[projectId]/pr` | `pr-record-dialog.tsx` |
-| **4A.2** | **Jalur Barang: Evaluasi Vendor** (evaluator, tanggal, hasil) | **Lengkap (UI Ready)** | `/workspace/[projectId]/procurement`<br>`/workspace/[projectId]/pr` | `vendor-evaluation-dialog.tsx` (Guardrail Buat PO) |
-| **4A.3** | **Jalur Barang: PO Diterbitkan** (1 PR : N PO) | **Lengkap (UI Ready)** | `/workspace/[projectId]/procurement`<br>`/workspace/[projectId]/po` | `po-create-dialog.tsx` |
-| **4A.4** | **Jalur Barang: Serah Terima Barang** (GR & BAST formal) | **Lengkap (UI Ready)** | `/workspace/[projectId]/procurement`<br>`/workspace/[projectId]/po` | `gr-receipt-dialog.tsx`<br>`goods-handover-dialog.tsx` |
-| **4B.1** | **Jalur Jasa: Usulan SPK (USPK)** (rekanan, nilai, scope) | **Lengkap (UI Ready)** | `/workspace/[projectId]/procurement`<br>`/workspace/[projectId]/services` | `uspk-create-dialog.tsx` |
-| **4B.2** | **Jalur Jasa: Evaluasi Teknis Jasa** (rekomendasi & catatan) | **Lengkap (UI Ready)** | `/workspace/[projectId]/procurement`<br>`/workspace/[projectId]/services` | `technical-evaluation-dialog.tsx` |
-| **4B.3** | **Jalur Jasa: Penerbitan SPK Resmi** (1 USPK : 1 SPK) | **Lengkap (UI Ready)** | `/workspace/[projectId]/procurement`<br>`/workspace/[projectId]/services` | `spk-create-dialog.tsx` |
-| **4B.4** | **Jalur Jasa: Pelaksanaan Fisik & Progres** (harian/mingguan) | **Lengkap (UI Ready)** | `/workspace/[projectId]/execution`<br>`/workspace/[projectId]/progress` | `daily-progress-dialog.tsx`<br>`weekly-progress-dialog.tsx`<br>Kurva S Recharts |
-| **5** | **Penyelesaian Proyek** (COMPLETED) | **Lengkap (UI Ready)** | `/workspace/[projectId]` | `smart-action-stepper.tsx`<br>`status-badge.tsx` |
+| **1** | **Inisiasi Proyek Baru** (PLANNED) | **Lengkap (Full-Stack)** | `/workspace/new`<br>`/workspace`<br>`/workspace/[projectId]` | `src/app/workspace/new/page.tsx`<br>`smart-action-stepper.tsx` |
+| **2** | **Pembuatan AFCE Awal** (DRAFT + Data SAP) | **Lengkap (Full-Stack)** | `/workspace/new` (Step 3)<br>`/workspace/[projectId]/afce` | Step 3 Wizard & Header `/afce` |
+| **3** | **Pencatatan Approval AFCE Manual** (per level jabatan via SAP) | **Lengkap (Full-Stack)** | `/workspace/[projectId]/afce` | `afce-action-dialog.tsx` |
+| **4A.1** | **Jalur Barang: PR Rilis** (Nomor internal & SAP) | **Lengkap (Full-Stack)** | `/workspace/[projectId]/procurement?track=barang`<br>(redirect dari `/pr`) | `pr-record-dialog.tsx` |
+| **4A.2** | **Jalur Barang: Evaluasi Vendor** (evaluator, tanggal, hasil) | **Lengkap (Full-Stack)** | `/workspace/[projectId]/procurement?track=barang`<br>(redirect dari `/pr`) | `vendor-evaluation-dialog.tsx` (Guardrail Buat PO) |
+| **4A.3** | **Jalur Barang: PO Diterbitkan** (1 PR : N PO) | **Lengkap (Full-Stack)** | `/workspace/[projectId]/procurement?track=barang`<br>(redirect dari `/po`) | `po-create-dialog.tsx` |
+| **4A.4** | **Jalur Barang: Serah Terima Barang** (GR & BAST formal) | **Lengkap (Full-Stack)** | `/workspace/[projectId]/procurement?track=barang`<br>(redirect dari `/po`) | `gr-receipt-dialog.tsx`<br>`goods-handover-dialog.tsx` |
+| **4B.1** | **Jalur Jasa: Usulan SPK (USPK)** (rekanan, nilai, scope) | **Lengkap (Full-Stack)** | `/workspace/[projectId]/procurement?track=jasa`<br>(redirect dari `/services`, `/uspk`) | `uspk-create-dialog.tsx` |
+| **4B.2** | **Jalur Jasa: Evaluasi Teknis Jasa** (rekomendasi & catatan) | **Lengkap (Full-Stack)** | `/workspace/[projectId]/procurement?track=jasa`<br>(redirect dari `/technical-evaluation`) | `technical-evaluation-dialog.tsx` |
+| **4B.3** | **Jalur Jasa: Penerbitan SPK Resmi** (1 USPK : 1 SPK) | **Lengkap (Full-Stack)** | `/workspace/[projectId]/procurement?track=jasa`<br>(redirect dari `/spk`) | `spk-create-dialog.tsx` |
+| **4B.4** | **Jalur Jasa: Pelaksanaan Fisik & Progres** (harian/mingguan) | **Lengkap (Full-Stack)** | `/workspace/[projectId]/execution?tab=progress`<br>(redirect dari `/progress`) | `daily-progress-dialog.tsx`<br>`weekly-progress-dialog.tsx`<br>Kurva S Recharts |
+| **5** | **Penyelesaian Proyek** (COMPLETED) | **Lengkap (Full-Stack)** | `/workspace/[projectId]` | `smart-action-stepper.tsx`<br>`status-badge.tsx` |

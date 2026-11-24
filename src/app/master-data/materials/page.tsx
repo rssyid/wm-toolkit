@@ -165,14 +165,14 @@ export default function MasterDataMaterialsPage() {
         <Button
           size="sm"
           onClick={handleOpenAdd}
-          className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+          className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm"
         >
           <Plus className="w-3.5 h-3.5" /> Tambah Material Baru
         </Button>
       </div>
 
       {/* Table Card */}
-      <Card className="shadow-xs overflow-hidden">
+      <Card className="shadow-sm overflow-hidden">
         <CardHeader className="p-3.5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="relative w-full sm:w-72">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />

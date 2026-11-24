@@ -7,7 +7,7 @@ const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefi
 function createPrismaClient(): PrismaClient {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
-    throw new Error("DATABASE_URL environment variable is missing.");
+    throw new Error("Variabel lingkungan DATABASE_URL belum dikonfigurasi.");
   }
 
   // Handle sslmode & channel_binding compatibility with pg Pool

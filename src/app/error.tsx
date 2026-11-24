@@ -20,15 +20,15 @@ export default function ErrorBoundary({
       <div className="w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-950 flex items-center justify-center text-rose-600">
         <AlertTriangle className="w-6 h-6" />
       </div>
-      <h2 className="text-xl font-bold tracking-tight text-foreground">
+      <h1 className="text-xl font-bold tracking-tight text-foreground">
         Terjadi Kesalahan pada Halaman
-      </h2>
+      </h1>
       <p className="text-xs text-muted-foreground max-w-md">
         {error.message || "Sistem mengalami kendala saat memuat data. Silakan coba muat ulang halaman."}
       </p>
       <Button
         onClick={() => reset()}
-        className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-xs"
+        className="h-8 text-xs bg-emerald-700 hover:bg-emerald-800 text-white gap-2 shadow-sm"
       >
         <RefreshCcw className="w-3.5 h-3.5" />
         Muat Ulang Komponen

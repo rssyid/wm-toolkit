@@ -23,7 +23,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAppState } from "@/context/app-state-context";
 import { Project, PurchaseRequisition, VendorEvaluationResult } from "@/types";
 import { toast } from "sonner";
-import { CheckCircle2, ClipboardCheck, UploadCloud, Building2, AlertCircle, Check, X } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, UploadCloud, Check, X, Loader2 } from "lucide-react";
 
 interface VendorEvaluationDialogProps {
   open: boolean;
@@ -41,32 +41,75 @@ export function VendorEvaluationDialog({
   const { recordVendorEvaluation, suppliers, userProfile } = useAppState();
 
   const [supplierId, setSupplierId] = useState("");
-  const [evaluationDate, setEvaluationDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [evaluationDate, setEvaluationDate] = useState("");
   const [result, setResult] = useState<VendorEvaluationResult>("RECOMMENDED");
   const [score, setScore] = useState<number>(90);
-  const [evaluatorName, setEvaluatorName] = useState(userProfile.fullName || "Dedi Setiawan, S.T.");
-  const [evaluatorJabatan, setEvaluatorJabatan] = useState(userProfile.role || "Manager Estate");
+  const [evaluatorName, setEvaluatorName] = useState(userProfile?.fullName || "");
+  const [evaluatorJabatan, setEvaluatorJabatan] = useState(userProfile?.role || "");
   const [notes, setNotes] = useState("");
   const [attachmentName, setAttachmentName] = useState("");
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
-      if (suppliers.length > 0 && !supplierId) {
-        setSupplierId(suppliers[0].id);
-      }
+      setSupplierId(suppliers[0]?.id || "");
       setEvaluationDate(new Date().toISOString().split("T")[0]);
-      setEvaluatorName(userProfile.fullName || "Dedi Setiawan, S.T.");
-      setEvaluatorJabatan(userProfile.role || "Manager Estate");
+      setResult("RECOMMENDED");
+      setScore(90);
+      setEvaluatorName(userProfile?.fullName || "");
+      setEvaluatorJabatan(userProfile?.role || "");
+      setNotes("");
+      setAttachmentName("");
     }
-  }, [open, suppliers, userProfile, supplierId]);
+  }, [open, suppliers, userProfile?.fullName, userProfile?.role]);
 
   const selectedSupplier = suppliers.find((s) => s.id === supplierId);
 
-  const handleSubmit = () => {
-    if (!supplierId) {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAttachment(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", project.id);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        toast.error(json.error || "Gagal mengunggah berkas ke Google Drive.");
+        return;
+      }
+
+      setAttachmentName(
+        json.data.webViewLink ||
+          (json.data.fileId ? `/api/files/${json.data.fileId}/download` : json.data.fileName)
+      );
+      toast.success(`Berkas "${json.data.fileName}" berhasil diunggah ke Google Drive.`);
+    } catch {
+      toast.error("Gagal terhubung ke server saat mengunggah berkas.");
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!supplierId || !selectedSupplier) {
       toast.error("Pilih rekanan vendor yang dievaluasi");
+      return;
+    }
+    if (!evaluationDate) {
+      toast.error("Tanggal evaluasi wajib diisi");
+      return;
+    }
+    const parsedScore = Number(score);
+    if (Number.isNaN(parsedScore) || parsedScore < 0 || parsedScore > 100) {
+      toast.error("Skor penilaian harus bernilai antara 0 sampai 100");
       return;
     }
     if (!evaluatorName.trim()) {
@@ -78,29 +121,34 @@ export function VendorEvaluationDialog({
       return;
     }
 
-    const defaultFilename = `BA_Evaluasi_${pr.prNumber}_${selectedSupplier?.code || "VND"}.pdf`;
+    setIsSubmitting(true);
+    try {
+      const ok = await recordVendorEvaluation({
+        prId: pr.id,
+        prNumber: pr.prNumber,
+        projectId: project.id,
+        supplierId,
+        supplierName: selectedSupplier.name,
+        evaluatorName: evaluatorName.trim(),
+        evaluatorJabatan: evaluatorJabatan.trim(),
+        evaluationDate,
+        result,
+        score: parsedScore,
+        notes: notes.trim(),
+        attachmentName: attachmentName.trim() || undefined,
+      });
 
-    recordVendorEvaluation({
-      prId: pr.id,
-      prNumber: pr.prNumber,
-      projectId: project.id,
-      supplierId,
-      supplierName: selectedSupplier?.name || "Supplier Rekanan",
-      evaluatorName: evaluatorName.trim(),
-      evaluatorJabatan: evaluatorJabatan.trim(),
-      evaluationDate,
-      result,
-      score: Number(score) || undefined,
-      notes: notes.trim(),
-      attachmentName: attachmentName.trim() || defaultFilename,
-    });
+      if (!ok) return;
 
-    toast.success(
-      `Evaluasi vendor ${selectedSupplier?.name} untuk PR ${pr.prNumber} berhasil dicatat (${result === "RECOMMENDED" ? "Direkomendasikan" : "Tidak Direkomendasikan"})!`
-    );
-    onOpenChange(false);
-    setNotes("");
-    setAttachmentName("");
+      toast.success(
+        `Evaluasi vendor ${selectedSupplier.name} untuk PR ${pr.prNumber} berhasil dicatat (${result === "RECOMMENDED" ? "Direkomendasikan" : "Tidak Direkomendasikan"})!`
+      );
+      onOpenChange(false);
+      setNotes("");
+      setAttachmentName("");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -249,28 +297,30 @@ export function VendorEvaluationDialog({
           {/* Dokumen Bukti Komparasi / Berita Acara */}
           <div>
             <label className="font-semibold text-foreground block mb-1">
-              Lampiran Dokumen Berita Acara Komparasi / Evaluasi (Simulasi)
+              Lampiran Dokumen Berita Acara Komparasi / Evaluasi (Opsional)
             </label>
             <div className="flex gap-2">
               <Input
-                placeholder={`BA_Evaluasi_${pr.prNumber}_${selectedSupplier?.code || "VND"}.pdf`}
+                placeholder="Tautan Google Drive atau nama berkas berita acara"
                 value={attachmentName}
                 onChange={(e) => setAttachmentName(e.target.value)}
                 className="h-8 text-xs font-mono"
               />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setAttachmentName(
-                    `BA_Komparasi_${pr.prNumber}_${Date.now().toString().slice(-4)}.pdf`
-                  )
-                }
-                className="h-8 text-xs gap-1 shrink-0"
-              >
-                <UploadCloud className="w-3.5 h-3.5" /> File Acak
-              </Button>
+              <label className="h-8 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1">
+                {uploadingAttachment ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                )}
+                <span>Unggah</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                  onChange={handleFileUpload}
+                  disabled={uploadingAttachment}
+                />
+              </label>
             </div>
           </div>
         </div>
@@ -280,6 +330,7 @@ export function VendorEvaluationDialog({
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
             className="text-xs"
           >
             Batal
@@ -287,9 +338,11 @@ export function VendorEvaluationDialog({
           <Button
             size="sm"
             onClick={handleSubmit}
+            disabled={isSubmitting || uploadingAttachment}
             className="text-xs bg-blue-600 hover:bg-blue-700 text-white gap-1"
           >
-            <CheckCircle2 className="w-3.5 h-3.5" /> Simpan Evaluasi Vendor
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            {isSubmitting ? "Menyimpan..." : "Simpan Evaluasi Vendor"}
           </Button>
         </DialogFooter>
       </DialogContent>

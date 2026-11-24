@@ -48,13 +48,14 @@ export function AFCEActionDialog({
   const [action, setAction] = useState<"Approve" | "Revise" | "Reject">(initialAction);
   const [approvalDate, setApprovalDate] = useState(new Date().toISOString().split("T")[0]);
   const [note, setNote] = useState("");
-  const [approverName, setApproverName] = useState(userProfile?.fullName || "Pejabat Otorisasi");
+  const [approverName, setApproverName] = useState(userProfile?.fullName || "");
   const [approverRole, setApproverRole] = useState(defaultRole);
   const [sapDocNumber, setSapDocNumber] = useState(afce.sapDocNumber || "");
   const [sapEvidenceUrl, setSapEvidenceUrl] = useState(
-    afce.sapScreenshotPlaceholder || "SAP_AFCE_Authorization_Released.png"
+    afce.sapScreenshotPlaceholder || ""
   );
   const [uploadingEvidence, setUploadingEvidence] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -77,7 +78,10 @@ export function AFCEActionDialog({
         throw new Error(json.error || "Gagal mengunggah berkas");
       }
 
-      setSapEvidenceUrl(json.data.fileName);
+      setSapEvidenceUrl(
+        json.data.webViewLink ||
+          (json.data.fileId ? `/api/files/${json.data.fileId}/download` : json.data.fileName)
+      );
       toast.success(`Berkas "${json.data.fileName}" berhasil diunggah langsung ke Google Drive!`);
     } catch (err: any) {
       toast.error(err.message || "Gagal mengunggah berkas ke Google Drive");
@@ -96,37 +100,16 @@ export function AFCEActionDialog({
       const targetRole = activeLevelItem ? activeLevelItem.label : afce.currentApproverRole;
       setApproverRole(targetRole);
 
-      // Default approver name to the authenticated user's name
-      if (userProfile?.fullName) {
-        setApproverName(userProfile.fullName);
-      } else if (targetRole.includes("Water Management") || targetRole === "WM") {
-        setApproverName("Dedi Setiawan, S.T.");
-      } else if (targetRole.includes("Estate Manager") || targetRole === "EM") {
-        setApproverName("Budi Santoso, S.T.");
-      } else if (targetRole.includes("General Estate") || targetRole === "GEM") {
-        setApproverName("Ir. Ahmad Dahlan");
-      } else if (targetRole.includes("Regional Head") || targetRole === "RH") {
-        setApproverName("Dr. Raden Haryo, M.M.");
-      } else if (targetRole.includes("Plantation Head") || targetRole === "PH") {
-        setApproverName("Ir. Bambang Trihatmojo");
-      } else if (targetRole.includes("Mill & Civil") || targetRole.includes("MCA") || targetRole === "MCA") {
-        setApproverName("Ir. Hendra Kusuma, M.T.");
-      } else if (targetRole.includes("CFO") || targetRole.includes("Chief Financial")) {
-        setApproverName("Gunawan Wijaya, S.E., Ak.");
-      } else if (targetRole.includes("COO") || targetRole.includes("Chief Operating")) {
-        setApproverName("Ir. Faisal Bahri");
-      } else if (targetRole.includes("Chairman") || targetRole.includes("Dewan Direksi")) {
-        setApproverName("Dewan Direksi PTPN IV");
-      } else {
-        setApproverName("Pejabat Otorisasi");
-      }
+      // Default nama & jabatan pejabat dari profil pengguna yang masuk
+      setApproverName(userProfile?.fullName || "");
+      setApproverRole(targetRole);
 
-      setSapDocNumber(afce.sapDocNumber || `AFCE-SAP-REL-L${levelNum}`);
-      setSapEvidenceUrl(afce.sapScreenshotPlaceholder || `SAP_AFCE_L${levelNum}_Evidence.png`);
+      setSapDocNumber(afce.sapDocNumber || "");
+      setSapEvidenceUrl(afce.sapScreenshotPlaceholder || "");
     }
-  }, [open, initialAction, activeLevelItem, afce, levelNum, userProfile?.fullName]);
+  }, [open, initialAction, activeLevelItem, afce, userProfile?.fullName]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!approvalDate) {
       setError("Tanggal approval/otorisasi SAP wajib diisi.");
       return;
@@ -141,35 +124,44 @@ export function AFCEActionDialog({
     }
 
     const targetLevelIndex = activeLevelItem ? activeLevelItem.level - 1 : afce.currentLevel - 1;
+    setIsSubmitting(true);
+    try {
+      const ok = await processAfceAction(
+        afce.id,
+        action,
+        note.trim(),
+        approverName.trim(),
+        approverRole,
+        approvalDate,
+        sapDocNumber.trim() || undefined,
+        sapEvidenceUrl.trim() || undefined,
+        targetLevelIndex
+      );
 
-    processAfceAction(
-      afce.id,
-      action,
-      note.trim(),
-      approverName.trim(),
-      approverRole,
-      approvalDate,
-      sapDocNumber.trim() || undefined,
-      sapEvidenceUrl.trim() || undefined,
-      targetLevelIndex
-    );
+      if (!ok) {
+        setError("Gagal mencatat otorisasi AFCE. Periksa hak akses atau kelengkapan data.");
+        return;
+      }
 
-    const actionText =
-      action === "Approve"
-        ? "disetujui (Approved)"
-        : action === "Revise"
-        ? "diminta revisi (Needs Revision)"
-        : "ditolak (Rejected)";
+      const actionText =
+        action === "Approve"
+          ? "disetujui (Approved)"
+          : action === "Revise"
+          ? "diminta revisi (Needs Revision)"
+          : "ditolak (Rejected)";
 
-    toast.success(
-      `Otorisasi Level ${levelNum} (${approverRole}) berhasil ${actionText} pada tanggal ${formatIDDate(
-        approvalDate
-      )}`
-    );
+      toast.success(
+        `Otorisasi Level ${levelNum} (${approverRole}) berhasil ${actionText} pada tanggal ${formatIDDate(
+          approvalDate
+        )}`
+      );
 
-    setNote("");
-    setError(null);
-    onOpenChange(false);
+      setNote("");
+      setError(null);
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -219,7 +211,7 @@ export function AFCEActionDialog({
                 onClick={() => setAction("Approve")}
                 className={`py-1.5 px-2 rounded-md font-medium border text-xs text-center transition-colors ${
                   action === "Approve"
-                    ? "bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold shadow-xs"
+                    ? "bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold shadow-sm"
                     : "border-input hover:bg-muted"
                 }`}
               >
@@ -230,7 +222,7 @@ export function AFCEActionDialog({
                 onClick={() => setAction("Revise")}
                 className={`py-1.5 px-2 rounded-md font-medium border text-xs text-center transition-colors ${
                   action === "Revise"
-                    ? "bg-amber-50 border-amber-500 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 font-bold shadow-xs"
+                    ? "bg-amber-50 border-amber-500 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 font-bold shadow-sm"
                     : "border-input hover:bg-muted"
                 }`}
               >
@@ -241,7 +233,7 @@ export function AFCEActionDialog({
                 onClick={() => setAction("Reject")}
                 className={`py-1.5 px-2 rounded-md font-medium border text-xs text-center transition-colors ${
                   action === "Reject"
-                    ? "bg-rose-50 border-rose-500 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 font-bold shadow-xs"
+                    ? "bg-rose-50 border-rose-500 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 font-bold shadow-sm"
                     : "border-input hover:bg-muted"
                 }`}
               >
@@ -320,8 +312,8 @@ export function AFCEActionDialog({
               <label className="font-semibold text-foreground flex items-center justify-between mb-1">
                 <span>Bukti Otorisasi SAP</span>
                 {uploadingEvidence && (
-                  <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-normal">
-                    <Loader2 className="w-3 h-3 animate-spin" /> Uploading...
+                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-normal">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Mengunggah...
                   </span>
                 )}
               </label>
@@ -329,17 +321,18 @@ export function AFCEActionDialog({
                 <Input
                   value={sapEvidenceUrl}
                   onChange={(e) => setSapEvidenceUrl(e.target.value)}
-                  placeholder="Bukti_Otorisasi_SAP.png"
+                  placeholder="Tautan Drive atau nama berkas bukti SAP"
                   className="h-8 text-xs font-mono flex-1"
                 />
                 <label className="h-8 px-2 rounded border border-input hover:bg-muted text-[11px] font-medium flex items-center justify-center cursor-pointer shrink-0 text-foreground transition-colors gap-1">
-                  <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="hidden sm:inline">Pilih Berkas</span>
+                  <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                  <span className="hidden sm:inline">Unggah</span>
                   <input
                     type="file"
                     className="hidden"
                     accept="image/*,application/pdf"
                     onChange={handleFileUpload}
+                    disabled={uploadingEvidence}
                   />
                 </label>
               </div>
@@ -370,12 +363,13 @@ export function AFCEActionDialog({
           <Button
             size="sm"
             onClick={handleSubmit}
+            disabled={uploadingEvidence || isSubmitting}
             className={
               action === "Approve"
-                ? "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+                ? "bg-emerald-700 hover:bg-emerald-800 text-white font-semibold shadow-sm"
                 : action === "Revise"
-                ? "bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-xs"
-                : "bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-xs"
+                ? "bg-amber-700 hover:bg-amber-800 text-white font-semibold shadow-sm"
+                : "bg-rose-700 hover:bg-rose-800 text-white font-semibold shadow-sm"
             }
           >
             {action === "Approve" ? (

@@ -2,7 +2,7 @@ import "dotenv/config";
 import { uploadFileToGoogleDrive } from "../src/server/google-drive";
 
 async function main() {
-  console.log("🔍 Memeriksa konfigurasi Google Drive API...");
+  console.log("[CHECK] Memeriksa konfigurasi Google Drive API...");
 
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const key = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
@@ -14,9 +14,9 @@ async function main() {
   const isOAuth2 = Boolean(clientId && refreshToken);
 
   if (!isServiceAccount && !isOAuth2) {
-    console.log("ℹ️ Kredensial Google Drive belum diatur di .env (Service Account atau OAuth2).");
-    console.log("👉 Sistem saat ini berjalan dalam mode Graceful Mock Link Fallback (Aman & Tidak Crash).");
-    console.log("📖 Ikuti panduan lengkap di: docs/GOOGLE-DRIVE-SETUP.md untuk mengaktifkan koneksi riil.");
+    console.log("[INFO] Kredensial Google Drive belum diatur di .env (Service Account atau OAuth2).");
+    console.log("[INFO] Unggah/unduh Google Drive memerlukan konfigurasi kredensial aktif.");
+    console.log("[DOC] Ikuti panduan lengkap di: docs/GOOGLE-DRIVE-SETUP.md untuk mengaktifkan koneksi riil.");
     return;
   }
 
@@ -39,15 +39,15 @@ async function main() {
       folderId,
     });
 
-    if (result.isMock) {
-      console.log("⚠️ Menggunakan fallback mock link (kredensial belum lengkap).");
+    if (!result.fileId) {
+      console.log("[WARN] File ID tidak dikembalikan.");
     } else {
-      console.log("✅ BERHASIL TERHUBUNG KE GOOGLE DRIVE!");
-      console.log(`📁 File ID: ${result.fileId}`);
-      console.log(`🔗 Link Berkas: ${result.webViewLink}`);
+      console.log("[PASS] BERHASIL TERHUBUNG KE GOOGLE DRIVE!");
+      console.log(`File ID: ${result.fileId}`);
+      console.log(`Link Berkas: ${result.webViewLink}`);
     }
   } catch (error: any) {
-    console.error("❌ Gagal terhubung ke Google Drive API:", error.message);
+    console.error("[FAIL] Gagal terhubung ke Google Drive API:", error.message);
   }
 }
 

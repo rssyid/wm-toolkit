@@ -47,34 +47,75 @@ export function GoodsHandoverDialog({
     new Date().toISOString().split("T")[0]
   );
   const [receiverName, setReceiverName] = useState(
-    userProfile.fullName || "Dedi Setiawan, S.T."
+    userProfile?.fullName || ""
   );
   const [receiverJabatan, setReceiverJabatan] = useState(
-    userProfile.role || "Manager Estate / PIC Proyek"
+    userProfile?.role || ""
   );
   const [giverName, setGiverName] = useState("");
   const [giverCompany, setGiverCompany] = useState(po.supplierName);
   const [status, setStatus] = useState<GoodsHandoverStatus>("COMPLETED");
   const [notes, setNotes] = useState("");
   const [attachmentName, setAttachmentName] = useState("");
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setHandoverNumber(`BAST-2026-00${20 + goodsHandovers.length}`);
+      const year = new Date().getFullYear();
+      const seq = String(goodsHandovers.length + 1).padStart(4, "0");
+      setHandoverNumber(`BAST-${year}-${seq}`);
       setHandoverDate(new Date().toISOString().split("T")[0]);
-      setReceiverName(userProfile.fullName || "Dedi Setiawan, S.T.");
-      setReceiverJabatan(userProfile.role || "Manager Estate / PIC Proyek");
+      setReceiverName(userProfile?.fullName || "");
+      setReceiverJabatan(userProfile?.role || "");
       setGiverCompany(po.supplierName);
 
       const sup = suppliers.find((s) => s.id === po.supplierId || s.name === po.supplierName);
-      setGiverName(sup?.contactPerson || "Perwakilan Resmi Supplier");
-      setAttachmentName(`BAST_Resmi_${po.poNumber.replace(/[^0-9]/g, "")}_Signed.pdf`);
+      setGiverName(sup?.contactPerson || "");
+      setNotes("");
+      setAttachmentName("");
     }
-  }, [open, goodsHandovers.length, userProfile, po, suppliers]);
+  }, [open, goodsHandovers.length, userProfile?.fullName, userProfile?.role, po, suppliers]);
 
-  const handleSubmit = () => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAttachment(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", project.id);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        toast.error(json.error || "Gagal mengunggah dokumen BAST ke Google Drive.");
+        return;
+      }
+
+      setAttachmentName(
+        json.data.webViewLink ||
+          (json.data.fileId ? `/api/files/${json.data.fileId}/download` : json.data.fileName)
+      );
+      toast.success(`Berkas "${json.data.fileName}" berhasil diunggah ke Google Drive.`);
+    } catch {
+      toast.error("Gagal terhubung ke server saat mengunggah berkas.");
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleSubmit = async () => {
     if (!handoverNumber.trim()) {
       toast.error("Nomor BAST wajib diisi");
+      return;
+    }
+    if (!handoverDate) {
+      toast.error("Tanggal serah terima wajib diisi");
       return;
     }
     if (!receiverName.trim() || !giverName.trim()) {
@@ -86,28 +127,35 @@ export function GoodsHandoverDialog({
       return;
     }
 
-    recordGoodsHandover({
-      handoverNumber: handoverNumber.trim(),
-      poId: po.id,
-      poNumber: po.poNumber,
-      projectId: project.id,
-      supplierId: po.supplierId,
-      supplierName: po.supplierName,
-      handoverDate,
-      receiverName: receiverName.trim(),
-      receiverJabatan: receiverJabatan.trim(),
-      giverName: giverName.trim(),
-      giverCompany: giverCompany.trim(),
-      notes: notes.trim(),
-      status,
-      attachmentName: attachmentName.trim() || `BAST_Resmi_${po.poNumber}_Signed.pdf`,
-    });
+    setIsSubmitting(true);
+    try {
+      const ok = await recordGoodsHandover({
+        handoverNumber: handoverNumber.trim(),
+        poId: po.id,
+        poNumber: po.poNumber,
+        projectId: project.id,
+        supplierId: po.supplierId,
+        supplierName: po.supplierName,
+        handoverDate,
+        receiverName: receiverName.trim(),
+        receiverJabatan: receiverJabatan.trim(),
+        giverName: giverName.trim(),
+        giverCompany: giverCompany.trim(),
+        notes: notes.trim(),
+        status,
+        attachmentName: attachmentName.trim() || undefined,
+      });
 
-    toast.success(
-      `Berita Acara Serah Terima ${handoverNumber} untuk PO ${po.poNumber} berhasil dicatat!`
-    );
-    onOpenChange(false);
-    setNotes("");
+      if (!ok) return;
+
+      toast.success(
+        `Berita Acara Serah Terima ${handoverNumber.trim()} untuk PO ${po.poNumber} berhasil dicatat!`
+      );
+      onOpenChange(false);
+      setNotes("");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -277,28 +325,26 @@ export function GoodsHandoverDialog({
           {/* Berkas Scan Dokumen BAST */}
           <div>
             <label className="font-semibold text-foreground block mb-1">
-              Lampiran Dokumen BAST Bertanda Tangan (Simulasi)
+              Lampiran Dokumen BAST Bertanda Tangan (Opsional)
             </label>
             <div className="flex gap-2">
               <Input
-                placeholder={`BAST_Resmi_${po.poNumber}_Signed.pdf`}
+                placeholder="Tautan Google Drive atau nama berkas BAST"
                 value={attachmentName}
                 onChange={(e) => setAttachmentName(e.target.value)}
                 className="h-8 text-xs font-mono"
               />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setAttachmentName(
-                    `BAST_Resmi_${po.poNumber.replace(/[^0-9]/g, "")}_FullSigned.pdf`
-                  )
-                }
-                className="h-8 text-xs gap-1 shrink-0"
-              >
-                <UploadCloud className="w-3.5 h-3.5" /> File Acak
-              </Button>
+              <label className="h-8 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1">
+                <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                <span>{uploadingAttachment ? "Mengunggah..." : "Unggah"}</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                  onChange={handleFileUpload}
+                  disabled={uploadingAttachment}
+                />
+              </label>
             </div>
           </div>
         </div>
@@ -308,6 +354,7 @@ export function GoodsHandoverDialog({
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
             className="text-xs"
           >
             Batal
@@ -315,9 +362,11 @@ export function GoodsHandoverDialog({
           <Button
             size="sm"
             onClick={handleSubmit}
-            className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+            disabled={isSubmitting || uploadingAttachment}
+            className="text-xs bg-emerald-700 hover:bg-emerald-800 text-white gap-1"
           >
-            <CheckCircle2 className="w-3.5 h-3.5" /> Simpan Berita Acara (BAST)
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            {isSubmitting ? "Menyimpan..." : "Simpan Berita Acara (BAST)"}
           </Button>
         </DialogFooter>
       </DialogContent>

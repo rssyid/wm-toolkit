@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,18 +12,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAppState } from "@/context/app-state-context";
 import { Project } from "@/types";
 import { toast } from "sonner";
-import { CalendarClock, UploadCloud, AlertTriangle, Calendar, ShieldCheck } from "lucide-react";
+import { CalendarClock, UploadCloud, AlertTriangle, Calendar, ShieldCheck, Loader2 } from "lucide-react";
 import { formatIDDate, calculateDaysBetween } from "@/lib/utils";
 
 interface ScheduleRevisionDialogProps {
@@ -37,7 +30,7 @@ export function ScheduleRevisionDialog({
   onOpenChange,
   project,
 }: ScheduleRevisionDialogProps) {
-  const { reviseProjectSchedule } = useAppState();
+  const { reviseProjectSchedule, users, userProfile } = useAppState();
 
   const [newEndDate, setNewEndDate] = useState(
     new Date(new Date(project.targetEndDate).getTime() + 14 * 24 * 60 * 60 * 1000)
@@ -45,15 +38,68 @@ export function ScheduleRevisionDialog({
       .split("T")[0]
   );
   const [approvalDate, setApprovalDate] = useState(new Date().toISOString().split("T")[0]);
-  const [approvedBy, setApprovedBy] = useState("Ir. Ahmad Dahlan (Manager Area)");
-  const [revisedBy, setRevisedBy] = useState("Dedi Setiawan, S.T. (Manager Estate)");
+  const [approvedBy, setApprovedBy] = useState(userProfile?.fullName || "");
+  const [revisedBy, setRevisedBy] = useState(userProfile?.fullName || "");
   const [reason, setReason] = useState("");
   const [attachmentName, setAttachmentName] = useState("");
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setNewEndDate(
+        new Date(new Date(project.targetEndDate).getTime() + 14 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split("T")[0]
+      );
+      setApprovalDate(new Date().toISOString().split("T")[0]);
+      setRevisedBy(userProfile?.fullName || "");
+      const defaultApprover =
+        users.find((u) => u.status === "Active" && u.role !== "VIEWER")?.name ||
+        userProfile?.fullName ||
+        "";
+      setApprovedBy(defaultApprover);
+      setReason("");
+      setAttachmentName("");
+    }
+  }, [open, project.targetEndDate, users, userProfile?.fullName]);
 
   const daysExtended = calculateDaysBetween(project.targetEndDate, newEndDate);
   const weeksExtended = Math.max(1, Math.ceil(daysExtended / 7));
 
-  const handleSubmit = () => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAttachment(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", project.id);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        toast.error(json.error || "Gagal mengunggah Berita Acara ke Google Drive.");
+        return;
+      }
+
+      setAttachmentName(
+        json.data.webViewLink ||
+          (json.data.fileId ? `/api/files/${json.data.fileId}/download` : json.data.fileName)
+      );
+      toast.success(`Berkas "${json.data.fileName}" berhasil diunggah ke Google Drive.`);
+    } catch {
+      toast.error("Gagal terhubung ke server saat mengunggah berkas.");
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleSubmit = async () => {
     if (!newEndDate) {
       toast.error("Pilih tanggal target penyelesaian baru");
       return;
@@ -66,30 +112,40 @@ export function ScheduleRevisionDialog({
       toast.error("Tanggal approval/pengesahan addendum wajib diisi");
       return;
     }
+    if (!approvedBy.trim()) {
+      toast.error("Nama pejabat penyetuju addendum wajib diisi");
+      return;
+    }
     if (!reason.trim()) {
       toast.error("Alasan perpanjangan jadwal wajib diisi");
       return;
     }
 
-    reviseProjectSchedule(project.id, {
-      revisionNumber: project.revisions.length + 1,
-      previousEndDate: project.targetEndDate,
-      newEndDate,
-      extendedWeeks: weeksExtended,
-      reason: reason.trim(),
-      revisedAt: new Date().toISOString().split("T")[0],
-      approvalDate,
-      approvedBy,
-      revisedBy,
-      approvalStatus: "Approved",
-      attachmentName:
-        attachmentName || `BA_Revisi_Jadwal_${project.code}_Rev${project.revisions.length + 1}.pdf`,
-    });
+    setIsSubmitting(true);
+    try {
+      const ok = await reviseProjectSchedule(project.id, {
+        revisionNumber: project.revisions.length + 1,
+        previousEndDate: project.targetEndDate,
+        newEndDate,
+        extendedWeeks: weeksExtended,
+        reason: reason.trim(),
+        revisedAt: new Date().toISOString().split("T")[0],
+        approvalDate,
+        approvedBy: approvedBy.trim(),
+        revisedBy: revisedBy.trim() || userProfile?.fullName || "",
+        approvalStatus: "Approved",
+        attachmentName: attachmentName.trim() || undefined,
+      });
 
-    toast.success(
-      `Jadwal proyek berhasil direvisi (+${weeksExtended} minggu) dan disahkan pada ${formatIDDate(approvalDate)}.`
-    );
-    onOpenChange(false);
+      if (!ok) return;
+
+      toast.success(
+        `Jadwal proyek berhasil direvisi (+${weeksExtended} minggu) dan disahkan pada ${formatIDDate(approvalDate)}.`
+      );
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -155,19 +211,20 @@ export function ScheduleRevisionDialog({
 
             <div>
               <label className="font-semibold text-foreground block mb-1 flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-                Pejabat Penyetuju Addendum
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
+                Pejabat Penyetuju Addendum <span className="text-rose-600">*</span>
               </label>
               <SearchableSelect
                 value={approvedBy}
                 onValueChange={setApprovedBy}
                 placeholder="Pilih Pejabat..."
                 searchPlaceholder="Cari nama pejabat..."
-                options={[
-                  { value: "Ir. Ahmad Dahlan (Manager Area)", label: "Ir. Ahmad Dahlan (Manager Area)" },
-                  { value: "Dedi Setiawan, S.T. (Manager Estate)", label: "Dedi Setiawan, S.T. (Manager Estate)" },
-                  { value: "Dr. Raden Haryo, M.M. (Head Office)", label: "Dr. Raden Haryo, M.M. (Head Office)" },
-                ]}
+                options={users
+                  .filter((u) => u.status === "Active")
+                  .map((u) => ({
+                    value: u.name,
+                    label: `${u.name} (${u.role})`,
+                  }))}
               />
             </div>
           </div>
@@ -196,37 +253,45 @@ export function ScheduleRevisionDialog({
 
           <div>
             <label className="font-semibold text-foreground block mb-1">
-              Lampiran Berita Acara (BA) / Bukti Pendukung
+              Lampiran Berita Acara (BA) / Bukti Pendukung (Opsional)
             </label>
             <div className="flex items-center gap-2">
               <Input
                 value={attachmentName}
                 onChange={(e) => setAttachmentName(e.target.value)}
-                placeholder="BA_Perpanjangan_Waktu.pdf"
+                placeholder="Tautan Google Drive atau nama berkas Berita Acara"
                 className="text-xs"
               />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0 text-xs"
-                onClick={() => {
-                  setAttachmentName(`BA_Adendum_${project.code}_${newEndDate}.pdf`);
-                  toast.info("Berita Acara perpanjangan terlampir");
-                }}
-              >
-                <UploadCloud className="w-3.5 h-3.5 mr-1" /> Mock BA
-              </Button>
+              <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1">
+                {uploadingAttachment ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                )}
+                <span>Unggah</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                  onChange={handleFileUpload}
+                  disabled={uploadingAttachment}
+                />
+              </label>
             </div>
           </div>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Batal
           </Button>
-          <Button size="sm" onClick={handleSubmit} className="bg-amber-600 hover:bg-amber-700 text-white">
-            Konfirmasi Simpan Revisi
+          <Button
+            size="sm"
+            onClick={handleSubmit}
+            disabled={isSubmitting || uploadingAttachment}
+            className="bg-amber-700 hover:bg-amber-800 text-white"
+          >
+            {isSubmitting ? "Menyimpan..." : "Konfirmasi Simpan Revisi"}
           </Button>
         </DialogFooter>
       </DialogContent>

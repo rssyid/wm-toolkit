@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Link2, ExternalLink, FileText, CheckCircle2 } from "lucide-react";
+import { Link2, ExternalLink } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +43,23 @@ const CATEGORY_OPTIONS = [
   "Lainnya",
 ];
 
+function extractDriveFileIdFromUrl(url: string): string | undefined {
+  const fileDMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (fileDMatch?.[1]) return fileDMatch[1];
+  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idMatch?.[1]) return idMatch[1];
+  return undefined;
+}
+
+function isValidHttpsUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl.trim());
+    return parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function GDriveLinkDialog({
   open,
   onOpenChange,
@@ -55,55 +72,70 @@ export function GDriveLinkDialog({
   const [fileName, setFileName] = useState("");
   const [category, setCategory] = useState("Survey Lapangan & Kontur");
   const [docNumber, setDocNumber] = useState("");
-  const [fileSize, setFileSize] = useState("2.5 MB");
+  const [fileSize, setFileSize] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmedUrl = fileUrl.trim();
+    const trimmedName = fileName.trim();
 
-    if (!fileUrl.trim()) {
-      toast.error("Tautan Google Drive wajib diisi.");
+    if (!trimmedUrl || !isValidHttpsUrl(trimmedUrl)) {
+      toast.error("Tautan Google Drive wajib menggunakan protokol https:// yang valid.");
       return;
     }
 
-    if (!fileName.trim()) {
+    if (!trimmedName) {
       toast.error("Nama berkas dokumen wajib diisi.");
       return;
     }
 
-    // Auto append extension if missing
-    let cleanName = fileName.trim();
-    if (!cleanName.includes(".")) {
-      cleanName += ".pdf";
-    }
+    const cleanName = trimmedName.includes(".") ? trimmedName : `${trimmedName}.pdf`;
+    const extractedDriveId = extractDriveFileIdFromUrl(trimmedUrl);
 
     const newAttachmentData: Omit<ProjectAttachment, "id" | "uploadedAt"> = {
       projectId,
       source: "GOOGLE_DRIVE_LINK",
       fileName: cleanName,
-      fileUrl: fileUrl.trim(),
-      fileSize: fileSize.trim() || "1.8 MB",
-      mimeType: cleanName.endsWith(".dwg")
+      fileUrl: trimmedUrl,
+      fileSize: fileSize.trim() || "",
+      mimeType: cleanName.toLowerCase().endsWith(".dwg")
         ? "application/acad"
-        : cleanName.endsWith(".png") || cleanName.endsWith(".jpg")
+        : cleanName.toLowerCase().endsWith(".png") ||
+          cleanName.toLowerCase().endsWith(".jpg") ||
+          cleanName.toLowerCase().endsWith(".jpeg")
         ? "image/jpeg"
         : "application/pdf",
       category,
       docNumber: docNumber.trim() || undefined,
+      googleDriveFileId: extractedDriveId,
       uploadedBy: userProfile.fullName,
     };
 
     if (onSaveAttachment) {
       onSaveAttachment(newAttachmentData);
-    } else {
-      addAttachment(newAttachmentData);
-      toast.success("Tautan berkas Google Drive berhasil disimpan!");
+      setFileUrl("");
+      setFileName("");
+      setDocNumber("");
+      setFileSize("");
+      onOpenChange(false);
+      return;
     }
 
-    // Reset & close
-    setFileUrl("");
-    setFileName("");
-    setDocNumber("");
-    onOpenChange(false);
+    setIsSaving(true);
+    try {
+      const saved = await addAttachment(newAttachmentData);
+      if (saved) {
+        toast.success("Tautan berkas Google Drive berhasil disimpan.");
+        setFileUrl("");
+        setFileName("");
+        setDocNumber("");
+        setFileSize("");
+        onOpenChange(false);
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -111,13 +143,13 @@ export function GDriveLinkDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center text-emerald-600">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-950 flex items-center justify-center text-blue-700 dark:text-blue-300">
               <Link2 className="w-4 h-4" />
             </div>
             <div>
-              <DialogTitle className="text-base">Tautkan Berkas Google Drive</DialogTitle>
+              <DialogTitle className="text-base">Tautkan URL Google Drive</DialogTitle>
               <DialogDescription className="text-xs">
-                Hubungkan dokumen proyek dari Google Drive atau tautan berkas cloud.
+                Masukkan tautan berbagi (shared link HTTPS) dokumen atau gambar dari Google Drive.
               </DialogDescription>
             </div>
           </div>
@@ -125,42 +157,29 @@ export function GDriveLinkDialog({
 
         <form onSubmit={handleSubmit} className="space-y-3.5 py-1 text-xs">
           <div>
-            <label className="font-semibold text-foreground block mb-1">
-              URL Tautan Google Drive <span className="text-rose-500">*</span>
+            <label htmlFor="gdrive-link-url" className="font-semibold text-foreground block mb-1">
+              Tautan Google Drive (HTTPS) <span className="text-rose-600">*</span>
             </label>
-            <div className="relative">
-              <Input
-                value={fileUrl}
-                onChange={(e) => {
-                  setFileUrl(e.target.value);
-                  // Auto extract or suggest filename if possible
-                  if (!fileName && e.target.value.includes("/")) {
-                    const parts = e.target.value.split("/");
-                    const last = parts[parts.length - 1];
-                    if (last && last.length < 40 && last.includes(".")) {
-                      setFileName(decodeURIComponent(last));
-                    }
-                  }
-                }}
-                placeholder="https://drive.google.com/file/d/..."
-                className="pr-8 text-xs font-mono"
-                required
-              />
-              <ExternalLink className="w-3.5 h-3.5 text-muted-foreground absolute right-2.5 top-2.5 pointer-events-none" />
-            </div>
-            <p className="text-[11px] text-muted-foreground mt-1">
-              Pastikan hak akses berkas disetel ke &quot;Siapa saja yang memiliki tautan dapat melihat&quot;.
-            </p>
+            <Input
+              id="gdrive-link-url"
+              type="url"
+              value={fileUrl}
+              onChange={(e) => setFileUrl(e.target.value)}
+              placeholder="https://drive.google.com/file/d/..."
+              className="text-xs font-mono"
+              required
+            />
           </div>
 
           <div>
-            <label className="font-semibold text-foreground block mb-1">
-              Nama Berkas Dokumen <span className="text-rose-500">*</span>
+            <label htmlFor="gdrive-link-name" className="font-semibold text-foreground block mb-1">
+              Nama Tampilan Dokumen <span className="text-rose-600">*</span>
             </label>
             <Input
+              id="gdrive-link-name"
               value={fileName}
               onChange={(e) => setFileName(e.target.value)}
-              placeholder="Contoh: Kajian_Elevasi_Pintu_Air_2026.pdf"
+              placeholder="Contoh: Peta_Kontur_Blok_A12.pdf"
               className="text-xs"
               required
             />
@@ -168,11 +187,11 @@ export function GDriveLinkDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="font-semibold text-foreground block mb-1">
+              <label htmlFor="gdrive-link-cat" className="font-semibold text-foreground block mb-1">
                 Kategori Dokumen
               </label>
               <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger className="text-xs h-9">
+                <SelectTrigger id="gdrive-link-cat" className="text-xs h-9">
                   <SelectValue placeholder="Pilih kategori" />
                 </SelectTrigger>
                 <SelectContent>
@@ -186,52 +205,57 @@ export function GDriveLinkDialog({
             </div>
 
             <div>
-              <label className="font-semibold text-foreground block mb-1">
-                Perkiraan Ukuran File
+              <label htmlFor="gdrive-link-docnum" className="font-semibold text-foreground block mb-1">
+                Nomor Dokumen / SAP
               </label>
               <Input
-                value={fileSize}
-                onChange={(e) => setFileSize(e.target.value)}
-                placeholder="Contoh: 3.2 MB"
-                className="text-xs"
+                id="gdrive-link-docnum"
+                value={docNumber}
+                onChange={(e) => setDocNumber(e.target.value)}
+                placeholder="Opsional"
+                className="text-xs font-mono"
               />
             </div>
           </div>
 
           <div>
-            <label className="font-semibold text-foreground block mb-1">
-              Nomor Registrasi / SAP (Opsional)
+            <label htmlFor="gdrive-link-size" className="font-semibold text-foreground block mb-1">
+              Keterangan Ukuran File (Opsional)
             </label>
             <Input
-              value={docNumber}
-              onChange={(e) => setDocNumber(e.target.value)}
-              placeholder="Contoh: DOC-SURV-2026/089"
-              className="text-xs font-mono"
+              id="gdrive-link-size"
+              value={fileSize}
+              onChange={(e) => setFileSize(e.target.value)}
+              placeholder="Contoh: 2.5 MB"
+              className="text-xs"
             />
           </div>
 
-          <div className="rounded-md border p-3 bg-muted/30 flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            <div className="text-[11px] text-muted-foreground leading-relaxed">
-              Berkas ini akan langsung terdaftar di tab <span className="font-semibold text-foreground">Documents</span> dan dapat diakses oleh seluruh anggota tim proyek.
-            </div>
+          <div className="rounded-md bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-2.5 flex items-start gap-2 text-[11px] text-blue-900 dark:text-blue-200">
+            <ExternalLink className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>
+              Pastikan hak akses tautan Google Drive diatur minimal ke{" "}
+              <strong>Anyone with the link (Viewer)</strong> agar dapat dibuka tim terkait.
+            </span>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+          <DialogFooter className="gap-2 sm:gap-0 pt-1">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => onOpenChange(false)}
+              className="h-9 text-xs"
             >
               Batal
             </Button>
             <Button
               type="submit"
               size="sm"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={isSaving}
+              className="h-9 text-xs bg-emerald-700 hover:bg-emerald-800 text-white"
             >
-              Tautkan Berkas
+              {isSaving ? "Menyimpan..." : "Simpan Tautan"}
             </Button>
           </DialogFooter>
         </form>

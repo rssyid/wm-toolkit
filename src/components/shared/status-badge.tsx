@@ -16,7 +16,7 @@ export function StatusBadge({ status, className, showDot = true }: StatusBadgePr
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border shadow-xs transition-colors whitespace-nowrap",
+        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border shadow-sm transition-colors whitespace-nowrap",
         badge,
         className
       )}

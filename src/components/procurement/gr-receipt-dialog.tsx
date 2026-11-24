@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,18 +12,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAppState } from "@/context/app-state-context";
-import { PurchaseOrder, POMaterialItem } from "@/types";
+import { PurchaseOrder } from "@/types";
 import { toast } from "sonner";
-import { PackageCheck, UploadCloud, AlertCircle } from "lucide-react";
+import { PackageCheck, UploadCloud, AlertCircle, Loader2 } from "lucide-react";
 
 interface GRReceiptDialogProps {
   open: boolean;
@@ -38,22 +31,73 @@ export function GRReceiptDialog({
   po,
   preselectedItemId,
 }: GRReceiptDialogProps) {
-  const { recordGoodsReceipt, grs } = useAppState();
+  const { recordGoodsReceipt, grs, userProfile } = useAppState();
 
-  const [grNumber, setGrNumber] = useState(`GR-2026-00${70 + grs.length}`);
-  const [receiptDate, setReceiptDate] = useState(new Date().toISOString().split("T")[0]);
+  const [grNumber, setGrNumber] = useState("");
+  const [receiptDate, setReceiptDate] = useState("");
   const [selectedItemId, setSelectedItemId] = useState(
     preselectedItemId || po.items[0]?.id || ""
   );
   const [receivedVolume, setReceivedVolume] = useState<number>(0);
   const [notes, setNotes] = useState("");
   const [attachmentName, setAttachmentName] = useState("");
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      const year = new Date().getFullYear();
+      const seq = String(grs.length + 1).padStart(4, "0");
+      setGrNumber(`GR-${year}-${seq}`);
+      setReceiptDate(new Date().toISOString().split("T")[0]);
+      setSelectedItemId(preselectedItemId || po.items[0]?.id || "");
+      setReceivedVolume(0);
+      setNotes("");
+      setAttachmentName("");
+    }
+  }, [open, grs.length, po.items, preselectedItemId]);
 
   const selectedItem = po.items.find((it) => it.id === selectedItemId);
 
-  const handleSubmit = () => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAttachment(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", po.projectId);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        toast.error(json.error || "Gagal mengunggah lampiran GR ke Google Drive.");
+        return;
+      }
+
+      setAttachmentName(
+        json.data.webViewLink ||
+          (json.data.fileId ? `/api/files/${json.data.fileId}/download` : json.data.fileName)
+      );
+      toast.success(`Berkas "${json.data.fileName}" berhasil diunggah ke Google Drive.`);
+    } catch {
+      toast.error("Gagal terhubung ke server saat mengunggah berkas.");
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleSubmit = async () => {
     if (!grNumber.trim()) {
       toast.error("Nomor GR wajib diisi");
+      return;
+    }
+    if (!receiptDate) {
+      toast.error("Tanggal terima fisik wajib diisi");
       return;
     }
     if (!selectedItem) {
@@ -71,24 +115,31 @@ export function GRReceiptDialog({
       return;
     }
 
-    recordGoodsReceipt({
-      grNumber: grNumber.trim(),
-      poId: po.id,
-      poNumber: po.poNumber,
-      receiptDate,
-      itemId: selectedItem.id,
-      materialName: selectedItem.materialName,
-      receivedVolume,
-      unit: selectedItem.unit,
-      notes: notes.trim() || `Penerimaan fisik material ${selectedItem.materialName} di gudang estate`,
-      attachmentName: attachmentName || `SAP_GR_Doc_${grNumber.replace(/[^0-9]/g, "")}.pdf`,
-      recordedBy: "Budi Santoso, S.T.",
-    });
+    setIsSubmitting(true);
+    try {
+      const ok = await recordGoodsReceipt({
+        grNumber: grNumber.trim(),
+        poId: po.id,
+        poNumber: po.poNumber,
+        receiptDate,
+        itemId: selectedItem.id,
+        materialName: selectedItem.materialName,
+        receivedVolume,
+        unit: selectedItem.unit,
+        notes: notes.trim() || `Penerimaan fisik material ${selectedItem.materialName} di gudang estate`,
+        attachmentName: attachmentName.trim() || undefined,
+        recordedBy: userProfile?.fullName || "",
+      });
 
-    toast.success(
-      `Penerimaan ${receivedVolume} ${selectedItem.unit} material berhasil dicatat! Sisa diperbarui.`
-    );
-    onOpenChange(false);
+      if (!ok) return;
+
+      toast.success(
+        `Penerimaan ${receivedVolume} ${selectedItem.unit} material berhasil dicatat! Sisa diperbarui.`
+      );
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -155,13 +206,13 @@ export function GRReceiptDialog({
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Sudah Diterima:</span>
-                <span className="font-mono text-emerald-600 font-semibold">
+                <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">
                   {selectedItem.receivedVolume} {selectedItem.unit}
                 </span>
               </div>
               <div className="flex justify-between border-t pt-1">
                 <span className="text-foreground font-semibold">Sisa Belum Diterima:</span>
-                <span className="font-mono text-amber-600 font-bold">
+                <span className="font-mono text-amber-700 dark:text-amber-400 font-bold">
                   {selectedItem.remainingVolume} {selectedItem.unit}
                 </span>
               </div>
@@ -203,37 +254,45 @@ export function GRReceiptDialog({
 
           <div>
             <label className="font-semibold text-foreground block mb-1">
-              Lampiran Surat Jalan / Screenshot GR SAP
+              Lampiran Surat Jalan / Screenshot GR SAP (Opsional)
             </label>
             <div className="flex items-center gap-2">
               <Input
                 value={attachmentName}
                 onChange={(e) => setAttachmentName(e.target.value)}
-                placeholder="Contoh: SuratJalan_Supplier_5001.png"
+                placeholder="Tautan Google Drive atau nama berkas"
                 className="text-xs"
               />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0 text-xs"
-                onClick={() => {
-                  setAttachmentName(`SuratJalan_SJ_${po.poNumber}_GR.pdf`);
-                  toast.info("Dokumen surat jalan terlampir");
-                }}
-              >
-                <UploadCloud className="w-3.5 h-3.5 mr-1" /> Mock Lampiran
-              </Button>
+              <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1.5">
+                {uploadingAttachment ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                )}
+                <span>Unggah</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                  onChange={handleFileUpload}
+                  disabled={uploadingAttachment}
+                />
+              </label>
             </div>
           </div>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Batal
           </Button>
-          <Button size="sm" onClick={handleSubmit} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-            Konfirmasi Simpan GR
+          <Button
+            size="sm"
+            onClick={handleSubmit}
+            disabled={isSubmitting || uploadingAttachment}
+            className="bg-emerald-700 hover:bg-emerald-800 text-white"
+          >
+            {isSubmitting ? "Menyimpan..." : "Konfirmasi Simpan GR"}
           </Button>
         </DialogFooter>
       </DialogContent>

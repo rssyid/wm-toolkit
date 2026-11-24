@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,18 +12,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAppState } from "@/context/app-state-context";
 import { Project, PRType } from "@/types";
 import { toast } from "sonner";
-import { FilePlus2, UploadCloud } from "lucide-react";
+import { FilePlus2, UploadCloud, Loader2 } from "lucide-react";
 
 interface PRRecordDialogProps {
   open: boolean;
@@ -34,17 +27,69 @@ interface PRRecordDialogProps {
 export function PRRecordDialog({ open, onOpenChange, project }: PRRecordDialogProps) {
   const { createPr, prs } = useAppState();
 
-  const [prNumber, setPrNumber] = useState(`PR-2026-00${70 + prs.length}`);
-  const [sapPrNumber, setSapPrNumber] = useState(`100459${700 + prs.length}`);
-  const [releaseDate, setReleaseDate] = useState(new Date().toISOString().split("T")[0]);
-  const [workItemId, setWorkItemId] = useState(project.workItems[0]?.id || "");
+  const [prNumber, setPrNumber] = useState("");
+  const [sapPrNumber, setSapPrNumber] = useState("");
+  const [releaseDate, setReleaseDate] = useState("");
+  const [workItemId, setWorkItemId] = useState("");
   const [prType, setPrType] = useState<PRType>("Material");
   const [description, setDescription] = useState("");
   const [attachmentName, setAttachmentName] = useState("");
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = () => {
+  useEffect(() => {
+    if (open) {
+      const year = new Date().getFullYear();
+      const seq = String(prs.length + 1).padStart(4, "0");
+      setPrNumber(`PR-${year}-${seq}`);
+      setSapPrNumber(`10045${String(9700 + prs.length)}`);
+      setReleaseDate(new Date().toISOString().split("T")[0]);
+      setWorkItemId(project.workItems[0]?.id || "");
+      setPrType("Material");
+      setDescription("");
+      setAttachmentName("");
+    }
+  }, [open, prs.length, project.workItems]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAttachment(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", project.id);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        toast.error(json.error || "Gagal mengunggah lampiran PR ke Google Drive.");
+        return;
+      }
+
+      setAttachmentName(
+        json.data.webViewLink ||
+          (json.data.fileId ? `/api/files/${json.data.fileId}/download` : json.data.fileName)
+      );
+      toast.success(`Berkas "${json.data.fileName}" berhasil diunggah ke Google Drive.`);
+    } catch {
+      toast.error("Gagal terhubung ke server saat mengunggah berkas.");
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleSubmit = async () => {
     if (!prNumber.trim() || !sapPrNumber.trim()) {
       toast.error("Nomor PR dan Nomor Dokumen SAP wajib diisi");
+      return;
+    }
+    if (!releaseDate) {
+      toast.error("Tanggal approval & rilis PR wajib diisi");
       return;
     }
     if (!workItemId) {
@@ -53,24 +98,35 @@ export function PRRecordDialog({ open, onOpenChange, project }: PRRecordDialogPr
     }
 
     const selectedWi = project.workItems.find((w) => w.id === workItemId);
+    if (!selectedWi) {
+      toast.error("Item pekerjaan terkait tidak ditemukan pada proyek ini");
+      return;
+    }
 
-    createPr({
-      prNumber: prNumber.trim(),
-      sapPrNumber: sapPrNumber.trim(),
-      projectId: project.id,
-      projectCode: project.code,
-      workItemId,
-      workItemName: selectedWi?.name || "Pekerjaan Proyek",
-      releaseDate,
-      prType,
-      description: description.trim() || `Pengadaan untuk ${selectedWi?.name}`,
-      status: "Released",
-      linkedPoCount: 0,
-      attachmentName: attachmentName || `SAP_PR_${sapPrNumber}_Release.pdf`,
-    });
+    setIsSubmitting(true);
+    try {
+      const ok = await createPr({
+        prNumber: prNumber.trim(),
+        sapPrNumber: sapPrNumber.trim(),
+        projectId: project.id,
+        projectCode: project.code,
+        workItemId,
+        workItemName: selectedWi.name,
+        releaseDate,
+        prType,
+        description: description.trim() || `Pengadaan untuk ${selectedWi.name}`,
+        status: "Released",
+        linkedPoCount: 0,
+        attachmentName: attachmentName.trim() || undefined,
+      });
 
-    toast.success(`Purchase Requisition ${prNumber} berhasil dicatat!`);
-    onOpenChange(false);
+      if (!ok) return;
+
+      toast.success(`Purchase Requisition ${prNumber.trim()} berhasil dicatat!`);
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -164,40 +220,48 @@ export function PRRecordDialog({ open, onOpenChange, project }: PRRecordDialogPr
             />
           </div>
 
-          {/* Screenshot / PDF Placeholder */}
+          {/* Lampiran Screenshot SAP / Google Drive */}
           <div>
             <label className="font-semibold text-foreground block mb-1">
-              Lampiran Screenshot SAP / Dokumen Pendukung
+              Lampiran Screenshot SAP / Dokumen Pendukung (Opsional)
             </label>
             <div className="flex items-center gap-2">
               <Input
                 value={attachmentName}
                 onChange={(e) => setAttachmentName(e.target.value)}
-                placeholder="Contoh: Screenshot_SAP_PR_Release.png"
+                placeholder="Tautan Google Drive atau nama berkas"
                 className="text-xs"
               />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0 text-xs"
-                onClick={() => {
-                  setAttachmentName(`SAP_PR_${sapPrNumber}_Release.pdf`);
-                  toast.info("File placeholder terlampir");
-                }}
-              >
-                <UploadCloud className="w-3.5 h-3.5 mr-1" /> Mock Lampiran
-              </Button>
+              <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1.5">
+                {uploadingAttachment ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                )}
+                <span>Unggah</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                  onChange={handleFileUpload}
+                  disabled={uploadingAttachment}
+                />
+              </label>
             </div>
           </div>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Batal
           </Button>
-          <Button size="sm" onClick={handleSubmit} className="bg-blue-600 hover:bg-blue-700 text-white">
-            Simpan Rilis PR
+          <Button
+            size="sm"
+            onClick={handleSubmit}
+            disabled={isSubmitting || uploadingAttachment}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            {isSubmitting ? "Menyimpan..." : "Simpan Rilis PR"}
           </Button>
         </DialogFooter>
       </DialogContent>

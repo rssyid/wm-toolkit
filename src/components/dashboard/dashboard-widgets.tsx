@@ -28,15 +28,19 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { CurrencyText } from "@/components/shared/currency-text";
 import { useAppState } from "@/context/app-state-context";
-import { formatIDDate } from "@/lib/utils";
+import { formatIDDate, formatWibTime, isProjectDelayed } from "@/lib/utils";
 import { AuditLog, AuditLogAction } from "@/types";
 import { AuditLogDetailDialog } from "@/components/dashboard/audit-log-detail-dialog";
 
 interface DashboardWidgetsProps {
   onViewAuditLog?: () => void;
+  filteredProjectIds?: Set<string>;
 }
 
-export function DashboardWidgets({ onViewAuditLog }: DashboardWidgetsProps = {}) {
+export function DashboardWidgets({
+  onViewAuditLog,
+  filteredProjectIds,
+}: DashboardWidgetsProps = {}) {
   const {
     afces,
     prs,
@@ -51,19 +55,38 @@ export function DashboardWidgets({ onViewAuditLog }: DashboardWidgetsProps = {})
   const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLog | null>(null);
   const [auditDialogOpen, setAuditDialogOpen] = useState(false);
 
+  const activeProjects = projects.filter(
+    (p) => !p.deletedAt && (!filteredProjectIds || filteredProjectIds.has(p.id))
+  );
+  const projectScopeIds = new Set(activeProjects.map((p) => p.id));
+
   // Filter Data
-  const pendingAfces = afces.filter((a) => a.status === "Pending Approval");
-  const atRiskProjects = projects.filter(
-    (p) => p.scheduleVarianceDays > 5 || p.ewsStatus !== "Normal"
+  const pendingAfces = afces.filter(
+    (a) => !a.deletedAt && projectScopeIds.has(a.projectId) && a.status === "Pending Approval"
   );
-  const releasedPrs = prs.filter((p) => p.status === "Released");
-  const activePos = pos;
-  const recentWeekly = weeklyProgress.slice(0, 4);
-  const activeSpks = spkContracts.filter((s) => s.status === "ACTIVE");
+  const atRiskProjects = activeProjects.filter((p) => isProjectDelayed(p));
+  const releasedPrs = prs.filter(
+    (p) => !p.deletedAt && projectScopeIds.has(p.projectId) && p.status === "Released"
+  );
+  const activePos = pos.filter(
+    (po) => !po.deletedAt && projectScopeIds.has(po.projectId)
+  );
+  const recentWeekly = weeklyProgress
+    .filter((w) => projectScopeIds.has(w.projectId))
+    .slice(0, 4);
+  const activeSpks = spkContracts.filter(
+    (s) => !s.deletedAt && projectScopeIds.has(s.projectId) && s.status === "ACTIVE"
+  );
   const pendingUspks = uspks.filter(
-    (u) => u.status === "SUBMITTED" || u.status === "DRAFT"
+    (u) =>
+      !u.deletedAt &&
+      projectScopeIds.has(u.projectId) &&
+      (u.status === "SUBMITTED" || u.status === "DRAFT")
   );
-  const recentLogs = auditLogs.slice(0, 5);
+  const scopedLogs = filteredProjectIds
+    ? auditLogs.filter((l) => !l.projectId || projectScopeIds.has(l.projectId))
+    : auditLogs;
+  const recentLogs = scopedLogs.slice(0, 5);
 
   const getActionBadgeColor = (action: AuditLogAction) => {
     switch (action) {
@@ -94,7 +117,7 @@ export function DashboardWidgets({ onViewAuditLog }: DashboardWidgetsProps = {})
          ───────────────────────────────────────────────────────────── */}
       <div className="lg:col-span-7 space-y-6">
         {/* Modul A: Pusat Tindakan & EWS Kritis (Priority Action Center) */}
-        <Card className="shadow-xs border overflow-hidden">
+        <Card className="shadow-sm border overflow-hidden">
           <CardHeader className="pb-3 border-b bg-muted/20">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -160,20 +183,21 @@ export function DashboardWidgets({ onViewAuditLog }: DashboardWidgetsProps = {})
                             <span>&bull;</span>
                             <CurrencyText value={a.value} className="font-medium text-foreground" />
                           </div>
-                          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                          <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
                             Menunggu Reviewer: {a.currentApproverRole}
                           </span>
                         </div>
 
-                        <Link href={`/workspace/${a.projectId}/afce`} className="shrink-0">
-                          <Button
-                            size="sm"
-                            className="h-7 text-xs px-2.5 bg-amber-600 hover:bg-amber-700 text-white font-medium gap-1"
-                          >
+                        <Button
+                          asChild
+                          size="sm"
+                          className="h-7 text-xs px-2.5 bg-amber-700 hover:bg-amber-800 text-white font-medium gap-1 shrink-0"
+                        >
+                          <Link href={`/workspace/${a.projectId}/afce`}>
                             <span>Input Approval</span>
                             <ArrowRight className="w-3 h-3" />
-                          </Button>
-                        </Link>
+                          </Link>
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -228,16 +252,16 @@ export function DashboardWidgets({ onViewAuditLog }: DashboardWidgetsProps = {})
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <Link href={`/workspace/${p.id}/schedule`}>
-                            <Button size="sm" variant="outline" className="h-7 text-xs px-2">
+                          <Button asChild size="sm" variant="outline" className="h-7 text-xs px-2">
+                            <Link href={`/workspace/${p.id}/execution?tab=schedule`}>
                               Revisi Jadwal
-                            </Button>
-                          </Link>
-                          <Link href={`/workspace/${p.id}`}>
-                            <Button size="sm" className="h-7 text-xs px-2.5">
+                            </Link>
+                          </Button>
+                          <Button asChild size="sm" className="h-7 text-xs px-2.5">
+                            <Link href={`/workspace/${p.id}`}>
                               Detail
-                            </Button>
-                          </Link>
+                            </Link>
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -261,7 +285,7 @@ export function DashboardWidgets({ onViewAuditLog }: DashboardWidgetsProps = {})
         </Card>
 
         {/* Modul B: Realisasi Fisik & Kurva-S Lapangan */}
-        <Card className="shadow-xs border overflow-hidden">
+        <Card className="shadow-sm border overflow-hidden">
           <CardHeader className="pb-3 border-b bg-muted/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -331,15 +355,16 @@ export function DashboardWidgets({ onViewAuditLog }: DashboardWidgetsProps = {})
                         Deviasi: {w.variance > 0 ? `+${w.variance}%` : `${w.variance}%`}
                       </span>
 
-                      <Link href={`/workspace/${w.projectId}/progress`}>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 text-[11px] px-2 text-emerald-700 dark:text-emerald-400 hover:underline"
-                        >
+                      <Button
+                        asChild
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-[11px] px-2 text-emerald-700 dark:text-emerald-400 hover:underline"
+                      >
+                        <Link href={`/workspace/${w.projectId}/execution?tab=progress`}>
                           Grafik S-Curve &rarr;
-                        </Button>
-                      </Link>
+                        </Link>
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -366,7 +391,7 @@ export function DashboardWidgets({ onViewAuditLog }: DashboardWidgetsProps = {})
          ───────────────────────────────────────────────────────────── */}
       <div className="lg:col-span-5 space-y-6">
         {/* Modul C: Pelacakan Dua Jalur (Barang vs Jasa) */}
-        <Card className="shadow-xs border overflow-hidden">
+        <Card className="shadow-sm border overflow-hidden">
           <CardHeader className="pb-3 border-b bg-muted/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -422,11 +447,11 @@ export function DashboardWidgets({ onViewAuditLog }: DashboardWidgetsProps = {})
                           <span>SAP: {pr.sapPrNumber}</span>
                         </div>
                       </div>
-                      <Link href={`/workspace/${pr.projectId}/pr`}>
-                        <Button size="sm" variant="ghost" className="h-6 text-xs px-2">
+                      <Button asChild size="sm" variant="ghost" className="h-6 text-xs px-2">
+                        <Link href={`/workspace/${pr.projectId}/procurement?track=barang`}>
                           Lihat
-                        </Button>
-                      </Link>
+                        </Link>
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -466,11 +491,11 @@ export function DashboardWidgets({ onViewAuditLog }: DashboardWidgetsProps = {})
                           </span>
                         </div>
                       </div>
-                      <Link href={`/workspace/${po.projectId}/po`} className="shrink-0 ml-1">
-                        <Button size="sm" variant="outline" className="h-6 text-[11px] px-2">
+                      <Button asChild size="sm" variant="outline" className="h-6 text-[11px] px-2 shrink-0 ml-1">
+                        <Link href={`/workspace/${po.projectId}/procurement?track=barang`}>
                           GR
-                        </Button>
-                      </Link>
+                        </Link>
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -520,11 +545,11 @@ export function DashboardWidgets({ onViewAuditLog }: DashboardWidgetsProps = {})
                         </div>
                       </div>
 
-                      <Link href={`/workspace/${spk.projectId}/services`}>
-                        <Button size="sm" variant="outline" className="h-6 text-xs px-2">
+                      <Button asChild size="sm" variant="outline" className="h-6 text-xs px-2">
+                        <Link href={`/workspace/${spk.projectId}/procurement?track=jasa`}>
                           Kontrak
-                        </Button>
-                      </Link>
+                        </Link>
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -551,14 +576,15 @@ export function DashboardWidgets({ onViewAuditLog }: DashboardWidgetsProps = {})
                             {uspk.vendorName} &bull; {uspk.scope}
                           </p>
                         </div>
-                        <Link href={`/workspace/${uspk.projectId}/services`}>
-                          <Button
-                            size="sm"
-                            className="h-6 text-[11px] px-2 bg-amber-600 hover:bg-amber-700 text-white"
-                          >
+                        <Button
+                          asChild
+                          size="sm"
+                          className="h-6 text-[11px] px-2 bg-amber-700 hover:bg-amber-800 text-white"
+                        >
+                          <Link href={`/workspace/${uspk.projectId}/procurement?track=jasa`}>
                             Review
-                          </Button>
-                        </Link>
+                          </Link>
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -578,7 +604,7 @@ export function DashboardWidgets({ onViewAuditLog }: DashboardWidgetsProps = {})
         </Card>
 
         {/* Modul D: Linimasa Aktivitas Terkini (Clean Activity Timeline) */}
-        <Card className="shadow-xs border overflow-hidden">
+        <Card className="shadow-sm border overflow-hidden">
           <CardHeader className="pb-3 border-b bg-muted/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -632,14 +658,9 @@ export function DashboardWidgets({ onViewAuditLog }: DashboardWidgetsProps = {})
 
                     <div className="text-[10px] text-muted-foreground font-mono mt-0.5 flex items-center gap-1">
                       <Clock className="w-2.5 h-2.5" />
-                      <span>{formatIDDate(log.createdAt.split("T")[0])}</span>
+                      <span>{formatIDDate(log.createdAt)}</span>
                       <span>&bull;</span>
-                      <span>
-                        {log.createdAt.includes("T")
-                          ? log.createdAt.split("T")[1].slice(0, 5)
-                          : "10:00"}{" "}
-                        WIB
-                      </span>
+                      <span>{formatWibTime(log.createdAt)} WIB</span>
                     </div>
                   </div>
 

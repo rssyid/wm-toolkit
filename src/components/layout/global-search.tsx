@@ -36,7 +36,6 @@ import {
   FileSpreadsheet,
   ClipboardList,
   Calendar,
-  Sparkles,
   ArrowRight,
   FolderOpen,
 } from "lucide-react";
@@ -65,7 +64,6 @@ export function GlobalSearch() {
     pos,
     uspks,
     spkContracts,
-    locations,
     materials,
     suppliers,
     canManageSystem,
@@ -284,9 +282,9 @@ export function GlobalSearch() {
       },
       {
         id: `context-pr-${pid}`,
-        title: `Purchase Requisition (PR): ${currentProject.code}`,
+        title: `Pengadaan Barang (PR): ${currentProject.code}`,
         subtitle: `Daftar nomor PR material dan sinkronisasi status SAP`,
-        path: `/workspace/${pid}/pr`,
+        path: `/workspace/${pid}/procurement?track=barang`,
         icon: FileSpreadsheet,
         category: "context",
         keywords: ["pr", "purchase requisition", "permintaan barang", "sap pr", currentProject.code],
@@ -295,7 +293,7 @@ export function GlobalSearch() {
         id: `context-po-${pid}`,
         title: `Purchase Order (PO): ${currentProject.code}`,
         subtitle: `Daftar PO pemesanan barang dan progres penerimaan logistik`,
-        path: `/workspace/${pid}/po`,
+        path: `/workspace/${pid}/procurement?track=barang`,
         icon: ShoppingCart,
         category: "context",
         keywords: ["po", "purchase order", "pesanan barang", "surat pesanan", currentProject.code],
@@ -304,7 +302,7 @@ export function GlobalSearch() {
         id: `context-services-${pid}`,
         title: `Kontrak Jasa & SPK: ${currentProject.code}`,
         subtitle: `Alur USPK, evaluasi teknis, dan kontrak kerja pemborong`,
-        path: `/workspace/${pid}/services`,
+        path: `/workspace/${pid}/procurement?track=jasa`,
         icon: FileCheck2,
         category: "context",
         keywords: ["jasa", "services", "kontrak jasa", "pemborong", currentProject.code],
@@ -313,7 +311,7 @@ export function GlobalSearch() {
         id: `context-spk-${pid}`,
         title: `Surat Perintah Kerja (SPK): ${currentProject.code}`,
         subtitle: `Penerbitan kontrak SPK rekanan pelaksana jasa proyek`,
-        path: `/workspace/${pid}/spk`,
+        path: `/workspace/${pid}/procurement?track=jasa`,
         icon: FileCheck2,
         category: "context",
         keywords: ["spk", "surat perintah kerja", "kontrak spk", currentProject.code],
@@ -322,7 +320,7 @@ export function GlobalSearch() {
         id: `context-execution-${pid}`,
         title: `Pelaksanaan & Kurva S: ${currentProject.code}`,
         subtitle: `Monitoring progres fisik terintegrasi, jadwal, dan kurva S`,
-        path: `/workspace/${pid}/execution`,
+        path: `/workspace/${pid}/execution?tab=progress`,
         icon: Calendar,
         category: "context",
         keywords: ["pelaksanaan", "execution", "kurva s", "progres", "jadwal", currentProject.code],
@@ -331,7 +329,7 @@ export function GlobalSearch() {
         id: `context-survey-boq-${pid}`,
         title: `Survey Lapangan & BOQ: ${currentProject.code}`,
         subtitle: `Bill of Quantities rincian volume dan estimasi biaya teknis`,
-        path: `/workspace/${pid}/survey-boq`,
+        path: `/workspace/${pid}/execution?tab=boq`,
         icon: ClipboardList,
         category: "context",
         keywords: ["survey", "boq", "bill of quantities", "rincian biaya", "volume", currentProject.code],
@@ -370,12 +368,13 @@ export function GlobalSearch() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground bg-muted/60 hover:bg-muted border rounded-md transition-colors w-44 md:w-64 justify-between"
+        aria-label="Cari menu, proyek, transaksi"
+        className="flex items-center gap-2 h-8 w-8 sm:w-52 md:w-64 px-0 sm:px-3 py-1.5 text-xs text-muted-foreground bg-muted/60 hover:bg-muted border rounded-md transition-colors justify-center sm:justify-between shrink-0"
         title="Cari menu, proyek, transaksi (Ctrl+K)"
       >
-        <span className="flex items-center gap-1.5 truncate">
+        <span className="flex items-center gap-1.5 min-w-0">
           <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-          <span className="truncate">Cari menu, proyek, transaksi...</span>
+          <span className="hidden sm:inline truncate">Cari menu, proyek, transaksi...</span>
         </span>
         <kbd className="pointer-events-none hidden sm:inline-flex h-5 select-none items-center gap-0.5 rounded border bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground shrink-0">
           <span className="text-[11px]">Ctrl</span>K
@@ -466,9 +465,9 @@ export function GlobalSearch() {
 
           <CommandSeparator />
 
-          {/* 3. Proyek & Workspace (Semua Proyek saat mencari, atau 5 Terkini saat kosong) */}
-          <CommandGroup heading={isSearching ? `Proyek & Workspace (${projects.length} Total)` : "Proyek Aktif Terbaru"}>
-            {(isSearching ? projects : recentProjects).map((p) => {
+          {/* 3. Proyek & Workspace */}
+          <CommandGroup heading={isSearching ? `Proyek & Workspace (${(canManageSystem ? projects : activeProjects).length} Total)` : "Proyek Aktif Terbaru"}>
+            {(isSearching ? (canManageSystem ? projects : activeProjects) : recentProjects).map((p) => {
               const isRecycleBin = Boolean(p.deletedAt);
               return (
                 <CommandItem
@@ -479,7 +478,7 @@ export function GlobalSearch() {
                   className="flex items-center justify-between gap-2 py-2"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+                    <div className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 shrink-0">
                       <FolderGit2 className="w-4 h-4" />
                     </div>
                     <div className="flex flex-col min-w-0">
@@ -488,7 +487,7 @@ export function GlobalSearch() {
                           {p.code} - {p.name}
                         </span>
                         {isRecycleBin && (
-                          <span className="text-[9px] px-1 py-0.2 rounded font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 shrink-0">
+                          <span className="text-[9px] px-1 py-0.5 rounded font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 shrink-0">
                             [Recycle Bin]
                           </span>
                         )}
@@ -510,7 +509,7 @@ export function GlobalSearch() {
 
           {/* 4. Dokumen Otorisasi AFCE */}
           <CommandGroup heading="Dokumen Otorisasi AFCE">
-            {(isSearching ? afces : afces.slice(0, 3)).map((a) => (
+            {(isSearching ? afces.filter((a) => !a.deletedAt) : afces.filter((a) => !a.deletedAt).slice(0, 3)).map((a) => (
               <CommandItem
                 key={a.id}
                 value={`afce-${a.id} ${a.afceNumber} ${a.projectName} ${a.status} ${a.currentApproverRole || ""} afce otorisasi belanja`}
@@ -540,12 +539,12 @@ export function GlobalSearch() {
 
           {/* 5. Pengadaan Barang: Purchase Requisition (PR) */}
           <CommandGroup heading="Purchase Requisition (PR)">
-            {(isSearching ? prs : prs.slice(0, 3)).map((pr) => (
+            {(isSearching ? prs.filter((pr) => !pr.deletedAt) : prs.filter((pr) => !pr.deletedAt).slice(0, 3)).map((pr) => (
               <CommandItem
                 key={pr.id}
                 value={`pr-${pr.id} ${pr.prNumber} ${pr.projectCode} ${pr.workItemName || ""} ${pr.sapPrNumber || ""} ${pr.status} pr purchase requisition pengadaan barang`}
                 keywords={[pr.prNumber, pr.projectCode, pr.status, "pr"]}
-                onSelect={() => handleSelect(`/workspace/${pr.projectId}/pr`)}
+                onSelect={() => handleSelect(`/workspace/${pr.projectId}/procurement?track=barang`)}
                 className="flex items-center justify-between gap-2 py-2"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -570,12 +569,12 @@ export function GlobalSearch() {
 
           {/* 6. Pengadaan Barang: Purchase Order (PO) */}
           <CommandGroup heading="Purchase Order (PO)">
-            {(isSearching ? pos : pos.slice(0, 3)).map((po) => (
+            {(isSearching ? pos.filter((po) => !po.deletedAt) : pos.filter((po) => !po.deletedAt).slice(0, 3)).map((po) => (
               <CommandItem
                 key={po.id}
                 value={`po-${po.id} ${po.poNumber} ${po.projectCode} ${po.supplierName || ""} ${po.relatedPrNumber || ""} ${po.status} po purchase order pesanan barang logistik`}
                 keywords={[po.poNumber, po.supplierName || "", po.projectCode, po.status, "po"]}
-                onSelect={() => handleSelect(`/workspace/${po.projectId}/po`)}
+                onSelect={() => handleSelect(`/workspace/${po.projectId}/procurement?track=barang`)}
                 className="flex items-center justify-between gap-2 py-2"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -600,12 +599,12 @@ export function GlobalSearch() {
 
           {/* 7. Kontrak Jasa: Surat Perintah Kerja (SPK) & USPK */}
           <CommandGroup heading="Kontrak Jasa & Pemborong (SPK / USPK)">
-            {(isSearching ? spkContracts : spkContracts.slice(0, 3)).map((spk) => (
+            {(isSearching ? spkContracts.filter((s) => !s.deletedAt) : spkContracts.filter((s) => !s.deletedAt).slice(0, 3)).map((spk) => (
               <CommandItem
                 key={spk.id}
                 value={`spk-${spk.id} ${spk.spkNumber} ${spk.projectCode} ${spk.vendorName || ""} ${spk.workItemName || ""} ${spk.status} spk surat perintah kerja kontrak jasa pemborong`}
                 keywords={[spk.spkNumber, spk.vendorName || "", spk.projectCode, spk.status, "spk"]}
-                onSelect={() => handleSelect(`/workspace/${spk.projectId}/spk`)}
+                onSelect={() => handleSelect(`/workspace/${spk.projectId}/procurement?track=jasa`)}
                 className="flex items-center justify-between gap-2 py-2"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -626,12 +625,14 @@ export function GlobalSearch() {
             ))}
 
             {isSearching &&
-              uspks.slice(0, 5).map((u) => (
-                <CommandItem
-                  key={u.id}
-                  value={`uspk-${u.id} ${u.uspkNumber} ${u.projectCode} ${u.vendorName || ""} ${u.scope || ""} ${u.status} uspk usulan surat perintah kerja`}
-                  keywords={[u.uspkNumber, u.projectCode, u.vendorName || "", u.status, "uspk"]}
-                  onSelect={() => handleSelect(`/workspace/${u.projectId}/uspk`)}
+              uspks
+                .filter((u) => !u.deletedAt)
+                .map((u) => (
+                  <CommandItem
+                    key={u.id}
+                    value={`uspk-${u.id} ${u.uspkNumber} ${u.projectCode} ${u.vendorName || ""} ${u.scope || ""} ${u.status} uspk usulan surat perintah kerja`}
+                    keywords={[u.uspkNumber, u.projectCode, u.vendorName || "", u.status, "uspk"]}
+                    onSelect={() => handleSelect(`/workspace/${u.projectId}/procurement?track=jasa`)}
                   className="flex items-center justify-between gap-2 py-2"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -652,39 +653,43 @@ export function GlobalSearch() {
               ))}
           </CommandGroup>
 
-          <CommandSeparator />
+          {canManageSystem && (
+            <>
+              <CommandSeparator />
 
-          {/* 8. Seluruh Modul Master Data */}
-          <CommandGroup heading="Master Data & Konfigurasi">
-            {(isSearching ? masterDataItems : masterDataItems.slice(0, 5)).map((item) => {
-              const Icon = item.icon;
-              return (
-                <CommandItem
-                  key={item.id}
-                  value={`${item.id} ${item.title} ${item.subtitle} ${item.keywords.join(" ")}`}
-                  keywords={item.keywords}
-                  onSelect={() => handleSelect(item.path)}
-                  className="flex items-center justify-between gap-2 py-2"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="p-1.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-medium text-foreground text-xs truncate">{item.title}</span>
-                      <span className="text-[11px] text-muted-foreground truncate">{item.subtitle}</span>
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded bg-muted/60 shrink-0">
-                    Master
-                  </span>
-                </CommandItem>
-              );
-            })}
-          </CommandGroup>
+              {/* 8. Seluruh Modul Master Data */}
+              <CommandGroup heading="Master Data & Konfigurasi">
+                {(isSearching ? masterDataItems : masterDataItems.slice(0, 5)).map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <CommandItem
+                      key={item.id}
+                      value={`${item.id} ${item.title} ${item.subtitle} ${item.keywords.join(" ")}`}
+                      keywords={item.keywords}
+                      onSelect={() => handleSelect(item.path)}
+                      className="flex items-center justify-between gap-2 py-2"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-1.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-medium text-foreground text-xs truncate">{item.title}</span>
+                          <span className="text-[11px] text-muted-foreground truncate">{item.subtitle}</span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded bg-muted/60 shrink-0">
+                        Master
+                      </span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </>
+          )}
 
           {/* 9. Entitas Master Data Spesifik (Material SAP & Rekanan Vendor saat mencari) */}
-          {isSearching && (
+          {canManageSystem && isSearching && (
             <>
               <CommandSeparator />
 
@@ -755,16 +760,16 @@ export function GlobalSearch() {
         <div className="flex items-center justify-between border-t px-3.5 py-2 text-[11px] text-muted-foreground bg-muted/30">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
-              <kbd className="rounded border bg-background px-1 py-0.2 font-mono text-[10px]">↑</kbd>
-              <kbd className="rounded border bg-background px-1 py-0.2 font-mono text-[10px]">↓</kbd>
+              <kbd className="rounded border bg-background px-1 py-0.5 font-mono text-[10px]">↑</kbd>
+              <kbd className="rounded border bg-background px-1 py-0.5 font-mono text-[10px]">↓</kbd>
               <span>Navigasi</span>
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded border bg-background px-1.5 py-0.2 font-mono text-[10px]">↵</kbd>
+              <kbd className="rounded border bg-background px-1.5 py-0.5 font-mono text-[10px]">↵</kbd>
               <span>Pilih</span>
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded border bg-background px-1.5 py-0.2 font-mono text-[10px]">Esc</kbd>
+              <kbd className="rounded border bg-background px-1.5 py-0.5 font-mono text-[10px]">Esc</kbd>
               <span>Tutup</span>
             </span>
           </div>

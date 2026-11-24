@@ -2,7 +2,7 @@ import "dotenv/config";
 import { db } from "../src/server/db";
 
 async function clearDemoTransactions() {
-  console.log("🧹 Memulai pembersihan data transaksi demo dari Neon PostgreSQL...\n");
+  console.log("[CLEAN] Memulai pembersihan data transaksi demo dari Neon PostgreSQL...\n");
 
   try {
     // Hapus data transaksi dengan urutan relasional yang aman
@@ -82,7 +82,7 @@ async function clearDemoTransactions() {
         db.approvalMatrixRule.count(),
       ]);
 
-    console.log("✅ MASTER DATA PERUSAHAAN TETAP UTUH:");
+    console.log("[OK] MASTER DATA PERUSAHAAN TETAP UTUH:");
     console.log(`   - Akun Pengguna Aktif: ${userCount}`);
     console.log(`   - Wilayah (Regions): ${regionCount}`);
     console.log(`   - Perusahaan (PT): ${companyCount}`);
@@ -92,7 +92,7 @@ async function clearDemoTransactions() {
     console.log(`   - Supplier Rekanan: ${supCount}`);
     console.log(`   - Aturan Matriks Approval: ${ruleCount}`);
 
-    console.log("\n🎉 BASIS DATA BERSIH 100%! SIAP UNTUK PENGISIAN DATA & DOKUMEN ASLI.");
+    console.log("\n[DONE] BASIS DATA BERSIH 100%! SIAP UNTUK PENGISIAN DATA & DOKUMEN ASLI.");
   } catch (err: any) {
     console.error("Gagal membersihkan data transaksi demo:", err.message);
   } finally {

@@ -52,37 +52,36 @@ interface LevelCellProps {
 
 function LevelCell({ tierId, levelIndex, isActive, roleName, onToggle }: LevelCellProps) {
   return (
-    <TooltipProvider delayDuration={300}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            onClick={() => onToggle(tierId, levelIndex)}
-            className={cn(
-              "flex items-center justify-center w-8 h-8 rounded-md transition-all duration-150 mx-auto",
-              isActive
-                ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/60 ring-1 ring-emerald-300 dark:ring-emerald-700"
-                : "bg-muted/50 text-muted-foreground/50 hover:bg-muted hover:text-muted-foreground"
-            )}
-            aria-label={`${isActive ? "Nonaktifkan" : "Aktifkan"} Level ${levelIndex + 1}: ${roleName}`}
-          >
-            {isActive ? (
-              <CheckCircle2 className="w-4 h-4" />
-            ) : (
-              <Circle className="w-3.5 h-3.5" />
-            )}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          {isActive ? (
-            <span>
-              <strong>Level {levelIndex + 1}: {roleName}</strong> aktif - klik untuk nonaktifkan
-            </span>
-          ) : (
-            <span>Klik untuk aktifkan <strong>Level {levelIndex + 1}: {roleName}</strong></span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={() => onToggle(tierId, levelIndex)}
+          className={cn(
+            "flex items-center justify-center w-8 h-8 rounded-md transition-all duration-150 mx-auto",
+            isActive
+              ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/60 ring-1 ring-emerald-300 dark:ring-emerald-700"
+              : "bg-muted/50 text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground"
           )}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+          aria-label={`${isActive ? "Nonaktifkan" : "Aktifkan"} Level ${levelIndex + 1}: ${roleName}`}
+        >
+          {isActive ? (
+            <CheckCircle2 className="w-4 h-4" />
+          ) : (
+            <Circle className="w-3.5 h-3.5" />
+          )}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        {isActive ? (
+          <span>
+            <strong>Level {levelIndex + 1}: {roleName}</strong> aktif - klik untuk nonaktifkan
+          </span>
+        ) : (
+          <span>Klik untuk aktifkan <strong>Level {levelIndex + 1}: {roleName}</strong></span>
+        )}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -143,6 +142,10 @@ export default function MasterDataApprovalMatrixPage() {
       toast.error("Nama tingkatan wajib diisi");
       return;
     }
+    if (minValue < 0 || maxValue < minValue) {
+      toast.error("Batas Max harus lebih besar atau sama dengan Batas Min (min >= 0)");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -200,7 +203,7 @@ export default function MasterDataApprovalMatrixPage() {
         <Button
           size="sm"
           onClick={handleOpenAdd}
-          className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+          className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm"
         >
           <Plus className="w-3.5 h-3.5" /> Tambah Tingkatan Baru
         </Button>
@@ -237,7 +240,8 @@ export default function MasterDataApprovalMatrixPage() {
         </div>
       </div>
       {/* Table Card */}
-      <Card className="shadow-xs overflow-hidden">
+      <TooltipProvider delayDuration={200}>
+      <Card className="shadow-sm overflow-hidden">
         <CardHeader className="p-3.5 border-b flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-semibold">
             Tingkatan Batasan Nilai AFCE &amp; Penugasan Wewenang Penyetuju
@@ -251,7 +255,7 @@ export default function MasterDataApprovalMatrixPage() {
           <table className="w-full text-xs border-collapse min-w-[900px]">
             <thead>
               <tr className="border-b bg-muted/30">
-                <th className="text-left font-semibold px-3 py-2.5 min-w-[180px] sticky left-0 bg-muted/30 z-10">
+                <th className="text-left font-semibold px-3 py-2.5 min-w-[180px] sticky left-0 bg-muted z-10 border-r shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)]">
                   Tingkatan (Tier)
                 </th>
                 <th className="text-right font-semibold px-3 py-2.5 whitespace-nowrap min-w-[110px]">
@@ -262,22 +266,20 @@ export default function MasterDataApprovalMatrixPage() {
                 </th>
                 {/* Level columns */}
                 {APPROVAL_LEVEL_ORDER.map((role, i) => (
-                  <TooltipProvider key={role} delayDuration={200}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <th className="font-semibold px-1 py-2.5 text-center whitespace-nowrap w-12 cursor-default">
-                          <span className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">
-                            L{i + 1}
-                          </span>
-                          <br />
-                          <span className="text-[10px] font-mono text-foreground/70">{role}</span>
-                        </th>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs">
-                        Level {i + 1}: <strong>{APPROVAL_LEVEL_LABELS[role]}</strong>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  <Tooltip key={role}>
+                    <TooltipTrigger asChild>
+                      <th className="font-semibold px-1 py-2.5 text-center whitespace-nowrap w-12 cursor-default">
+                        <span className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+                          L{i + 1}
+                        </span>
+                        <br />
+                        <span className="text-[10px] font-mono text-foreground/70">{role}</span>
+                      </th>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      Level {i + 1}: <strong>{APPROVAL_LEVEL_LABELS[role]}</strong>
+                    </TooltipContent>
+                  </Tooltip>
                 ))}
                 <th className="text-center font-semibold px-2 py-2.5 whitespace-nowrap w-[70px]">
                   Status
@@ -307,10 +309,10 @@ export default function MasterDataApprovalMatrixPage() {
                     )}
                   >
                     {/* Tier name */}
-                    <td className="px-3 py-2.5 sticky left-0 z-10 bg-inherit">
+                    <td className="px-3 py-2.5 sticky left-0 z-10 bg-card border-r shadow-[2px_0_4px_-1px_rgba(0,0,0,0.06)]">
                       <span className="font-semibold text-foreground">{tier.tierName}</span>
                       {activeCount > 0 && (
-                        <span className="ml-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono bg-emerald-50 dark:bg-emerald-950/30 px-1.5 py-0.5 rounded">
+                        <span className="ml-2 text-[10px] text-emerald-700 dark:text-emerald-400 font-mono bg-emerald-50 dark:bg-emerald-950/30 px-1.5 py-0.5 rounded">
                           {activeCount} level
                         </span>
                       )}
@@ -386,6 +388,7 @@ export default function MasterDataApprovalMatrixPage() {
           </table>
         </CardContent>
       </Card>
+      </TooltipProvider>
 
       {/* Add / Edit Tier Dialog - only name + range */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -457,7 +460,7 @@ export default function MasterDataApprovalMatrixPage() {
               size="sm"
               onClick={handleSave}
               disabled={isSubmitting}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white"
             >
               {isSubmitting ? "Menyimpan..." : editingTier ? "Simpan Perubahan" : "Simpan Tier"}
             </Button>

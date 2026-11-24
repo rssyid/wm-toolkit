@@ -1,18 +1,64 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadFileToGoogleDrive, getOrCreateGoogleDriveFolder } from "@/server/google-drive";
+import { uploadFileToGoogleDrive, getOrCreateGoogleDriveFolder, isGoogleDriveConfigured } from "@/server/google-drive";
 import { db } from "@/server/db";
-import { auth } from "@/auth";
+import { getCurrentUser } from "@/server/auth-guard";
 
-export const maxDuration = 60; // Izinkan durasi streaming hingga 60 detik di Vercel
+export const maxDuration = 60;
+
+const ALLOWED_EXTENSIONS = new Set([
+  "pdf",
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+  "csv",
+  "txt",
+]);
+
+const ALLOWED_MIME_PREFIXES = [
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/csv",
+  "text/plain",
+];
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Verifikasi sesi login (jika ada sesi NextAuth)
-    const session = await auth();
-    // Jika tidak ada session (misal saat transisi demo lokal), izinkan atau tangani dengan aman
-    const uploaderName = session?.user?.name || "Pengguna WM-Toolkit";
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Sesi Anda telah berakhir. Silakan login kembali." },
+        { status: 401 }
+      );
+    }
 
-    // 2. Ambil payload multi-part FormData
+    if (user.role === "VIEWER") {
+      return NextResponse.json(
+        { success: false, error: "Peran VIEWER tidak memiliki izin untuk mengunggah berkas." },
+        { status: 403 }
+      );
+    }
+
+    if (!isGoogleDriveConfigured()) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Integrasi Google Drive belum dikonfigurasi pada server. Hubungi administrator.",
+        },
+        { status: 503 }
+      );
+    }
+
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const projectId = (formData.get("projectId") as string | null) || undefined;
@@ -24,50 +70,54 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Batasi ukuran maksimum 15 MB
-    const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
-    if (file.size > MAX_FILE_SIZE) {
+    const ext = file.name.split(".").pop()?.toLowerCase() || "";
+    const mimeAllowed =
+      !file.type ||
+      ALLOWED_MIME_PREFIXES.includes(file.type) ||
+      file.type === "application/octet-stream";
+
+    if (!ALLOWED_EXTENSIONS.has(ext) || !mimeAllowed) {
       return NextResponse.json(
         {
           success: false,
-          error: "Ukuran berkas melebihi batas maksimum 15 MB.",
+          error: "Tipe berkas tidak diizinkan. Gunakan PDF, gambar (PNG/JPG/WebP), Word, Excel, CSV, atau TXT.",
         },
         { status: 400 }
       );
     }
 
-    // 4. Ubah file stream menjadi Buffer
+    const MAX_FILE_SIZE = 15 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { success: false, error: "Ukuran berkas melebihi batas maksimum 15 MB." },
+        { status: 400 }
+      );
+    }
+
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // 5. Tentukan folder target di Google Drive (Folder khusus per proyek jika ada projectId)
     let targetFolderId: string | undefined = process.env.GOOGLE_DRIVE_FOLDER_ID;
     let projectFolderName: string | undefined;
     let projectFolderViewLink: string | undefined;
 
     if (projectId) {
-      try {
-        const project = await db.project.findUnique({
-          where: { id: projectId },
-          select: { id: true, projectCode: true, name: true },
-        });
+      const project = await db.project.findUnique({
+        where: { id: projectId },
+        select: { id: true, projectCode: true, name: true },
+      });
 
-        if (project) {
-          projectFolderName = `[${project.projectCode}] ${project.name}`.trim();
-          const folderInfo = await getOrCreateGoogleDriveFolder({
-            folderName: projectFolderName,
-            parentFolderId: targetFolderId,
-          });
-          targetFolderId = folderInfo.id;
-          projectFolderViewLink = folderInfo.webViewLink;
-        }
-      } catch (folderErr: any) {
-        console.warn("Peringatan pembuatan folder proyek Google Drive:", folderErr?.message);
-        // Tetap lanjutkan upload ke folder induk root jika gagal membuat folder spesifik proyek
+      if (project) {
+        projectFolderName = `[${project.projectCode}] ${project.name}`.trim();
+        const folderInfo = await getOrCreateGoogleDriveFolder({
+          folderName: projectFolderName,
+          parentFolderId: targetFolderId,
+        });
+        targetFolderId = folderInfo.id;
+        projectFolderViewLink = folderInfo.webViewLink;
       }
     }
 
-    // 6. Unggah ke Google Drive (di dalam folder proyek)
     const uploadResult = await uploadFileToGoogleDrive({
       buffer,
       fileName: file.name,
@@ -79,20 +129,15 @@ export async function POST(req: NextRequest) {
       success: true,
       data: {
         ...uploadResult,
-        uploaderName,
+        uploaderName: user.name,
         folderId: targetFolderId,
         folderName: projectFolderName,
         folderViewLink: projectFolderViewLink,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Gagal mengunggah berkas ke Google Drive.";
     console.error("Kesalahan API Upload Google Drive:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message || "Gagal mengunggah berkas ke Google Drive.",
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

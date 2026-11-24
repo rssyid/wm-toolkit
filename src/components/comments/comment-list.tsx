@@ -11,14 +11,22 @@ import {
   User,
   Filter,
 } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { AttachmentPreview } from "@/components/shared/attachment-preview";
 import { useAppState } from "@/context/app-state-context";
-import { ProjectComment, ProjectAttachment } from "@/types";
+import { ProjectAttachment } from "@/types";
 import { formatIDDate } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -27,9 +35,20 @@ interface CommentListProps {
 }
 
 export function CommentList({ projectId }: CommentListProps) {
-  const { comments, attachments, deleteComment, users, userProfile, isViewerOnly } = useAppState();
+  const {
+    comments,
+    attachments,
+    deleteComment,
+    users,
+    userProfile,
+    activeUserId,
+    isAdmin,
+    isViewerOnly,
+  } = useAppState();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedUserFilter, setSelectedUserFilter] = useState<string>("ALL");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Filter comments for this project
   const projectComments = comments.filter((c) => c.projectId === projectId);
@@ -71,19 +90,27 @@ export function CommentList({ projectId }: CommentListProps) {
     }
   };
 
-  // Helper to render text with highlighted mentions
   const renderFormattedContent = (content: string) => {
-    const tokens = content.split(/(@[A-Za-z0-9\s.,]+?)(?=\s@|\s[a-z]|\s|$)/g);
+    const escapedNames = users
+      .map((u) => u.name)
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length)
+      .map((name) => `@${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
+
+    const pattern =
+      escapedNames.length > 0
+        ? new RegExp(`(${escapedNames.join("|")}|@[^\\s]+)`, "g")
+        : /(@[^\s]+)/g;
+
+    const tokens = content.split(pattern);
 
     return (
       <span className="leading-relaxed">
         {tokens.map((token, idx) => {
-          if (token.startsWith("@")) {
+          if (token.startsWith("@") && token.length > 1) {
             const cleanMentionName = token.slice(1).trim();
             const matchedUser = users.find(
-              (u) =>
-                u.name.toLowerCase() === cleanMentionName.toLowerCase() ||
-                token.includes(u.name)
+              (u) => u.name.toLowerCase() === cleanMentionName.toLowerCase()
             );
 
             return (
@@ -101,10 +128,17 @@ export function CommentList({ projectId }: CommentListProps) {
     );
   };
 
-  const handleDelete = (commentId: string) => {
-    if (confirm("Apakah Anda yakin ingin menghapus komentar ini?")) {
-      deleteComment(commentId);
-      toast.success("Komentar telah dihapus.");
+  const confirmDelete = async () => {
+    if (!confirmDeleteId) return;
+    setIsDeleting(true);
+    try {
+      const ok = await deleteComment(confirmDeleteId);
+      if (ok) {
+        toast.success("Komentar telah dihapus.");
+        setConfirmDeleteId(null);
+      }
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -129,7 +163,8 @@ export function CommentList({ projectId }: CommentListProps) {
           <select
             value={selectedUserFilter}
             onChange={(e) => setSelectedUserFilter(e.target.value)}
-            className="h-8 text-xs rounded-md border border-input bg-background px-2 text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            aria-label="Filter komentar berdasarkan anggota tim"
+            className="h-8 text-xs rounded-md border border-input bg-background px-2 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="ALL">Semua Anggota Tim</option>
             {users.map((u) => (
@@ -143,7 +178,7 @@ export function CommentList({ projectId }: CommentListProps) {
 
       {/* Feed List */}
       {filteredComments.length === 0 ? (
-        <Card className="shadow-xs border-dashed">
+        <Card className="shadow-sm border-dashed">
           <CardContent className="p-8 text-center space-y-2">
             <MessageSquare className="w-8 h-8 text-muted-foreground/60 mx-auto" />
             <p className="text-xs font-semibold text-foreground">Belum ada diskusi atau komentar</p>
@@ -166,15 +201,17 @@ export function CommentList({ projectId }: CommentListProps) {
             ];
 
             const isAuthor =
+              (Boolean(activeUserId) && comment.userId === activeUserId) ||
               comment.userName === userProfile.fullName ||
               comment.userId === userProfile.username;
+            const canDelete = !isViewerOnly && (isAdmin || isAuthor);
 
             return (
               <div key={comment.id} className="relative">
                 {/* Timeline Node Dot */}
-                <span className="absolute -left-[31px] top-4 w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-background" />
+                <span className="absolute -left-[31px] top-4 w-3 h-3 rounded-full bg-emerald-600 ring-4 ring-background" />
 
-                <Card className="shadow-xs hover:border-border transition-colors border-border/80">
+                <Card className="shadow-sm hover:border-border transition-colors border-border/80">
                   <CardContent className="p-4 space-y-3">
                     {/* Author Header */}
                     <div className="flex items-start justify-between gap-3">
@@ -204,14 +241,15 @@ export function CommentList({ projectId }: CommentListProps) {
                         </div>
                       </div>
 
-                      {!isViewerOnly && (
+                      {canDelete && (
                         <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDelete(comment.id)}
-                            className="h-7 w-7 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                            onClick={() => setConfirmDeleteId(comment.id)}
+                            className="h-7 w-7 text-muted-foreground hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                             title="Hapus komentar"
+                            aria-label="Hapus komentar"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
@@ -291,6 +329,40 @@ export function CommentList({ projectId }: CommentListProps) {
         })}
       </div>
       )}
+
+      <Dialog
+        open={Boolean(confirmDeleteId)}
+        onOpenChange={(isOpen) => {
+          if (!isOpen && !isDeleting) setConfirmDeleteId(null);
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Hapus Komentar</DialogTitle>
+            <DialogDescription className="text-xs">
+              Komentar ini akan dihapus secara permanen dari riwayat diskusi proyek.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmDeleteId(null)}
+              disabled={isDeleting}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={confirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Menghapus..." : "Hapus Komentar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

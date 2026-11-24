@@ -5,29 +5,31 @@ import Link from "next/link";
 import { usePathname, useParams, useRouter } from "next/navigation";
 import {
   ChevronLeft,
-  Calendar,
-  Layers,
-  FileCheck2,
-  FileSpreadsheet,
-  ShoppingCart,
-  TrendingUp,
-  FileText,
-  History,
-  Edit,
   Plus,
   Send,
-  Building,
-  CheckCircle,
-  AlertTriangle,
   ShieldCheck,
   RotateCcw,
   Eye,
   Trash2,
+  Edit,
+  CheckCircle,
+  AlertTriangle,
+  TrendingUp,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { useAppState } from "@/context/app-state-context";
-import { formatIDDate, formatIDR, cn } from "@/lib/utils";
+import { formatIDDate, formatIDR, calculateDaysBetween, cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -41,8 +43,7 @@ import { PRRecordDialog } from "@/components/procurement/pr-record-dialog";
 import { POCreateDialog } from "@/components/procurement/po-create-dialog";
 import { DailyProgressDialog } from "@/components/progress/daily-progress-dialog";
 import { CollaborationDrawer } from "@/components/workspace/collaboration-drawer";
-import { MessageSquare, Paperclip } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ProjectStatus } from "@/types";
 import { toast } from "sonner";
 
 export default function ProjectDetailLayout({
@@ -54,10 +55,17 @@ export default function ProjectDetailLayout({
   const params = useParams();
   const router = useRouter();
   const projectId = params?.projectId as string;
+
   const {
+    isLoading,
     projects,
     afces,
+    prs,
+    vendorEvaluations,
+    locations,
+    users,
     submitAfceApproval,
+    updateProject,
     canEditProjects,
     canApproveAfce,
     canManageSystem,
@@ -70,9 +78,9 @@ export default function ProjectDetailLayout({
   } = useAppState();
 
   const project = projects.find((p) => p.id === projectId);
-  const afce = afces.find((a) => a.projectId === projectId);
+  const afce = afces.find((a) => a.projectId === projectId && !a.deletedAt);
 
-  // Modal dialog states
+  // Dialog states
   const [afceDialogOpen, setAfceDialogOpen] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
   const [poDialogOpen, setPoDialogOpen] = useState(false);
@@ -82,26 +90,133 @@ export default function ProjectDetailLayout({
   const [hardDeleteDialogOpen, setHardDeleteDialogOpen] = useState(false);
   const [isHardDeleting, setIsHardDeleting] = useState(false);
 
+  // Modal Edit Proyek (F1)
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editPicId, setEditPicId] = useState("");
+  const [editStatus, setEditStatus] = useState<ProjectStatus>("Planned");
+  const [editLocationIds, setEditLocationIds] = useState<string[]>([]);
+  const [editBaselineStart, setEditBaselineStart] = useState("");
+  const [editBaselineEnd, setEditBaselineEnd] = useState("");
+  const [editTargetEnd, setEditTargetEnd] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
   const projectCommentsCount = comments.filter((c) => c.projectId === projectId).length;
   const projectAttachmentsCount = attachments.filter((a) => a.projectId === projectId).length;
 
-  if (!project) {
+  if (isLoading) {
     return (
-      <div className="p-12 text-center space-y-3">
-        <h2 className="text-base font-semibold">Proyek tidak ditemukan</h2>
-        <p className="text-xs text-muted-foreground">
-          Proyek dengan ID {projectId} tidak ada dalam database lokal.
-        </p>
-        <Link href="/workspace">
-          <Button size="sm" variant="outline">
-            Kembali ke Workspace
-          </Button>
-        </Link>
+      <div className="space-y-4">
+        <div className="rounded-lg border bg-card p-6 space-y-3">
+          <div className="h-4 w-40 rounded bg-muted" />
+          <div className="h-6 w-2/3 rounded bg-muted" />
+          <div className="h-4 w-1/2 rounded bg-muted" />
+        </div>
+        <div className="rounded-lg border bg-card p-6 h-48" />
       </div>
     );
   }
 
-  // 4 Primary Integrated Tabs
+  if (!project) {
+    return (
+      <div className="p-12 text-center space-y-3">
+        <h1 className="text-lg font-semibold">Proyek tidak ditemukan</h1>
+        <p className="text-xs text-muted-foreground">
+          Proyek dengan ID {projectId} tidak tersedia pada basis data atau sudah dihapus permanen.
+        </p>
+        <Button asChild size="sm" variant="outline">
+          <Link href="/workspace">Kembali ke Workspace</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const isAfceApproved = project.afceStatus === "Approved";
+  const hasRecommendedPr = prs.some(
+    (pr) =>
+      pr.projectId === project.id &&
+      !pr.deletedAt &&
+      vendorEvaluations.some((ve) => ve.prId === pr.id && ve.result === "RECOMMENDED")
+  );
+
+  const picCandidates = users.filter(
+    (u) => u.status === "Active" && (u.role === "PIC" || u.role === "ADMIN")
+  );
+
+  const handleOpenEditProject = () => {
+    setEditName(project.name);
+    setEditDescription(project.description || "");
+    setEditPicId(project.picId || "");
+    setEditStatus(project.status);
+    setEditLocationIds(
+      project.locationIds && project.locationIds.length > 0
+        ? project.locationIds
+        : project.locationId
+        ? [project.locationId]
+        : []
+    );
+    setEditBaselineStart(project.baselineStartDate);
+    setEditBaselineEnd(project.baselineEndDate);
+    setEditTargetEnd(project.targetEndDate);
+    setEditDialogOpen(true);
+  };
+
+  const handleToggleEditLocation = (locId: string) => {
+    setEditLocationIds((prev) =>
+      prev.includes(locId) ? prev.filter((id) => id !== locId) : [...prev, locId]
+    );
+  };
+
+  const handleSaveEditProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editName.trim() || editName.trim().length < 5) {
+      toast.error("Nama proyek minimal 5 karakter.");
+      return;
+    }
+    if (editLocationIds.length === 0) {
+      toast.error("Pilih minimal 1 lokasi kebun proyek.");
+      return;
+    }
+    if (editBaselineStart && editBaselineEnd && editBaselineEnd < editBaselineStart) {
+      toast.error("Tanggal akhir baseline tidak boleh lebih awal dari tanggal mulai.");
+      return;
+    }
+    if (editBaselineStart && editTargetEnd && editTargetEnd < editBaselineStart) {
+      toast.error("Target selesai tidak boleh lebih awal dari tanggal mulai baseline.");
+      return;
+    }
+
+    const selectedLocs = locations.filter((l) => editLocationIds.includes(l.id));
+    const locationNamesList = selectedLocs.map((l) => l.name);
+    const primaryLoc = selectedLocs[0];
+    const durationDays = calculateDaysBetween(editBaselineStart, editBaselineEnd);
+
+    setIsSavingEdit(true);
+    try {
+      const ok = await updateProject(project.id, {
+        name: editName.trim(),
+        description: editDescription.trim(),
+        picId: editPicId || undefined,
+        status: editStatus,
+        locationId: primaryLoc?.id || project.locationId,
+        locationName: locationNamesList.join(", ") || project.locationName,
+        locationIds: editLocationIds,
+        locationNames: locationNamesList,
+        baselineStartDate: editBaselineStart,
+        baselineEndDate: editBaselineEnd,
+        targetEndDate: editTargetEnd,
+        durationDays: durationDays > 0 ? durationDays : project.durationDays,
+      });
+      if (ok) {
+        toast.success("Informasi proyek berhasil diperbarui.");
+        setEditDialogOpen(false);
+      }
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   const primaryTabs = [
     {
       label: "Ringkasan Proyek",
@@ -138,31 +253,54 @@ export default function ProjectDetailLayout({
         `/workspace/${projectId}/survey-boq`,
       ],
     },
+    {
+      label: "Riwayat Audit",
+      href: `/workspace/${projectId}/history`,
+      matchPrefixes: [`/workspace/${projectId}/history`],
+    },
   ];
 
   return (
     <div className="space-y-4">
-      {/* Soft Delete Warning Banner */}
+      {/* Banner Recycle Bin Tunggal */}
       {project.deletedAt && (
-        <div className="rounded-lg border border-rose-300 bg-rose-50 dark:bg-rose-950/60 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-800 dark:text-rose-200 shadow-xs">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>
-              Proyek ini berada dalam <strong>Recycle Bin</strong> (dihapus pada {formatIDDate(project.deletedAt.split("T")[0])}).
-            </span>
+        <div className="rounded-lg border border-rose-300 bg-rose-50/90 dark:bg-rose-950/50 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-sm">
+          <div className="flex items-center gap-2.5 text-rose-900 dark:text-rose-200">
+            <Trash2 className="w-4 h-4 shrink-0 text-rose-700 dark:text-rose-400" />
+            <div>
+              <span className="font-bold">Proyek berada di dalam Recycle Bin</span>
+              <span className="hidden sm:inline">
+                {" "}
+                (dihapus pada {formatIDDate(project.deletedAt.split("T")[0])}).
+              </span>
+            </div>
           </div>
-          <Button
-            size="sm"
-            onClick={() => restoreProject(project.id)}
-            className="h-7 text-xs bg-rose-600 hover:bg-rose-700 text-white gap-1.5 shrink-0"
-          >
-            <RotateCcw className="w-3.5 h-3.5" /> Pulihkan Proyek Ini
-          </Button>
+          {canEditProjects && (
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void restoreProject(project.id)}
+                className="h-9 text-xs gap-1.5 border-emerald-500 text-emerald-800 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 font-semibold"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Pulihkan Proyek
+              </Button>
+              {canManageSystem && (
+                <Button
+                  size="sm"
+                  onClick={() => setHardDeleteDialogOpen(true)}
+                  className="h-9 text-xs gap-1.5 bg-rose-700 hover:bg-rose-800 text-white font-semibold"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Hapus Permanen
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Back button & Breadcrumb */}
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
+      {/* Breadcrumb Navigasi */}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <Link
           href="/workspace"
           className="hover:text-foreground inline-flex items-center gap-1 font-medium transition-colors"
@@ -179,7 +317,9 @@ export default function ProjectDetailLayout({
           {project.companyName && (
             <>
               <span className="font-semibold text-foreground">
-                {project.companyName.includes("(") ? project.companyName.split("(")[0].trim() : project.companyName}
+                {project.companyName.includes("(")
+                  ? project.companyName.split("(")[0].trim()
+                  : project.companyName}
               </span>
               <span>/</span>
             </>
@@ -204,92 +344,26 @@ export default function ProjectDetailLayout({
         </div>
       </div>
 
-      {/* Prominent Project Sticky Header */}
-      {project.deletedAt && (
-        <div className="rounded-lg border border-rose-300 bg-rose-50/80 dark:bg-rose-950/40 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2.5 text-rose-800 dark:text-rose-200">
-            <Trash2 className="w-4 h-4 shrink-0 text-rose-600" />
-            <div>
-              <span className="font-bold">Proyek ini berada di dalam Recycle Bin</span>
-              <span className="hidden sm:inline"> (dihapus sementara pada {formatIDDate(project.deletedAt)}).</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                restoreProject(project.id);
-                toast.success("Proyek berhasil dipulihkan!");
-              }}
-              className="h-7 text-xs gap-1 border-emerald-400 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 font-semibold"
-            >
-              <RotateCcw className="w-3 h-3" /> Pulihkan Proyek
-            </Button>
-            {canManageSystem && (
-              <Button
-                size="sm"
-                onClick={() => setHardDeleteDialogOpen(true)}
-                className="h-7 text-xs gap-1 bg-rose-600 hover:bg-rose-700 text-white font-semibold"
-              >
-                <Trash2 className="w-3 h-3" /> Hapus Permanen
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-lg border bg-card p-4 shadow-xs space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1">
+      {/* Header Proyek Utama */}
+      <div className="rounded-lg border bg-card p-4 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div className="space-y-1.5 min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-xs font-bold bg-muted px-2 py-0.5 rounded text-foreground">
                 {project.code}
               </span>
               <StatusBadge status={project.status} />
               <StatusBadge status={project.afceStatus} />
-              {project.companyName && (
-                <span className="text-xs px-2 py-0.5 rounded font-medium bg-blue-50 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                  {project.companyName.includes("(") ? project.companyName.split("(")[0].trim() : project.companyName}
+              {project.picName && (
+                <span className="text-xs px-2 py-0.5 rounded font-medium bg-muted text-foreground border">
+                  PIC: {project.picName}
                 </span>
               )}
-              {project.locationNames && project.locationNames.length > 1 ? (
-                project.locationNames.map((loc, idx) => (
-                  <span
-                    key={idx}
-                    className="text-xs px-2 py-0.5 rounded font-medium bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-                  >
-                    {loc}
-                  </span>
-                ))
-              ) : (
-                <span className="text-xs px-2 py-0.5 rounded font-medium bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                  {project.locationName}
-                </span>
-              )}
-              {project.blockCodes && project.blockCodes.length > 1 ? (
-                project.blockCodes.map((blk, idx) => (
-                  <span
-                    key={idx}
-                    className="text-xs px-2 py-0.5 rounded font-mono font-medium bg-muted text-foreground border"
-                  >
-                    {blk}
-                  </span>
-                ))
-              ) : project.blockCode ? (
-                <span className="text-xs px-2 py-0.5 rounded font-mono font-medium bg-muted text-foreground border">
-                  {project.blockCode}
-                </span>
-              ) : null}
               {project.projectCategoryName && (
-                <>
-                  <span className="text-xs text-muted-foreground hidden sm:inline">&bull;</span>
-                  <span className="text-xs px-2 py-0.5 rounded font-medium bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                    {project.projectCategoryName}
-                  </span>
-                </>
+                <span className="text-xs px-2 py-0.5 rounded font-medium bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                  {project.projectCategoryName}
+                </span>
               )}
-              <span className="text-xs text-muted-foreground hidden sm:inline">&bull;</span>
               <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
                 {project.projectType}
               </span>
@@ -299,172 +373,180 @@ export default function ProjectDetailLayout({
               {project.name}
             </h1>
 
-            <p className="text-xs text-muted-foreground max-w-2xl line-clamp-2">
-              {project.description}
-            </p>
+            {project.description && (
+              <p className="text-xs text-muted-foreground max-w-2xl line-clamp-2">
+                {project.description}
+              </p>
+            )}
           </div>
 
-          {/* Quick Metrics & Actions */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 lg:border-l lg:pl-6 shrink-0">
-            {/* Progress Counter */}
-            <div className="text-left sm:text-right">
-              <span className="text-[11px] text-muted-foreground block font-medium">
-                Kemajuan Fisik Total
-              </span>
-              <span className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                {project.progress}%
-              </span>
-              <span className="text-[10px] text-muted-foreground block font-mono">
-                Target: {formatIDDate(project.targetEndDate)}
-              </span>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              {isViewerOnly ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs px-2.5 py-1 rounded bg-muted text-muted-foreground border font-medium inline-flex items-center gap-1.5">
-                    <Eye className="w-3.5 h-3.5 text-blue-500" /> Mode Pantau (Read-Only)
-                  </span>
-                </div>
-              ) : (
-                <>
-                  {canApproveAfce && project.afceStatus === "Pending Approval" && (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        if (afce) {
-                          setAfceDialogOpen(true);
-                        } else {
-                          toast.info("Dokumen AFCE belum dikonfigurasi");
-                        }
-                      }}
-                      className="h-8 text-xs gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-xs"
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5" /> Input Approval AFCE ({afce?.currentApproverRole || "Reviewer"})
-                    </Button>
-                  )}
-
-                  {canEditProjects && project.afceStatus === "Draft" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        if (afce) {
-                          submitAfceApproval(afce.id, "Pengajuan dokumen AFCE untuk persetujuan berjenjang.");
-                          toast.success("Permintaan persetujuan AFCE berhasil diajukan!");
-                        } else {
-                          toast.info("Dokumen AFCE belum dikonfigurasi");
-                        }
-                      }}
-                      className="h-8 text-xs gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300"
-                    >
-                      <Send className="w-3.5 h-3.5" /> Ajukan Approval AFCE
-                    </Button>
-                  )}
-
-                  {canApproveAfce && project.afceStatus === "Need Revision" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        if (afce) {
-                          setAfceDialogOpen(true);
-                        }
-                      }}
-                      className="h-8 text-xs gap-1.5 border-amber-400 text-amber-700 hover:bg-amber-50"
-                    >
-                      <Send className="w-3.5 h-3.5" /> Evaluasi Revisi AFCE
-                    </Button>
-                  )}
-
-                  {project.afceStatus === "Approved" && (
-                    <span className="h-8 px-2.5 rounded-md bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 inline-flex items-center gap-1 text-xs font-semibold">
-                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> AFCE Disetujui
-                    </span>
-                  )}
-
-                  {canEditProjects && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setPrDialogOpen(true)}
-                        className="h-8 text-xs gap-1"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Tambah PR
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setPoDialogOpen(true)}
-                        className="h-8 text-xs gap-1"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Buat PO
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        onClick={() => setProgressDialogOpen(true)}
-                        className="h-8 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                      >
-                        <TrendingUp className="w-3.5 h-3.5" /> Input Progress
-                      </Button>
-
-                      {!project.deletedAt && canEditProjects && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setDeleteDialogOpen(true)}
-                          className="h-8 w-8 p-0 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950"
-                          title="Pindahkan proyek ke Recycle Bin"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-
-              {/* Universal Collaboration & Documents Drawer Trigger */}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setCollabDrawerOpen(true)}
-                className="h-8 text-xs gap-1.5 border-dashed hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30"
-              >
-                <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="hidden sm:inline">Berkas & Diskusi</span>
-                <span className="sm:hidden">Kolaborasi</span>
-                {projectCommentsCount + projectAttachmentsCount > 0 && (
-                  <span className="h-4 min-w-[16px] px-1 rounded-full bg-emerald-600 text-[10px] text-white font-mono flex items-center justify-center font-bold">
-                    {projectCommentsCount + projectAttachmentsCount}
-                  </span>
-                )}
-              </Button>
-            </div>
+          <div className="text-left sm:text-right sm:border-l sm:pl-5 shrink-0">
+            <span className="text-[11px] text-muted-foreground block font-medium">
+              Kemajuan Fisik Total
+            </span>
+            <span className="text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
+              {project.progress}%
+            </span>
+            <span className="text-[11px] text-muted-foreground block font-mono">
+              Target: {formatIDDate(project.targetEndDate)}
+            </span>
           </div>
         </div>
 
-        {/* 4 Primary Integrated Tabs Strip */}
+        <div className="flex flex-wrap items-center gap-2 pt-3 border-t">
+          {isViewerOnly ? (
+            <span className="text-xs px-2.5 py-1.5 rounded bg-muted text-muted-foreground border font-medium inline-flex items-center gap-1.5">
+              <Eye className="w-3.5 h-3.5 text-blue-700 dark:text-blue-400" /> Mode Pantau
+            </span>
+          ) : (
+            <>
+              {canApproveAfce && project.afceStatus === "Pending Approval" && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (afce) setAfceDialogOpen(true);
+                    else toast.info("Dokumen AFCE belum dikonfigurasi.");
+                  }}
+                  className="h-9 text-xs gap-1.5 bg-amber-800 hover:bg-amber-900 text-white font-semibold shadow-sm"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" /> Approval AFCE
+                </Button>
+              )}
+
+              {canEditProjects && project.afceStatus === "Draft" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (afce) {
+                      void submitAfceApproval(
+                        afce.id,
+                        "Pengajuan dokumen AFCE untuk persetujuan berjenjang."
+                      );
+                    } else {
+                      toast.info("Dokumen AFCE belum dikonfigurasi.");
+                    }
+                  }}
+                  className="h-9 text-xs gap-1.5 border-blue-300 text-blue-800 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300"
+                >
+                  <Send className="w-3.5 h-3.5" /> Ajukan AFCE
+                </Button>
+              )}
+
+              {isAfceApproved && (
+                <span className="h-9 px-2.5 rounded-md bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 inline-flex items-center gap-1 text-xs font-semibold">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />{" "}
+                  AFCE Disetujui
+                </span>
+              )}
+
+              {canEditProjects && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleOpenEditProject}
+                    className="h-9 text-xs gap-1"
+                  >
+                    <Edit className="w-3.5 h-3.5" /> Edit Proyek
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!isAfceApproved}
+                    title={
+                      !isAfceApproved
+                        ? "Menunggu AFCE disetujui sebelum mencatat PR"
+                        : "Tambah PR Barang"
+                    }
+                    onClick={() => setPrDialogOpen(true)}
+                    className="h-9 text-xs gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Tambah PR
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!isAfceApproved || !hasRecommendedPr}
+                    title={
+                      !isAfceApproved
+                        ? "Menunggu AFCE disetujui"
+                        : !hasRecommendedPr
+                        ? "Memerlukan PR dengan Evaluasi Rekanan Direkomendasikan"
+                        : "Buat Purchase Order"
+                    }
+                    onClick={() => setPoDialogOpen(true)}
+                    className="h-9 text-xs gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Buat PO
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    disabled={!isAfceApproved}
+                    title={
+                      !isAfceApproved
+                        ? "Menunggu AFCE disetujui sebelum mencatat progres"
+                        : "Input Progres Lapangan"
+                    }
+                    onClick={() => setProgressDialogOpen(true)}
+                    className="h-9 text-xs gap-1 bg-emerald-700 hover:bg-emerald-800 text-white"
+                  >
+                    <TrendingUp className="w-3.5 h-3.5" /> Input Progres
+                  </Button>
+
+                  {!project.deletedAt && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Pindahkan proyek ke Recycle Bin"
+                      onClick={() => setDeleteDialogOpen(true)}
+                      className="h-9 w-9 text-muted-foreground hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950"
+                      title="Pindahkan proyek ke Recycle Bin"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCollabDrawerOpen(true)}
+            className="h-9 text-xs gap-1.5 border-dashed hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+            <span className="hidden sm:inline">Berkas &amp; Diskusi</span>
+            <span className="sm:hidden">Diskusi</span>
+            {projectCommentsCount + projectAttachmentsCount > 0 && (
+              <span className="h-4 min-w-[16px] px-1 rounded-full bg-emerald-700 text-[10px] text-white font-mono flex items-center justify-center font-bold">
+                {projectCommentsCount + projectAttachmentsCount}
+              </span>
+            )}
+          </Button>
+        </div>
+
+        {/* Strip Navigasi Tab */}
         <div className="flex items-center gap-1.5 border-t pt-2 overflow-x-auto no-scrollbar">
           {primaryTabs.map((tab) => {
             const isActive = tab.exact
               ? pathname === tab.href
-              : tab.matchPrefixes
-              ? tab.matchPrefixes.some((p) => pathname === p || pathname.startsWith(p + "/"))
-              : pathname.startsWith(tab.href);
+              : tab.matchPrefixes.some((p) => pathname === p || pathname.startsWith(p + "/"));
 
             return (
               <Link
                 key={tab.href}
                 href={tab.href}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "px-3.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors flex items-center gap-1.5",
+                  "px-3.5 py-2 text-xs font-medium rounded-md whitespace-nowrap transition-colors flex items-center gap-1.5",
                   isActive
-                    ? "bg-emerald-600 text-white font-semibold shadow-xs"
+                    ? "bg-emerald-700 text-white font-semibold shadow-sm"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
@@ -475,17 +557,183 @@ export default function ProjectDetailLayout({
         </div>
       </div>
 
-      {/* Main Tab Content Rendered Here */}
       <div className="min-h-[400px]">{children}</div>
 
-      {/* Collaboration Drawer */}
+      {/* Modal Edit Proyek (F1) */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-semibold">Edit Informasi Proyek</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Perbarui nama, deskripsi, PIC, status operasional, lokasi kebun, dan jadwal proyek{" "}
+              <strong className="font-mono">{project.code}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveEditProject} className="space-y-3 text-xs">
+            <div>
+              <label htmlFor="edit-proj-name" className="font-semibold block mb-1">
+                Nama Proyek <span className="text-rose-600">*</span>
+              </label>
+              <Input
+                id="edit-proj-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="h-9 text-xs"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="edit-proj-desc" className="font-semibold block mb-1">
+                Uraian Teknis Proyek
+              </label>
+              <Textarea
+                id="edit-proj-desc"
+                rows={3}
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                className="text-xs resize-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="edit-proj-pic" className="font-semibold block mb-1">
+                  PIC Proyek
+                </label>
+                <Select value={editPicId} onValueChange={setEditPicId}>
+                  <SelectTrigger id="edit-proj-pic" className="h-9 text-xs">
+                    <SelectValue placeholder="Pilih PIC Proyek" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {picCandidates.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.name} ({u.jabatan})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label htmlFor="edit-proj-status" className="font-semibold block mb-1">
+                  Status Operasional
+                </label>
+                <Select
+                  value={editStatus}
+                  onValueChange={(v) => setEditStatus(v as ProjectStatus)}
+                >
+                  <SelectTrigger id="edit-proj-status" className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Planned">Direncanakan (Planned)</SelectItem>
+                    <SelectItem value="In Progress">Sedang Berjalan (In Progress)</SelectItem>
+                    <SelectItem value="On Hold">Ditunda (On Hold)</SelectItem>
+                    <SelectItem value="Completed">Selesai (Completed)</SelectItem>
+                    <SelectItem value="Cancelled">Dibatalkan (Cancelled)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <span className="font-semibold block mb-1.5">
+                Lokasi Kebun Proyek ({editLocationIds.length} dipilih)
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-36 overflow-y-auto p-2 rounded-md border bg-muted/20">
+                {locations.map((loc) => {
+                  const checked = editLocationIds.includes(loc.id);
+                  const checkboxId = `edit-loc-${loc.id}`;
+                  return (
+                    <label
+                      key={loc.id}
+                      htmlFor={checkboxId}
+                      className="flex items-center gap-2 p-1.5 rounded hover:bg-muted cursor-pointer text-xs"
+                    >
+                      <input
+                        id={checkboxId}
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => handleToggleEditLocation(loc.id)}
+                        className="rounded border-input"
+                      />
+                      <span className="truncate">{loc.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label htmlFor="edit-base-start" className="font-semibold block mb-1">
+                  Mulai Baseline
+                </label>
+                <Input
+                  id="edit-base-start"
+                  type="date"
+                  value={editBaselineStart}
+                  onChange={(e) => setEditBaselineStart(e.target.value)}
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-base-end" className="font-semibold block mb-1">
+                  Selesai Baseline
+                </label>
+                <Input
+                  id="edit-base-end"
+                  type="date"
+                  value={editBaselineEnd}
+                  onChange={(e) => setEditBaselineEnd(e.target.value)}
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-target-end" className="font-semibold block mb-1">
+                  Target Selesai Saat Ini
+                </label>
+                <Input
+                  id="edit-target-end"
+                  type="date"
+                  value={editTargetEnd}
+                  onChange={(e) => setEditTargetEnd(e.target.value)}
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isSavingEdit}
+                onClick={() => setEditDialogOpen(false)}
+                className="h-9 text-xs"
+              >
+                Batal
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isSavingEdit}
+                className="h-9 text-xs bg-emerald-700 hover:bg-emerald-800 text-white"
+              >
+                {isSavingEdit ? "Menyimpan..." : "Simpan Perubahan"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <CollaborationDrawer
         open={collabDrawerOpen}
         onOpenChange={setCollabDrawerOpen}
         project={project}
       />
 
-      {/* Attached Dialogs */}
       {afce && (
         <AFCEActionDialog
           open={afceDialogOpen}
@@ -493,29 +741,22 @@ export default function ProjectDetailLayout({
           afce={afce}
         />
       )}
-      <PRRecordDialog
-        open={prDialogOpen}
-        onOpenChange={setPrDialogOpen}
-        project={project}
-      />
-      <POCreateDialog
-        open={poDialogOpen}
-        onOpenChange={setPoDialogOpen}
-        project={project}
-      />
+      <PRRecordDialog open={prDialogOpen} onOpenChange={setPrDialogOpen} project={project} />
+      <POCreateDialog open={poDialogOpen} onOpenChange={setPoDialogOpen} project={project} />
       <DailyProgressDialog
         open={progressDialogOpen}
         onOpenChange={setProgressDialogOpen}
         project={project}
       />
 
-      {/* Soft Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <div className="flex items-center gap-2 text-rose-600">
+            <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400">
               <Trash2 className="w-5 h-5" />
-              <DialogTitle className="text-base font-bold">Pindahkan Proyek ke Recycle Bin</DialogTitle>
+              <DialogTitle className="text-base font-bold">
+                Pindahkan Proyek ke Recycle Bin
+              </DialogTitle>
             </div>
             <DialogDescription className="text-xs pt-1">
               Apakah Anda yakin ingin memindahkan proyek ini ke Recycle Bin?
@@ -532,7 +773,7 @@ export default function ProjectDetailLayout({
           </div>
 
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Proyek ini tidak akan dihapus permanen. Anda dapat memulihkannya kapan saja melalui tab <strong>Recycle Bin</strong> di halaman Workspace.
+            Proyek dapat dipulihkan kembali melalui tab <strong>Recycle Bin</strong> di halaman Workspace.
           </p>
 
           <DialogFooter className="gap-2 sm:gap-0">
@@ -541,18 +782,21 @@ export default function ProjectDetailLayout({
               variant="outline"
               size="sm"
               onClick={() => setDeleteDialogOpen(false)}
+              className="h-9 text-xs"
             >
               Batal
             </Button>
             <Button
               type="button"
               size="sm"
-              onClick={() => {
-                deleteProject(project.id);
-                setDeleteDialogOpen(false);
-                router.push("/workspace");
+              onClick={async () => {
+                const ok = await deleteProject(project.id);
+                if (ok) {
+                  setDeleteDialogOpen(false);
+                  router.push("/workspace");
+                }
               }}
-              className="bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+              className="h-9 text-xs bg-rose-700 hover:bg-rose-800 text-white font-semibold"
             >
               Pindahkan ke Recycle Bin
             </Button>
@@ -560,13 +804,12 @@ export default function ProjectDetailLayout({
         </DialogContent>
       </Dialog>
 
-      {/* Hard Delete Confirmation Dialog */}
       <Dialog open={hardDeleteDialogOpen} onOpenChange={setHardDeleteDialogOpen}>
         <DialogContent className="max-w-md border-rose-300 dark:border-rose-900">
           <DialogHeader>
-            <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
-              <AlertTriangle className="w-5 h-5 text-rose-600" />
-              <DialogTitle className="text-base font-bold text-rose-600 dark:text-rose-400">
+            <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400">
+              <AlertTriangle className="w-5 h-5" />
+              <DialogTitle className="text-base font-bold">
                 Hapus Proyek Secara Permanen
               </DialogTitle>
             </div>
@@ -584,17 +827,6 @@ export default function ProjectDetailLayout({
             </p>
           </div>
 
-          <div className="rounded-md bg-muted/60 p-3 text-[11px] text-muted-foreground space-y-1.5 leading-relaxed">
-            <p className="font-semibold text-foreground">Data yang akan dihapus permanen dari database:</p>
-            <ul className="list-disc pl-4 space-y-0.5">
-              <li>Struktur Rincian Kerja (WBS) & Bobot Fisik</li>
-              <li>Rencana Anggaran Biaya (BOQ) & Estimasi Item</li>
-              <li>Dokumen AFCE & Riwayat Otorisasi Berjenjang</li>
-              <li>Seluruh transaksi PR, PO, USPK, SPK, dan BAST</li>
-              <li>Jurnal harian/mingguan dan seluruh berkas lampiran</li>
-            </ul>
-          </div>
-
           <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button
               type="button"
@@ -602,6 +834,7 @@ export default function ProjectDetailLayout({
               size="sm"
               disabled={isHardDeleting}
               onClick={() => setHardDeleteDialogOpen(false)}
+              className="h-9 text-xs"
             >
               Batal
             </Button>
@@ -621,7 +854,7 @@ export default function ProjectDetailLayout({
                   setIsHardDeleting(false);
                 }
               }}
-              className="bg-rose-600 hover:bg-rose-700 text-white font-semibold gap-1.5"
+              className="h-9 text-xs bg-rose-700 hover:bg-rose-800 text-white font-semibold gap-1.5"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>{isHardDeleting ? "Menghapus..." : "Ya, Hapus Permanen"}</span>

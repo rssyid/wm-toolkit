@@ -30,7 +30,7 @@ export function AFCEStepper({ afce, onOpenActionDialog }: AFCEStepperProps) {
   }
 
   return (
-    <Card className="shadow-xs overflow-hidden border">
+    <Card className="shadow-sm overflow-hidden border">
       <CardHeader className="pb-3 border-b bg-muted/20 flex flex-row items-center justify-between">
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-emerald-600" />
@@ -183,7 +183,7 @@ export function AFCEStepper({ afce, onOpenActionDialog }: AFCEStepperProps) {
                       <Button
                         size="sm"
                         onClick={() => onOpenActionDialog(item, "Approve")}
-                        className="w-full text-xs h-7 gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+                        className="w-full text-xs h-7 gap-1 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold shadow-sm"
                       >
                         <CheckCircle2 className="w-3 h-3" /> Catat Otorisasi
                       </Button>

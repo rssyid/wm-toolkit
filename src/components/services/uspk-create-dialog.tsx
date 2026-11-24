@@ -23,7 +23,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAppState } from "@/context/app-state-context";
 import { Project, USPKStatus } from "@/types";
 import { toast } from "sonner";
-import { FileSpreadsheet, Plus, UploadCloud, Briefcase, Calendar } from "lucide-react";
+import { FileSpreadsheet, Plus, UploadCloud, Briefcase, Calendar, Loader2 } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 
 interface USPKCreateDialogProps {
@@ -39,8 +39,8 @@ export function USPKCreateDialog({
 }: USPKCreateDialogProps) {
   const { createUspk, uspks, suppliers, userProfile } = useAppState();
 
-  const [uspkNumber, setUspkNumber] = useState(`USPK-2026-0${20 + uspks.length}`);
-  const [uspkDate, setUspkDate] = useState(new Date().toISOString().split("T")[0]);
+  const [uspkNumber, setUspkNumber] = useState("");
+  const [uspkDate, setUspkDate] = useState("");
   const [vendorId, setVendorId] = useState(suppliers[0]?.id || "");
   const [customVendorName, setCustomVendorName] = useState("");
   const [workItemId, setWorkItemId] = useState(project.workItems[0]?.id || "");
@@ -48,37 +48,78 @@ export function USPKCreateDialog({
   const [targetVolume, setTargetVolume] = useState<number | "">(100);
   const [unit, setUnit] = useState<string>("M3");
   const [value, setValue] = useState<number>(50000000);
-  const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
-  const [endDate, setEndDate] = useState(
-    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-  );
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [status, setStatus] = useState<USPKStatus>("SUBMITTED");
   const [attachmentName, setAttachmentName] = useState("");
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setUspkNumber(`USPK-2026-0${20 + uspks.length}`);
-      if (suppliers.length > 0 && !vendorId) {
-        setVendorId(suppliers[0].id);
-      }
-      if (project.workItems.length > 0 && !workItemId) {
-        setWorkItemId(project.workItems[0].id);
-      }
-      setStartDate(new Date().toISOString().split("T")[0]);
-      setEndDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
+      const today = new Date().toISOString().split("T")[0];
+      const plus30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      const year = new Date().getFullYear();
+      const seq = String(uspks.length + 1).padStart(4, "0");
+      setUspkNumber(`USPK-${year}-${seq}`);
+      setUspkDate(today);
+      setVendorId(suppliers[0]?.id || "");
+      setWorkItemId(project.workItems[0]?.id || "");
+      setCustomVendorName("");
+      setScope("");
+      setAttachmentName("");
+      setStartDate(today);
+      setEndDate(plus30);
+      setStatus("SUBMITTED");
     }
-  }, [open, uspks.length, suppliers, project.workItems, vendorId, workItemId]);
+  }, [open, uspks.length, suppliers, project.workItems]);
 
   const selectedSupplier = suppliers.find((s) => s.id === vendorId);
-  const effectiveVendorName = customVendorName.trim() || selectedSupplier?.name || "Kontraktor Rekanan";
+  const effectiveVendorName = customVendorName.trim() || selectedSupplier?.name || "";
   const selectedWorkItem = project.workItems.find((w) => w.id === workItemId);
 
-  const handleSubmit = () => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAttachment(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", project.id);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        toast.error(json.error || "Gagal mengunggah dokumen penawaran ke Google Drive.");
+        return;
+      }
+
+      setAttachmentName(
+        json.data.webViewLink ||
+          (json.data.fileId ? `/api/files/${json.data.fileId}/download` : json.data.fileName)
+      );
+      toast.success(`Berkas "${json.data.fileName}" berhasil diunggah ke Google Drive.`);
+    } catch {
+      toast.error("Gagal terhubung ke server saat mengunggah berkas.");
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleSubmit = async () => {
     if (!uspkNumber.trim()) {
       toast.error("Nomor USPK wajib diisi");
       return;
     }
-    if (!effectiveVendorName.trim()) {
+    if (!uspkDate) {
+      toast.error("Tanggal USPK wajib diisi");
+      return;
+    }
+    if (!effectiveVendorName) {
       toast.error("Nama rekanan penyedia jasa wajib dipilih/diisi");
       return;
     }
@@ -102,39 +143,47 @@ export function USPKCreateDialog({
       toast.error("Tanggal awal dan akhir pelaksanaan wajib diisi");
       return;
     }
+    if (new Date(endDate) < new Date(startDate)) {
+      toast.error("Tanggal target selesai tidak boleh lebih awal dari tanggal mulai");
+      return;
+    }
 
-    const defaultFilename = `Proposal_${uspkNumber.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+    setIsSubmitting(true);
+    try {
+      const ok = await createUspk({
+        afceId: project.afceNumber,
+        projectId: project.id,
+        projectCode: project.code,
+        workItemId: selectedWorkItem?.id,
+        workItemName: selectedWorkItem?.name,
+        uspkNumber: uspkNumber.trim(),
+        vendorName: effectiveVendorName,
+        vendorId: selectedSupplier ? selectedSupplier.id : undefined,
+        scope: scope.trim(),
+        targetVolume: Number(targetVolume),
+        unit: unit.trim().toUpperCase(),
+        value: Number(value),
+        startDate,
+        endDate,
+        status,
+        submittedAt: status === "SUBMITTED" ? uspkDate : undefined,
+        createdBy: userProfile?.fullName || "",
+        attachmentName: attachmentName.trim() || undefined,
+      });
 
-    createUspk({
-      afceId: project.afceNumber,
-      projectId: project.id,
-      projectCode: project.code,
-      workItemId: selectedWorkItem?.id,
-      workItemName: selectedWorkItem?.name,
-      uspkNumber: uspkNumber.trim(),
-      vendorName: effectiveVendorName,
-      vendorId: selectedSupplier ? selectedSupplier.id : undefined,
-      scope: scope.trim(),
-      targetVolume: Number(targetVolume),
-      unit: unit.trim().toUpperCase(),
-      value: Number(value),
-      startDate,
-      endDate,
-      status,
-      submittedAt: status === "SUBMITTED" ? new Date().toISOString().split("T")[0] : undefined,
-      createdBy: userProfile.fullName || "PIC Proyek",
-      attachmentName: attachmentName.trim() || defaultFilename,
-    });
+      if (!ok) return;
 
-    toast.success(
-      `Usulan SPK ${uspkNumber} untuk rekanan ${effectiveVendorName} berhasil dicatat!`
-    );
+      toast.success(
+        `Usulan SPK ${uspkNumber.trim()} untuk rekanan ${effectiveVendorName} berhasil dicatat!`
+      );
 
-    // Reset fields
-    setScope("");
-    setAttachmentName("");
-    setCustomVendorName("");
-    onOpenChange(false);
+      setScope("");
+      setAttachmentName("");
+      setCustomVendorName("");
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -379,14 +428,31 @@ export function USPKCreateDialog({
           {/* Row 7: Lampiran Berkas */}
           <div className="space-y-1.5">
             <label className="font-semibold text-foreground flex items-center gap-1">
-              <UploadCloud className="w-3.5 h-3.5 text-muted-foreground" /> Berkas Penawaran / Proposal Teknis
+              <UploadCloud className="w-3.5 h-3.5 text-muted-foreground" /> Berkas Penawaran / Proposal Teknis (Opsional)
             </label>
-            <Input
-              value={attachmentName}
-              onChange={(e) => setAttachmentName(e.target.value)}
-              placeholder="Proposal_Teknis_Vendor.pdf (opsional)"
-              className="text-xs"
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                value={attachmentName}
+                onChange={(e) => setAttachmentName(e.target.value)}
+                placeholder="Tautan Google Drive atau nama berkas proposal"
+                className="text-xs"
+              />
+              <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1">
+                {uploadingAttachment ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                )}
+                <span>Unggah</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                  onChange={handleFileUpload}
+                  disabled={uploadingAttachment}
+                />
+              </label>
+            </div>
           </div>
         </div>
 
@@ -396,6 +462,7 @@ export function USPKCreateDialog({
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
           >
             Batal
           </Button>
@@ -403,9 +470,11 @@ export function USPKCreateDialog({
             type="button"
             size="sm"
             onClick={handleSubmit}
+            disabled={isSubmitting || uploadingAttachment}
             className="bg-blue-600 hover:bg-blue-700 text-white gap-1"
           >
-            <Plus className="w-3.5 h-3.5" /> Simpan USPK
+            <Plus className="w-3.5 h-3.5" />
+            {isSubmitting ? "Menyimpan..." : "Simpan USPK"}
           </Button>
         </DialogFooter>
       </DialogContent>

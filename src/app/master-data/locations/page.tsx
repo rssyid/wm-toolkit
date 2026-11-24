@@ -582,7 +582,7 @@ function MasterDataLocationsContent() {
             <Button
               size="sm"
               onClick={handleOpenAddEstate}
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+              className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm"
             >
               <Plus className="w-3.5 h-3.5" /> Tambah Kebun Baru
             </Button>
@@ -591,7 +591,7 @@ function MasterDataLocationsContent() {
             <Button
               size="sm"
               onClick={handleOpenAddCompany}
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+              className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm"
             >
               <Plus className="w-3.5 h-3.5" /> Tambah Perusahaan Baru
             </Button>
@@ -600,7 +600,7 @@ function MasterDataLocationsContent() {
             <Button
               size="sm"
               onClick={handleOpenAddRegion}
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+              className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm"
             >
               <Plus className="w-3.5 h-3.5" /> Tambah Wilayah Baru
             </Button>
@@ -609,7 +609,7 @@ function MasterDataLocationsContent() {
             <Button
               size="sm"
               onClick={handleOpenAddBlock}
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+              className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm"
             >
               <Plus className="w-3.5 h-3.5" /> Tambah Blok Kebun
             </Button>
@@ -622,25 +622,25 @@ function MasterDataLocationsContent() {
         <TabsList className="grid grid-cols-2 sm:grid-cols-4 h-10 w-full sm:w-auto p-1 bg-muted/60">
           <TabsTrigger value="estates" className="gap-1.5 text-xs">
             <MapPin className="w-3.5 h-3.5" /> Kebun (Estates)
-            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-muted-foreground/15 font-mono">
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-muted-foreground/15 font-mono">
               {locations.length}
             </span>
           </TabsTrigger>
           <TabsTrigger value="companies" className="gap-1.5 text-xs">
             <Building2 className="w-3.5 h-3.5" /> Perusahaan (PT)
-            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-muted-foreground/15 font-mono">
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-muted-foreground/15 font-mono">
               {companies.length}
             </span>
           </TabsTrigger>
           <TabsTrigger value="regions" className="gap-1.5 text-xs">
             <Globe2 className="w-3.5 h-3.5" /> Wilayah (Regions)
-            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-muted-foreground/15 font-mono">
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-muted-foreground/15 font-mono">
               {regions.length}
             </span>
           </TabsTrigger>
           <TabsTrigger value="blocks" className="gap-1.5 text-xs">
             <Grid className="w-3.5 h-3.5" /> Blok Kebun (Blocks)
-            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-muted-foreground/15 font-mono">
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-muted-foreground/15 font-mono">
               {blocks.length}
             </span>
           </TabsTrigger>
@@ -648,7 +648,7 @@ function MasterDataLocationsContent() {
 
         {/* ================= TAB 1: ESTATES (KEBUN) ================= */}
         <TabsContent value="estates" className="mt-4 space-y-4">
-          <Card className="shadow-xs overflow-hidden">
+          <Card className="shadow-sm overflow-hidden">
             <CardHeader className="p-3.5 border-b flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2 flex-1">
                 <div className="relative w-full sm:w-64">
@@ -803,7 +803,7 @@ function MasterDataLocationsContent() {
 
         {/* ================= TAB 2: COMPANIES (PERUSAHAAN) ================= */}
         <TabsContent value="companies" className="mt-4 space-y-4">
-          <Card className="shadow-xs overflow-hidden">
+          <Card className="shadow-sm overflow-hidden">
             <CardHeader className="p-3.5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="relative w-full sm:w-72">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -939,7 +939,7 @@ function MasterDataLocationsContent() {
 
         {/* ================= TAB 3: REGIONS (WILAYAH) ================= */}
         <TabsContent value="regions" className="mt-4 space-y-4">
-          <Card className="shadow-xs overflow-hidden">
+          <Card className="shadow-sm overflow-hidden">
             <CardHeader className="p-3.5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="relative w-full sm:w-72">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -1070,7 +1070,7 @@ function MasterDataLocationsContent() {
 
         {/* ================= TAB 4: BLOCKS (BLOK KEBUN) ================= */}
         <TabsContent value="blocks" className="mt-4 space-y-4">
-          <Card className="shadow-xs overflow-hidden">
+          <Card className="shadow-sm overflow-hidden">
             <CardHeader className="p-3.5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2 flex-1">
                 <div className="relative w-full sm:w-64">
@@ -1299,7 +1299,7 @@ function MasterDataLocationsContent() {
             <Button variant="outline" size="sm" onClick={() => setEstateDialogOpen(false)} disabled={isSubmitting}>
               Batal
             </Button>
-            <Button size="sm" onClick={handleSaveEstate} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5">
+            <Button size="sm" onClick={handleSaveEstate} disabled={isSubmitting} className="bg-emerald-700 hover:bg-emerald-800 text-white gap-1.5">
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" /> Menyimpan...
@@ -1616,7 +1616,7 @@ export default function MasterDataLocationsPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center min-h-[300px] text-xs text-muted-foreground animate-pulse">
+        <div className="flex items-center justify-center min-h-[300px] text-xs text-muted-foreground">
           Memuat data hierarki lokasi kebun...
         </div>
       }

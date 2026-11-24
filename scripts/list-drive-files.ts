@@ -17,7 +17,7 @@ async function main() {
       fields: "files(id, name, mimeType, webViewLink, size, createdTime)",
     });
 
-    console.log(`\n📁 Berkas di Google Drive Folder [${folderId}]: ${res.data.files?.length || 0} berkas`);
+    console.log(`\n[Drive] Berkas di Google Drive Folder [${folderId}]: ${res.data.files?.length || 0} berkas`);
     res.data.files?.forEach((f, idx) => {
       console.log(`${idx + 1}. [${f.name}]`);
       console.log(`   - ID: ${f.id}`);

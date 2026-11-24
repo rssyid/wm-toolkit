@@ -6,7 +6,7 @@ async function listUsers() {
     orderBy: { role: "asc" },
   });
 
-  console.log(`\n📋 DAFTAR PENGGUNA TERDAFTAR DI DATABASE NEON (${users.length} Akun):`);
+  console.log(`\n[INFO] DAFTAR PENGGUNA TERDAFTAR DI DATABASE NEON (${users.length} Akun):`);
   console.log("-------------------------------------------------------------------------------------------------------------------");
   console.log("| No | Nama Lengkap                  | Email                           | Role     | Jabatan                         |");
   console.log("-------------------------------------------------------------------------------------------------------------------");
@@ -18,8 +18,7 @@ async function listUsers() {
     const jab = (u.jabatan || "-").padEnd(31, " ");
     console.log(`| ${num} | ${name} | ${email} | ${role} | ${jab} |`);
   });
-  console.log("-------------------------------------------------------------------------------------------------------------------");
-  console.log("🔑 Kata Sandi Default untuk SEMUA akun di atas: wmtoolkit2026\n");
+  console.log("-------------------------------------------------------------------------------------------------------------------\n");
   process.exit(0);
 }
 

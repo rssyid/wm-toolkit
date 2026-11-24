@@ -6,7 +6,7 @@ import {
   Palette,
   Bell,
   Database,
-  Sparkles,
+  AlertCircle,
   Settings as SettingsIcon,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -18,11 +18,15 @@ import { MaintenanceDangerTab } from "@/components/settings/maintenance-danger-t
 import { useAppState } from "@/context/app-state-context";
 
 export default function SettingsPage() {
-  const { canManageSystem } = useAppState();
+  const { canManageSystem, userProfile } = useAppState();
   const [activeTab, setActiveTab] = useState("profile");
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
-  // If tab was maintenance but user lacks permission, reset to profile
+  const isProfileIncomplete =
+    !userProfile.role?.trim() ||
+    !userProfile.selectedLocation?.trim() ||
+    !userProfile.bio?.trim();
+
   React.useEffect(() => {
     if (activeTab === "maintenance" && !canManageSystem) {
       setActiveTab("profile");
@@ -31,7 +35,6 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      {/* Top Header */}
       <div>
         <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
           <SettingsIcon className="w-3.5 h-3.5" />
@@ -41,17 +44,15 @@ export default function SettingsPage() {
           Pengaturan Sistem & Akun
         </h1>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Kelola profil pengguna & wewenang approval, tampilan antarmuka, parameter proyek & alarm EWS, serta pemulihan cadangan data.
+          Kelola profil pengguna, tampilan antarmuka, preferensi notifikasi, serta ekspor dan pemeliharaan basis data.
         </p>
       </div>
 
-      {/* Main Layout: Side-Tab Navigation Rail + Content */}
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
         className="flex flex-col md:flex-row gap-6 items-start"
       >
-        {/* Left Side-Tab Rail Navigation */}
         <aside className="w-full md:w-56 shrink-0">
           <div className="sticky top-20">
             <TabsList className="flex flex-row md:flex-col h-auto w-full overflow-x-auto md:overflow-x-visible space-x-1 md:space-x-0 md:space-y-1 bg-transparent p-0 text-muted-foreground justify-start">
@@ -76,37 +77,35 @@ export default function SettingsPage() {
                 className="w-full justify-start gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none hover:bg-muted/50 hover:text-foreground text-left"
               >
                 <Bell className="w-4 h-4 shrink-0" />
-                <span>Parameter Proyek & EWS</span>
+                <span>Notifikasi & Peringatan</span>
               </TabsTrigger>
 
               {canManageSystem && (
                 <TabsTrigger
                   value="maintenance"
-                  className="w-full justify-start gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none hover:bg-muted/50 hover:text-foreground text-left text-amber-700 dark:text-amber-400"
+                  className="w-full justify-start gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none hover:bg-muted/50 hover:text-foreground text-left text-amber-800 dark:text-amber-400"
                 >
                   <Database className="w-4 h-4 shrink-0" />
-                  <span>Pemeliharaan & Cadangan</span>
+                  <span>Pemeliharaan Sistem</span>
                 </TabsTrigger>
               )}
             </TabsList>
           </div>
         </aside>
 
-        {/* Right Content Area */}
-        <main className="flex-1 w-full space-y-4 min-w-0">
-          {/* ReUI Settings-7 Signature Callout Banner */}
-          {!bannerDismissed && (
-            <div className="rounded-xl border border-amber-300/80 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/20 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+        <div className="flex-1 w-full space-y-4 min-w-0">
+          {!bannerDismissed && isProfileIncomplete && (
+            <div className="rounded-xl border border-amber-300/80 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/20 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
               <div className="flex items-start sm:items-center gap-3">
-                <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
-                  <Sparkles className="w-4 h-4" />
+                <div className="p-2 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 shrink-0">
+                  <AlertCircle className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+                  <h2 className="text-xs font-semibold text-amber-900 dark:text-amber-200">
                     Lengkapi profil operasional Anda
-                  </h4>
-                  <p className="text-[11px] text-amber-700/90 dark:text-amber-400/90 mt-0.5">
-                    Pastikan jabatan estate, kontak kedinasan, dan zona waktu Anda selalu terbarui untuk kelancaran alur otorisasi AFCE.
+                  </h2>
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5">
+                    Lengkapi jabatan kedinasan, unit kerja kebun, dan catatan lingkup kerja agar identitas pencatatan dokumen AFCE tetap akurat.
                   </p>
                 </div>
               </div>
@@ -116,7 +115,7 @@ export default function SettingsPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => setBannerDismissed(true)}
-                  className="h-7 text-xs text-amber-800 dark:text-amber-300 hover:bg-amber-500/10"
+                  className="h-8 text-xs text-amber-800 dark:text-amber-300 hover:bg-amber-500/10"
                 >
                   Tutup
                 </Button>
@@ -125,8 +124,11 @@ export default function SettingsPage() {
                   size="sm"
                   onClick={() => {
                     setActiveTab("profile");
+                    requestAnimationFrame(() => {
+                      document.getElementById("profile-full-name")?.focus();
+                    });
                   }}
-                  className="h-7 text-xs bg-amber-900 dark:bg-amber-200 text-amber-50 dark:text-amber-950 hover:bg-amber-800 dark:hover:bg-amber-300 font-medium"
+                  className="h-8 text-xs bg-amber-900 dark:bg-amber-200 text-amber-50 dark:text-amber-950 hover:bg-amber-800 dark:hover:bg-amber-300 font-medium"
                 >
                   Perbarui
                 </Button>
@@ -134,25 +136,36 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Tab Panels */}
-          <TabsContent value="profile" className="mt-0 outline-none">
+          <TabsContent
+            value="profile"
+            className="mt-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+          >
             <ProfileTab />
           </TabsContent>
 
-          <TabsContent value="appearance" className="mt-0 outline-none">
+          <TabsContent
+            value="appearance"
+            className="mt-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+          >
             <AppearanceScheduleTab />
           </TabsContent>
 
-          <TabsContent value="notifications" className="mt-0 outline-none">
+          <TabsContent
+            value="notifications"
+            className="mt-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+          >
             <NotificationsTab />
           </TabsContent>
 
           {canManageSystem && (
-            <TabsContent value="maintenance" className="mt-0 outline-none">
+            <TabsContent
+              value="maintenance"
+              className="mt-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+            >
               <MaintenanceDangerTab />
             </TabsContent>
           )}
-        </main>
+        </div>
       </Tabs>
     </div>
   );

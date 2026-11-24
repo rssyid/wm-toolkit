@@ -2,7 +2,7 @@ import "dotenv/config";
 import { uploadFileToGoogleDrive, downloadFileFromGoogleDrive } from "../src/server/google-drive";
 
 async function main() {
-  console.log("🧪 Memulai Uji Coba End-to-End Google Drive...");
+  console.log("[TEST] Memulai Uji Coba End-to-End Google Drive...");
 
   // 1. Buat berkas uji coba PDF
   const testFileName = `Uji_Coba_Upload_WMToolkit_${Date.now()}.pdf`;
@@ -32,10 +32,9 @@ startxref
     fileId: uploadRes.fileId,
     fileName: uploadRes.fileName,
     webViewLink: uploadRes.webViewLink,
-    isMock: uploadRes.isMock,
   });
 
-  if (uploadRes.isMock || !uploadRes.fileId) {
+  if (!uploadRes.fileId) {
     throw new Error("Upload gagal mengembalikan Google Drive File ID yang valid!");
   }
 
@@ -60,10 +59,10 @@ startxref
     throw new Error(`Ukuran berkas tidak cocok: diharapkan ${testBuffer.length}, didapat ${downloadedBuf.length}`);
   }
 
-  console.log("\n✅ SEMUA PENGUJIAN END-TO-END GOOGLE DRIVE BERHASIL DENGAN SEMPURNA!");
+  console.log("\n[PASS] SEMUA PENGUJIAN END-TO-END GOOGLE DRIVE BERHASIL DENGAN SEMPURNA!");
 }
 
 main().catch((err) => {
-  console.error("❌ E2E test gagal:", err);
+  console.error("[FAIL] E2E test gagal:", err);
   process.exit(1);
 });

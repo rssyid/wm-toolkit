@@ -8,17 +8,17 @@ export default function NotFound() {
       <div className="p-3 bg-muted rounded-full text-muted-foreground">
         <AlertCircle className="w-10 h-10 text-amber-500" />
       </div>
-      <h2 className="text-xl font-bold tracking-tight text-foreground">
+      <h1 className="text-xl font-bold tracking-tight text-foreground">
         Halaman Tidak Ditemukan (404)
-      </h2>
+      </h1>
       <p className="text-xs text-muted-foreground max-w-sm leading-relaxed">
         Halaman yang Anda tuju tidak ditemukan atau telah dipindahkan.
       </p>
-      <Link href="/dashboard">
-        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+      <Button asChild size="sm" className="bg-emerald-700 hover:bg-emerald-800 text-white">
+        <Link href="/dashboard">
           Kembali ke Dashboard
-        </Button>
-      </Link>
+        </Link>
+      </Button>
     </div>
   );
 }

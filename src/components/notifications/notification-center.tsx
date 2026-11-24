@@ -13,16 +13,13 @@ import {
   CheckCheck,
   Trash2,
   Search,
-  ExternalLink,
-  Sparkles,
   Settings,
   Clock,
-  ChevronRight,
   ShieldAlert,
   ArrowRight,
   RefreshCw,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -31,6 +28,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { useAppState } from "@/context/app-state-context";
 import { NotificationItem, NotificationType } from "@/types";
 import { formatIDDate, cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export function NotificationCenter() {
   const router = useRouter();
@@ -41,11 +39,27 @@ export function NotificationCenter() {
     markAllNotificationsAsRead,
     deleteNotification,
     clearAllNotifications,
-    simulateCronReminderCheck,
+    runCronDeadlineCheck,
+    isAdmin,
   } = useAppState();
 
   const [activeTab, setActiveTab] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [runningCron, setRunningCron] = useState(false);
+
+  const handleRunCron = async () => {
+    setRunningCron(true);
+    try {
+      const res = await runCronDeadlineCheck();
+      if (res.success) {
+        toast.success(res.message || `Pemeriksaan EWS selesai (${res.generatedCount} notifikasi baru).`);
+      } else {
+        toast.error(res.message || "Gagal menjalankan pemeriksaan tenggat EWS.");
+      }
+    } finally {
+      setRunningCron(false);
+    }
+  };
 
   // Helper to format relative time in Indonesian
   const formatRelativeTime = (isoString: string) => {
@@ -186,16 +200,19 @@ export function NotificationCenter() {
 
         {/* Header Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => simulateCronReminderCheck()}
-            className="h-8 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5"
-            title="Simulasi pemicu Vercel Cron harian untuk memeriksa keterlambatan dan tenggat waktu"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span>Simulasi Cron EWS</span>
-          </Button>
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={runningCron}
+              onClick={handleRunCron}
+              className="h-8 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+              title="Jalankan pemeriksaan EWS keterlambatan dan tenggat waktu di server"
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5 text-amber-600", runningCron && "animate-spin")} />
+              <span>{runningCron ? "Memeriksa EWS..." : "Periksa Tenggat EWS"}</span>
+            </Button>
+          )}
 
           {unreadNotificationCount > 0 && (
             <Button
@@ -204,28 +221,29 @@ export function NotificationCenter() {
               onClick={() => markAllNotificationsAsRead()}
               className="h-8 text-xs flex items-center gap-1.5"
             >
-              <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <CheckCheck className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
               <span>Tandai Semua Dibaca</span>
             </Button>
           )}
 
-          <Link href="/settings">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5"
-              title="Atur preferensi sakelar notifikasi"
-            >
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+            title="Atur preferensi sakelar notifikasi"
+          >
+            <Link href="/settings">
               <Settings className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Setelan</span>
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </div>
 
       {/* KPI Cards Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card className="shadow-xs hover:border-border transition-colors">
+        <Card className="shadow-sm hover:border-border transition-colors">
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
@@ -244,7 +262,7 @@ export function NotificationCenter() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs hover:border-border transition-colors">
+        <Card className="shadow-sm hover:border-border transition-colors">
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
@@ -263,7 +281,7 @@ export function NotificationCenter() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs hover:border-border transition-colors">
+        <Card className="shadow-sm hover:border-border transition-colors">
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
@@ -282,7 +300,7 @@ export function NotificationCenter() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-xs hover:border-border transition-colors">
+        <Card className="shadow-sm hover:border-border transition-colors">
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
@@ -357,7 +375,7 @@ export function NotificationCenter() {
                 <div
                   key={item.id}
                   className={cn(
-                    "group relative rounded-xl border p-4 transition-all duration-200 bg-card hover:shadow-xs",
+                    "group relative rounded-xl border p-4 transition-all duration-200 bg-card hover:shadow-sm",
                     meta.cardBorder,
                     !item.isRead
                       ? "bg-muted/30 border-border dark:bg-muted/15"
@@ -385,14 +403,17 @@ export function NotificationCenter() {
                       <div className="space-y-1 flex-1 min-w-0">
                         {/* Title & Badge */}
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3
-                            onClick={() => handleNotificationClick(item)}
-                            className={cn(
-                              "text-sm font-semibold cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors",
-                              !item.isRead ? "text-foreground font-bold" : "text-foreground/90"
-                            )}
-                          >
-                            {item.title}
+                          <h3 className="text-sm font-semibold">
+                            <button
+                              type="button"
+                              onClick={() => handleNotificationClick(item)}
+                              className={cn(
+                                "text-left cursor-pointer hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded",
+                                !item.isRead ? "text-foreground font-bold" : "text-foreground/90 font-semibold"
+                              )}
+                            >
+                              {item.title}
+                            </button>
                           </h3>
 
                           {!item.isRead && (
@@ -450,9 +471,7 @@ export function NotificationCenter() {
                           size="icon"
                           className="h-7 w-7 text-muted-foreground hover:text-foreground"
                           onClick={() => {
-                            if (item.isRead) {
-                              // toggle to unread not provided in type, or mark read
-                            } else {
+                            if (!item.isRead) {
                               markNotificationAsRead(item.id);
                             }
                           }}

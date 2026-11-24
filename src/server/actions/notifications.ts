@@ -2,15 +2,16 @@
 
 import { db } from "@/server/db";
 import { requireAuth } from "@/server/auth-guard";
-import { CreateNotificationSchema } from "@/server/schemas";
+import { formatActionError } from "@/server/errors";
+import { CreateNotificationSchema, UpdateNotificationSettingSchema } from "@/server/schemas";
 import { safeRevalidatePath as revalidatePath } from "@/server/revalidate";
 
-export async function createNotificationAction(rawInput: any) {
+export async function createNotificationAction(rawInput: unknown) {
   try {
     const user = await requireAuth();
     const parsed = CreateNotificationSchema.parse(rawInput);
 
-    const targetUserId = parsed.userId || user.id;
+    const targetUserId = user.role === "ADMIN" && parsed.userId ? parsed.userId : user.id;
 
     const notif = await db.notification.create({
       data: {
@@ -30,26 +31,30 @@ export async function createNotificationAction(rawInput: any) {
 
     revalidatePath("/notifications");
     return { success: true, notification: notif };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Gagal menyimpan notifikasi ke database:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: formatActionError(error, "Gagal menyimpan notifikasi.") };
   }
 }
 
 export async function markNotificationAsReadAction(notificationId: string) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
 
-    await db.notification.update({
-      where: { id: notificationId },
+    const updated = await db.notification.updateMany({
+      where: { id: notificationId, userId: user.id },
       data: { isRead: true },
     });
 
+    if (updated.count === 0) {
+      return { success: false, error: "Notifikasi tidak ditemukan atau bukan milik Anda." };
+    }
+
     revalidatePath("/notifications");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Gagal menandai notifikasi sebagai dibaca:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: formatActionError(error, "Gagal menandai notifikasi.") };
   }
 }
 
@@ -57,40 +62,36 @@ export async function markAllNotificationsAsReadAction() {
   try {
     const user = await requireAuth();
 
-    // Tandai semua notifikasi untuk user tersebut, atau semua notifikasi jika ADMIN
-    if (user.role === "ADMIN") {
-      await db.notification.updateMany({
-        where: { isRead: false },
-        data: { isRead: true },
-      });
-    } else {
-      await db.notification.updateMany({
-        where: { userId: user.id, isRead: false },
-        data: { isRead: true },
-      });
-    }
+    await db.notification.updateMany({
+      where: { userId: user.id, isRead: false },
+      data: { isRead: true },
+    });
 
     revalidatePath("/notifications");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Gagal menandai semua notifikasi sebagai dibaca:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: formatActionError(error, "Gagal menandai semua notifikasi.") };
   }
 }
 
 export async function deleteNotificationAction(notificationId: string) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
 
-    await db.notification.delete({
-      where: { id: notificationId },
+    const deleted = await db.notification.deleteMany({
+      where: { id: notificationId, userId: user.id },
     });
+
+    if (deleted.count === 0) {
+      return { success: false, error: "Notifikasi tidak ditemukan atau bukan milik Anda." };
+    }
 
     revalidatePath("/notifications");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Gagal menghapus notifikasi:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: formatActionError(error, "Gagal menghapus notifikasi.") };
   }
 }
 
@@ -98,44 +99,42 @@ export async function clearAllNotificationsAction() {
   try {
     const user = await requireAuth();
 
-    if (user.role === "ADMIN") {
-      await db.notification.deleteMany();
-    } else {
-      await db.notification.deleteMany({
-        where: { userId: user.id },
-      });
-    }
+    await db.notification.deleteMany({
+      where: { userId: user.id },
+    });
 
     revalidatePath("/notifications");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Gagal membersihkan notifikasi:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: formatActionError(error, "Gagal membersihkan notifikasi.") };
   }
 }
 
 export async function updateNotificationSettingAction(notificationType: string, isEnabled: boolean) {
   try {
     const user = await requireAuth();
+    const parsed = UpdateNotificationSettingSchema.parse({ notificationType, isEnabled });
 
     await db.notificationSetting.upsert({
       where: {
         userId_notificationType: {
           userId: user.id,
-          notificationType,
+          notificationType: parsed.notificationType,
         },
       },
-      update: { isEnabled },
+      update: { isEnabled: parsed.isEnabled },
       create: {
         userId: user.id,
-        notificationType,
-        isEnabled,
+        notificationType: parsed.notificationType,
+        isEnabled: parsed.isEnabled,
       },
     });
 
+    revalidatePath("/settings");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Gagal memperbarui pengaturan notifikasi:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: formatActionError(error, "Gagal memperbarui pengaturan notifikasi.") };
   }
 }

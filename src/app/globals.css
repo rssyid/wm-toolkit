@@ -13,24 +13,24 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 158 64% 32%; /* Emerald-700 / Forest Engineering */
+    --primary: 158 65% 27%; /* Forest Engineering - WCAG AA 5.71:1 */
     --primary-foreground: 210 40% 98%;
 
     --secondary: 210 20% 93%;
     --secondary-foreground: 222 47% 11%;
 
     --muted: 210 20% 95%;
-    --muted-foreground: 215 16% 47%;
+    --muted-foreground: 216 21% 38%;
 
     --accent: 210 20% 92%;
     --accent-foreground: 222 47% 11%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 0 74% 42%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214 20% 88%;
-    --input: 214 20% 88%;
-    --ring: 158 64% 32%;
+    --border: 214 20% 86%;
+    --input: 215 18% 72%;
+    --ring: 158 65% 27%;
 
     --radius: 0.5rem;
   }
@@ -45,24 +45,24 @@
     --popover: 222 47% 10%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 158 64% 42%; /* Emerald-500 */
+    --primary: 158 61% 48%;
     --primary-foreground: 222 47% 7%;
 
     --secondary: 217 33% 17%;
     --secondary-foreground: 210 40% 98%;
 
     --muted: 217 33% 16%;
-    --muted-foreground: 215 20% 65%;
+    --muted-foreground: 214 26% 70%;
 
     --accent: 217 33% 18%;
     --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 63% 40%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 88% 70%;
+    --destructive-foreground: 222 47% 7%;
 
     --border: 217 33% 20%;
-    --input: 217 33% 20%;
-    --ring: 158 64% 42%;
+    --input: 217 28% 30%;
+    --ring: 158 61% 48%;
   }
 }
 
@@ -73,6 +73,24 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  select:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

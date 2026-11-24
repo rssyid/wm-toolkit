@@ -15,9 +15,9 @@ import {
   ClipboardCheck,
   FileCheck2,
   Layers,
-  Sparkles,
   PackageCheck,
   Check,
+  ArrowRightCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,10 +43,13 @@ interface SmartActionStepperProps {
   uspks: USPKItem[];
   technicalEvaluations: TechnicalEvaluation[];
   spkContracts: SPKContract[];
+  onSubmitDraftAfce?: () => void;
   onOpenAfceAction?: () => void;
   onOpenPrDialog?: () => void;
+  onOpenVendorEvalDialog?: (pr: PurchaseRequisition) => void;
   onOpenPoDialog?: (preselectedPrId?: string) => void;
   onOpenUspkDialog?: () => void;
+  onOpenTechEvalDialog?: (uspk: USPKItem) => void;
   onOpenSpkDialog?: (uspkId?: string) => void;
   onOpenProgressDialog?: () => void;
   isViewerOnly?: boolean;
@@ -61,10 +64,13 @@ export function SmartActionStepper({
   uspks,
   technicalEvaluations,
   spkContracts,
+  onSubmitDraftAfce,
   onOpenAfceAction,
   onOpenPrDialog,
+  onOpenVendorEvalDialog,
   onOpenPoDialog,
   onOpenUspkDialog,
+  onOpenTechEvalDialog,
   onOpenSpkDialog,
   onOpenProgressDialog,
   isViewerOnly = false,
@@ -163,10 +169,10 @@ export function SmartActionStepper({
       badgeVariant: "default",
       title: "Dokumen AFCE Masih Berstatus Draft",
       description:
-        "Ajukan dokumen AFCE ke sistem persetujuan berjenjang sesuai kewenangan nilai anggaran SAP.",
+        "Ajukan dokumen AFCE ke alur pencatatan persetujuan berjenjang sesuai kewenangan nilai anggaran SAP.",
       primaryActionLabel: "Ajukan Approval AFCE",
-      onPrimaryAction: onOpenAfceAction,
-      icon: <Send className="w-5 h-5 text-blue-600" />,
+      onPrimaryAction: onSubmitDraftAfce || onOpenAfceAction,
+      icon: <Send className="w-5 h-5 text-blue-700 dark:text-blue-400" />,
     };
   } else if (project.afceStatus === "Pending Approval") {
     recommendation = {
@@ -231,12 +237,12 @@ export function SmartActionStepper({
         badgeVariant: "default",
         title: `PR ${prNeedingEval.prNumber} Menunggu Evaluasi Rekanan`,
         description:
-          "Catat hasil evaluasi harga dan spesifikasi vendor untuk menerbitkan Purchase Order.",
+          "Catat hasil evaluasi harga dan spesifikasi vendor sebelum menerbitkan Purchase Order.",
         primaryActionLabel: "Input Evaluasi Rekanan",
-        onPrimaryAction: () => {
-          if (onOpenPoDialog) onOpenPoDialog(prNeedingEval.id);
-        },
-        icon: <ClipboardCheck className="w-5 h-5 text-blue-600" />,
+        onPrimaryAction: onOpenVendorEvalDialog
+          ? () => onOpenVendorEvalDialog(prNeedingEval)
+          : undefined,
+        icon: <ClipboardCheck className="w-5 h-5 text-blue-700 dark:text-blue-400" />,
       };
     } else if (recommendedEvalWithoutPo) {
       recommendation = {
@@ -244,12 +250,12 @@ export function SmartActionStepper({
         badgeVariant: "default",
         title: `Evaluasi Selesai untuk ${recommendedEvalWithoutPo.supplierName}`,
         description:
-          "Rekanan telah direkomendasikan. Buat Purchase Order (PO) untuk pengadaan material.",
+          "Rekanan telah direkomendasikan. Terbitkan Purchase Order (PO) untuk pengadaan material.",
         primaryActionLabel: "Terbitkan PO Sekarang",
         onPrimaryAction: () => {
           if (onOpenPoDialog) onOpenPoDialog(recommendedEvalWithoutPo.prId);
         },
-        icon: <ShoppingCart className="w-5 h-5 text-emerald-600" />,
+        icon: <ShoppingCart className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />,
       };
     } else if (uspkNeedingEval) {
       recommendation = {
@@ -258,9 +264,11 @@ export function SmartActionStepper({
         title: `USPK ${uspkNeedingEval.uspkNumber} Menunggu Evaluasi Teknis`,
         description:
           "Catat hasil evaluasi kelayakan teknis, metode kerja, dan kapasitas kontraktor.",
-        primaryActionLabel: "Lihat di Tab Pengadaan",
-        onPrimaryAction: undefined,
-        icon: <ClipboardCheck className="w-5 h-5 text-purple-600" />,
+        primaryActionLabel: "Catat Evaluasi Teknis",
+        onPrimaryAction: onOpenTechEvalDialog
+          ? () => onOpenTechEvalDialog(uspkNeedingEval)
+          : undefined,
+        icon: <ClipboardCheck className="w-5 h-5 text-purple-700 dark:text-purple-400" />,
       };
     } else if (recommendedTechEvalWithoutSpk) {
       recommendation = {
@@ -302,7 +310,7 @@ export function SmartActionStepper({
   return (
     <div className="space-y-3">
       {/* 1. Horizontal Lifecycle Timeline Bar */}
-      <Card className="p-3.5 shadow-xs border bg-card">
+      <Card className="p-3.5 shadow-sm border bg-card">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
             <Layers className="w-3.5 h-3.5 text-emerald-600" />
@@ -328,7 +336,7 @@ export function SmartActionStepper({
                   isDone
                     ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200"
                     : isCurrent
-                    ? "bg-amber-50/70 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 shadow-xs"
+                    ? "bg-amber-50/70 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 shadow-sm"
                     : isReady
                     ? "bg-blue-50/40 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200"
                     : isWarn
@@ -341,11 +349,11 @@ export function SmartActionStepper({
                     className={cn(
                       "w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0",
                       isDone
-                        ? "bg-emerald-600 text-white"
+                        ? "bg-emerald-700 text-white"
                         : isCurrent
-                        ? "bg-amber-600 text-white animate-pulse"
+                        ? "bg-amber-700 text-white"
                         : isReady
-                        ? "bg-blue-600 text-white"
+                        ? "bg-blue-700 text-white"
                         : "bg-muted-foreground/30 text-foreground"
                     )}
                   >
@@ -362,16 +370,15 @@ export function SmartActionStepper({
         </div>
       </Card>
 
-      {/* 2. Recommended Next Action Callout */}
       {recommendation && (
-        <div className="rounded-lg border border-emerald-200 dark:border-emerald-800/70 bg-gradient-to-r from-emerald-50/60 via-card to-background dark:from-emerald-950/20 dark:via-background dark:to-background p-3.5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="rounded-lg border border-emerald-200 dark:border-emerald-800/70 bg-emerald-50/40 dark:bg-emerald-950/20 p-3.5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className="p-2 rounded-md bg-emerald-100 dark:bg-emerald-900/50 shrink-0 mt-0.5">
               {recommendation.icon}
             </div>
             <div className="space-y-0.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-600 text-white">
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-700 text-white">
                   {recommendation.badge}
                 </span>
                 <span className="text-xs font-bold text-foreground">
@@ -391,7 +398,7 @@ export function SmartActionStepper({
                   size="sm"
                   variant="outline"
                   onClick={recommendation.onSecondaryAction}
-                  className="h-8 text-xs gap-1.5"
+                  className="h-9 text-xs gap-1.5"
                 >
                   {recommendation.secondaryActionLabel}
                 </Button>
@@ -400,9 +407,9 @@ export function SmartActionStepper({
                 <Button
                   size="sm"
                   onClick={recommendation.onPrimaryAction}
-                  className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+                  className="h-9 text-xs gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold shadow-sm"
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
+                  <ArrowRightCircle className="w-3.5 h-3.5" />
                   {recommendation.primaryActionLabel}
                 </Button>
               )}

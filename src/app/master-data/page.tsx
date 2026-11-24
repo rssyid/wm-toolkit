@@ -20,8 +20,6 @@ import {
   Building2,
   LayoutGrid,
   List,
-  Sparkles,
-  ExternalLink,
   SlidersHorizontal,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -60,7 +58,7 @@ export default function MasterDataHubPage() {
   const [selectedDomain, setSelectedDomain] = useState<DomainFilter>("ALL");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
 
-  // 8 Canonical Master Data Modules
+  // 9 Canonical Master Data Modules
   const masterModules = useMemo(
     () => [
       {
@@ -342,72 +340,69 @@ export default function MasterDataHubPage() {
 
         {/* System Health / Status Badge */}
         <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-card text-xs shadow-2xs">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-card text-xs shadow-sm">
+            <span className="inline-flex rounded-full h-2 w-2 bg-emerald-600" />
             <span className="font-semibold text-foreground">
               {totalActiveEntities} Entitas Terdaftar
             </span>
-            <span className="text-muted-foreground">&bull; 8 Modul Siap Pakai</span>
+            <span className="text-muted-foreground">&bull; {masterModules.length} Modul Siap Pakai</span>
           </div>
         </div>
       </div>
 
-      {/* 2. Sleek 4-Pillar Executive Summary Strip (No redundant links) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="rounded-lg border bg-card p-3 shadow-2xs flex items-center gap-3">
-          <div className="size-8 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20">
+      {/* 2. Sleek 4-Pillar Executive Summary Strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="rounded-lg border bg-card p-3.5 shadow-sm flex items-start gap-3">
+          <div className="size-8 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/20 mt-0.5">
             <MapPin className="w-4 h-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider truncate">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider leading-snug">
               Struktur Wilayah
             </p>
-            <p className="text-xs font-bold text-foreground truncate mt-0.5">
+            <p className="text-xs font-bold text-foreground leading-snug mt-0.5">
               {locations.length} Kebun &bull; {companies.length} PT &bull; {blocks.length} Blok
             </p>
           </div>
         </div>
 
-        <div className="rounded-lg border bg-card p-3 shadow-2xs flex items-center gap-3">
-          <div className="size-8 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0 border border-cyan-500/20">
+        <div className="rounded-lg border bg-card p-3.5 shadow-sm flex items-start gap-3">
+          <div className="size-8 rounded-md bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 flex items-center justify-center shrink-0 border border-cyan-500/20 mt-0.5">
             <Tags className="w-4 h-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider truncate">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider leading-snug">
               Standarisasi Proyek
             </p>
-            <p className="text-xs font-bold text-foreground truncate mt-0.5">
+            <p className="text-xs font-bold text-foreground leading-snug mt-0.5">
               {projectCategories?.length || 0} Kategori &bull; {projectTypes?.length || 0} Tipe &bull; {procurementTypes?.length || 0} Metode
             </p>
           </div>
         </div>
 
-        <div className="rounded-lg border bg-card p-3 shadow-2xs flex items-center gap-3">
-          <div className="size-8 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/20">
+        <div className="rounded-lg border bg-card p-3.5 shadow-sm flex items-start gap-3">
+          <div className="size-8 rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/20 mt-0.5">
             <Package className="w-4 h-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider truncate">
-              Logistik & Vendor SAP
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider leading-snug">
+              Logistik &amp; Vendor SAP
             </p>
-            <p className="text-xs font-bold text-foreground truncate mt-0.5">
+            <p className="text-xs font-bold text-foreground leading-snug mt-0.5">
               {materials.length} Material &bull; {suppliers.length} Vendor Resmi
             </p>
           </div>
         </div>
 
-        <div className="rounded-lg border bg-card p-3 shadow-2xs flex items-center gap-3">
-          <div className="size-8 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/20">
+        <div className="rounded-lg border bg-card p-3.5 shadow-sm flex items-start gap-3">
+          <div className="size-8 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/20 mt-0.5">
             <ShieldCheck className="w-4 h-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider truncate">
-              Tata Kelola & Akses
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider leading-snug">
+              Tata Kelola &amp; Akses
             </p>
-            <p className="text-xs font-bold text-foreground truncate mt-0.5">
+            <p className="text-xs font-bold text-foreground leading-snug mt-0.5">
               {users.length} Akun &bull; {approvalMatrix.length} Tier Matriks
             </p>
           </div>
@@ -415,7 +410,7 @@ export default function MasterDataHubPage() {
       </div>
 
       {/* 3. Modern Toolbar: Integrated Search + Category Tabs + View Mode Switcher */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card p-3 rounded-lg border shadow-2xs">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card p-3 rounded-lg border shadow-sm">
         {/* Domain Filter Pills */}
         <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
           {domainTabs.map((tab) => {
@@ -428,14 +423,14 @@ export default function MasterDataHubPage() {
                 className={cn(
                   "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none",
                   active
-                    ? "bg-emerald-600 text-white shadow-2xs"
+                    ? "bg-emerald-700 text-white shadow-sm"
                     : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
                 <span>{tab.label}</span>
                 <span
                   className={cn(
-                    "text-[10px] px-1.5 py-0.2 rounded-full font-mono",
+                    "text-[10px] px-1.5 py-0.5 rounded-full font-mono",
                     active
                       ? "bg-white/20 text-white font-semibold"
                       : "bg-background text-muted-foreground"
@@ -458,13 +453,14 @@ export default function MasterDataHubPage() {
               placeholder="Cari modul data master..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 pr-7 h-8 text-xs bg-background shadow-2xs"
+              className="pl-8 pr-7 h-8 text-xs bg-background shadow-sm"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch("")}
                 className="absolute right-2.5 top-2 text-muted-foreground hover:text-foreground"
+                aria-label="Hapus pencarian"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -480,7 +476,7 @@ export default function MasterDataHubPage() {
               className={cn(
                 "p-1.5 rounded-sm text-xs transition-colors",
                 viewMode === "grid"
-                  ? "bg-background text-foreground shadow-2xs font-semibold"
+                  ? "bg-background text-foreground shadow-sm font-semibold"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -493,7 +489,7 @@ export default function MasterDataHubPage() {
               className={cn(
                 "p-1.5 rounded-sm text-xs transition-colors",
                 viewMode === "table"
-                  ? "bg-background text-foreground shadow-2xs font-semibold"
+                  ? "bg-background text-foreground shadow-sm font-semibold"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -503,9 +499,9 @@ export default function MasterDataHubPage() {
         </div>
       </div>
 
-      {/* 4A. GRID VIEW: Symmetrical 4-Column Layout (2 Rows x 4 Columns = 8 Cards, Zero Orphan Gaps!) */}
+      {/* 4A. GRID VIEW */}
       {viewMode === "grid" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {filteredModules.map((mod) => {
             const Icon = mod.icon;
             return (
@@ -540,7 +536,10 @@ export default function MasterDataHubPage() {
 
                   {/* Title & Description */}
                   <div>
-                    <Link href={mod.href} className="focus:outline-none">
+                    <Link
+                      href={mod.href}
+                      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                    >
                       <h2 className="text-sm font-bold tracking-tight text-foreground group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors line-clamp-1">
                         {mod.title}
                       </h2>
@@ -573,7 +572,7 @@ export default function MasterDataHubPage() {
 
                   <Link
                     href={mod.href}
-                    className="inline-flex items-center gap-1 font-semibold text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors group-hover:translate-x-0.5"
+                    className="inline-flex items-center gap-1 font-semibold text-xs text-emerald-700 dark:text-emerald-400 hover:underline transition-colors"
                   >
                     <span>Kelola</span>
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -587,7 +586,7 @@ export default function MasterDataHubPage() {
 
       {/* 4B. TABLE VIEW: Compact Directory List */}
       {viewMode === "table" && (
-        <div className="rounded-lg border bg-card shadow-2xs overflow-hidden">
+        <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
           <Table>
             <TableHeader className="bg-muted/30">
               <TableRow className="text-xs">
@@ -655,16 +654,17 @@ export default function MasterDataHubPage() {
                     </TableCell>
 
                     <TableCell className="text-right">
-                      <Link href={mod.href}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:bg-emerald-500/10 gap-1 px-2.5"
-                        >
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 gap-1 px-2.5"
+                      >
+                        <Link href={mod.href}>
                           <span>Kelola</span>
                           <ArrowRight className="w-3.5 h-3.5" />
-                        </Button>
-                      </Link>
+                        </Link>
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );
@@ -676,7 +676,7 @@ export default function MasterDataHubPage() {
 
       {/* 5. Empty Search State */}
       {filteredModules.length === 0 && (
-        <div className="py-14 text-center border rounded-xl bg-card shadow-2xs space-y-2.5">
+        <div className="py-14 text-center border rounded-xl bg-card shadow-sm space-y-2.5">
           <Database className="w-9 h-9 mx-auto text-muted-foreground/50" />
           <p className="text-sm font-bold text-foreground">
             Modul Master Data Tidak Ditemukan

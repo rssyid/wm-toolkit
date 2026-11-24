@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AuditLog, AuditLogAction } from "@/types";
-import { formatIDDate } from "@/lib/utils";
+import { formatIDDate, formatWibTime } from "@/lib/utils";
 import {
   ShieldCheck,
   User,
@@ -111,10 +111,10 @@ export function AuditLogDetailDialog({
               <Clock className="w-3 h-3 text-muted-foreground" /> Waktu Transaksi
             </span>
             <p className="font-medium text-foreground">
-              {formatIDDate(log.createdAt.split("T")[0], true)}
+              {formatIDDate(log.createdAt, true)}
             </p>
             <p className="font-mono text-[11px] text-muted-foreground">
-              {log.createdAt.includes("T") ? log.createdAt.split("T")[1].replace("Z", "") : "10:00:00"} WIB
+              {formatWibTime(log.createdAt, true)} WIB
             </p>
           </div>
 

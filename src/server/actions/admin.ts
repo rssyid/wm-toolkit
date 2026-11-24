@@ -3,6 +3,7 @@
 import { db } from "@/server/db";
 import { requireRole } from "@/server/auth-guard";
 import { recordServerAuditLog } from "@/server/audit";
+import { formatActionError } from "@/server/errors";
 import { safeRevalidatePath as revalidatePath } from "@/server/revalidate";
 import bcrypt from "bcryptjs";
 import {
@@ -20,16 +21,12 @@ import {
 } from "@/lib/mock-data/master-data";
 import { INITIAL_NOTIFICATION_SETTINGS } from "@/lib/mock-data/notifications";
 
-/**
- * 1. Seed Master Data: Memastikan seluruh master data (kebun, PT, blok, material, vendor, matriks approval, pengguna) terisi di basis data.
- */
 export async function seedMasterDataAction() {
-  const user = await requireRole(["ADMIN"]);
-
   try {
-    const defaultPasswordHash = bcrypt.hashSync("wmtoolkit2026", 10);
+    const user = await requireRole(["ADMIN"]);
+    const defaultPwd = process.env.DEFAULT_USER_PASSWORD || "wmtoolkit2026";
+    const defaultPasswordHash = bcrypt.hashSync(defaultPwd, 10);
 
-    // 1. Regions
     for (const r of INITIAL_REGIONS) {
       const existing = await db.region.findFirst({
         where: { OR: [{ code: r.code }, { id: r.id }] },
@@ -46,7 +43,6 @@ export async function seedMasterDataAction() {
       }
     }
 
-    // 2. Companies
     for (const c of INITIAL_COMPANIES) {
       const existing = await db.company.findFirst({
         where: { OR: [{ code: c.code }, { id: c.id }] },
@@ -63,7 +59,6 @@ export async function seedMasterDataAction() {
       }
     }
 
-    // 3. Locations
     for (const loc of INITIAL_LOCATIONS) {
       const existing = await db.estateLocation.findFirst({
         where: { OR: [{ code: loc.code }, { id: loc.id }] },
@@ -96,7 +91,6 @@ export async function seedMasterDataAction() {
       }
     }
 
-    // 4. Blocks
     for (const b of INITIAL_BLOCKS) {
       const existing = await db.estateBlock.findUnique({ where: { id: b.id } });
       if (existing) {
@@ -130,7 +124,6 @@ export async function seedMasterDataAction() {
       }
     }
 
-    // 5. Materials
     for (const m of INITIAL_MATERIALS) {
       const existing = await db.materialCatalogItem.findFirst({
         where: { OR: [{ sapCode: m.sapCode }, { id: m.id }] },
@@ -161,7 +154,6 @@ export async function seedMasterDataAction() {
       }
     }
 
-    // 6. Suppliers
     for (const s of INITIAL_SUPPLIERS) {
       const existing = await db.supplier.findFirst({
         where: { OR: [{ code: s.code }, { id: s.id }] },
@@ -196,8 +188,28 @@ export async function seedMasterDataAction() {
       }
     }
 
-    // 7. Users
-    for (const u of INITIAL_USERS) {
+    const extraUsers = [
+      {
+        id: "usr-approver",
+        name: "Ir. H. Syamsul Bahri, M.M.",
+        email: "approver@perkebunan.co.id",
+        systemRole: "APPROVER" as const,
+        jabatan: "Regional Head / Direksi Evaluator",
+        estateName: "Kantor Wilayah Sumatera Utara",
+        status: "Active" as const,
+      },
+      {
+        id: "usr-viewer",
+        name: "Auditor Stakeholder Eksternal",
+        email: "viewer@perkebunan.co.id",
+        systemRole: "VIEWER" as const,
+        jabatan: "Tim Audit Kepatuhan",
+        estateName: "Holding PalmCo",
+        status: "Active" as const,
+      },
+    ];
+
+    for (const u of [...INITIAL_USERS, ...extraUsers]) {
       const existing = await db.user.findFirst({
         where: { OR: [{ email: u.email }, { id: u.id }] },
       });
@@ -206,7 +218,7 @@ export async function seedMasterDataAction() {
           where: { id: existing.id },
           data: {
             name: u.name,
-            role: u.systemRole as any,
+            role: u.systemRole as never,
             jabatan: u.jabatan,
             estateName: u.estateName,
             isActive: u.status === "Active",
@@ -219,7 +231,7 @@ export async function seedMasterDataAction() {
             email: u.email,
             passwordHash: defaultPasswordHash,
             name: u.name,
-            role: u.systemRole as any,
+            role: u.systemRole as never,
             jabatan: u.jabatan,
             estateName: u.estateName,
             isActive: u.status === "Active",
@@ -228,96 +240,63 @@ export async function seedMasterDataAction() {
       }
     }
 
-    // 8. Approval Matrix
     for (const rule of INITIAL_APPROVAL_MATRIX) {
-      const existing = await db.approvalMatrixRule.findUnique({ where: { id: rule.id } });
-      if (existing) {
-        await db.approvalMatrixRule.update({
-          where: { id: rule.id },
-          data: {
-            tierName: rule.tierName,
-            minValue: rule.minValue,
-            maxValue: rule.maxValue,
-            levels: rule.levels as any,
-            active: rule.active,
-          },
-        });
-      } else {
-        await db.approvalMatrixRule.create({
-          data: {
-            id: rule.id,
-            tierName: rule.tierName,
-            minValue: rule.minValue,
-            maxValue: rule.maxValue,
-            levels: rule.levels as any,
-            active: rule.active,
-          },
-        });
-      }
+      await db.approvalMatrixRule.upsert({
+        where: { id: rule.id },
+        update: {
+          tierName: rule.tierName,
+          minValue: rule.minValue,
+          maxValue: rule.maxValue,
+          levels: rule.levels as never,
+          active: rule.active,
+        },
+        create: {
+          id: rule.id,
+          tierName: rule.tierName,
+          minValue: rule.minValue,
+          maxValue: rule.maxValue,
+          levels: rule.levels as never,
+          active: rule.active,
+        },
+      });
     }
 
-    // 9. Categories, Types, Procurement Types
     for (const cat of INITIAL_PROJECT_CATEGORIES) {
-      const existing = await db.projectCategoryItem.findFirst({
-        where: { OR: [{ code: cat.code }, { id: cat.id }] },
+      await db.projectCategoryItem.upsert({
+        where: { code: cat.code },
+        update: { name: cat.name, description: cat.description, status: cat.status },
+        create: { id: cat.id, code: cat.code, name: cat.name, description: cat.description, status: cat.status },
       });
-      if (existing) {
-        await db.projectCategoryItem.update({
-          where: { id: existing.id },
-          data: { name: cat.name, description: cat.description, status: cat.status },
-        });
-      } else {
-        await db.projectCategoryItem.create({
-          data: { id: cat.id, code: cat.code, name: cat.name, description: cat.description, status: cat.status },
-        });
-      }
     }
 
     for (const pt of INITIAL_PROJECT_TYPES) {
-      const existing = await db.projectTypeItem.findFirst({
-        where: { OR: [{ code: pt.code }, { id: pt.id }] },
+      await db.projectTypeItem.upsert({
+        where: { code: pt.code },
+        update: { name: pt.name, description: pt.description, status: pt.status },
+        create: { id: pt.id, code: pt.code, name: pt.name, description: pt.description, status: pt.status },
       });
-      if (existing) {
-        await db.projectTypeItem.update({
-          where: { id: existing.id },
-          data: { name: pt.name, description: pt.description, status: pt.status },
-        });
-      } else {
-        await db.projectTypeItem.create({
-          data: { id: pt.id, code: pt.code, name: pt.name, description: pt.description, status: pt.status },
-        });
-      }
     }
 
     for (const proc of INITIAL_PROCUREMENT_TYPES) {
-      const existing = await db.procurementTypeItem.findFirst({
-        where: { OR: [{ code: proc.code }, { id: proc.id }] },
+      await db.procurementTypeItem.upsert({
+        where: { code: proc.code },
+        update: { name: proc.name, description: proc.description, status: proc.status },
+        create: { id: proc.id, code: proc.code, name: proc.name, description: proc.description, status: proc.status },
       });
-      if (existing) {
-        await db.procurementTypeItem.update({
-          where: { id: existing.id },
-          data: { name: proc.name, description: proc.description, status: proc.status },
-        });
-      } else {
-        await db.procurementTypeItem.create({
-          data: { id: proc.id, code: proc.code, name: proc.name, description: proc.description, status: proc.status },
-        });
-      }
     }
 
-    // 10. Notification Settings
     for (const setting of INITIAL_NOTIFICATION_SETTINGS) {
       await db.notificationSetting.upsert({
         where: {
           userId_notificationType: {
-            userId: setting.userId || "usr-1",
+            userId: setting.userId || user.id,
             notificationType: setting.notificationType,
           },
         },
         update: { isEnabled: setting.isEnabled },
         create: {
           id: setting.id,
-          userId: setting.userId || "usr-1",
+          userId: setting.userId || user.id,
           notificationType: setting.notificationType,
           isEnabled: setting.isEnabled,
         },
@@ -326,10 +305,10 @@ export async function seedMasterDataAction() {
 
     await recordServerAuditLog({
       action: "UPDATE",
-      entityType: "PROJECT",
+      entityType: "SYSTEM",
       entityId: "master-data-seed",
       entityTitle: "Sinkronisasi Master Data",
-      notes: `Admin ${user.name} melakukan sinkronisasi Master Data standar ke basis data`,
+      notes: `Admin ${user.name} melakukan sinkronisasi Master Data standar ke basis data.`,
     });
 
     revalidatePath("/dashboard");
@@ -337,100 +316,50 @@ export async function seedMasterDataAction() {
     revalidatePath("/settings");
     revalidatePath("/notifications");
     revalidatePath("/master-data/locations");
-    return { success: true, message: "Master Data berhasil disinkronkan ke Neon PostgreSQL!" };
-  } catch (error: any) {
+    return { success: true, message: "Master Data berhasil disinkronkan ke basis data." };
+  } catch (error: unknown) {
     console.error("Gagal sinkronisasi master data:", error);
-    return { success: false, message: error.message || "Gagal sinkronisasi master data." };
+    return { success: false, message: formatActionError(error, "Gagal sinkronisasi master data.") };
   }
 }
 
-/**
- * 2. Clear Demo Data: Menghapus seluruh rekod transaksi demo (proyek, AFCE, PR, PO, GR, SPK, progres)
- * namun tetap mempertahankan master data dan akun pengguna.
- */
+async function deleteAllTransactionTablesTx(tx: Parameters<Parameters<typeof db.$transaction>[0]>[0]) {
+  await tx.progressLog.deleteMany();
+  await tx.goodsHandover.deleteMany();
+  await tx.goodsReceipt.deleteMany();
+  await tx.poItem.deleteMany();
+  await tx.purchaseOrder.deleteMany();
+  await tx.vendorEvaluation.deleteMany();
+  await tx.purchaseRequisition.deleteMany();
+  await tx.technicalEvaluation.deleteMany();
+  await tx.spk.deleteMany();
+  await tx.uspk.deleteMany();
+  await tx.afceApprovalRecord.deleteMany();
+  await tx.afceApprovalLevel.deleteMany();
+  await tx.afce.deleteMany();
+  await tx.scheduleRevision.deleteMany();
+  await tx.boqItem.deleteMany();
+  await tx.workItem.deleteMany();
+  await tx.projectAttachment.deleteMany();
+  await tx.projectComment.deleteMany();
+  await tx.project.deleteMany();
+  await tx.notification.deleteMany();
+}
+
 export async function clearDemoDataAction() {
-  const user = await requireRole(["ADMIN"]);
-
   try {
-    // Delete in reverse relational order
-    await db.progressLog.deleteMany();
-    await db.goodsHandover.deleteMany();
-    await db.goodsReceipt.deleteMany();
-    await db.poItem.deleteMany();
-    await db.purchaseOrder.deleteMany();
-    await db.vendorEvaluation.deleteMany();
-    await db.purchaseRequisition.deleteMany();
-    await db.technicalEvaluation.deleteMany();
-    await db.spk.deleteMany();
-    await db.uspk.deleteMany();
-    await db.afceApprovalRecord.deleteMany();
-    await db.afceApprovalLevel.deleteMany();
-    await db.afce.deleteMany();
-    await db.scheduleRevision.deleteMany();
-    await db.boqItem.deleteMany();
-    await db.workItem.deleteMany();
-    await db.projectAttachment.deleteMany();
-    await db.projectComment.deleteMany();
-    await db.project.deleteMany();
-    await db.notification.deleteMany();
-    await db.auditLog.deleteMany();
+    const user = await requireRole(["ADMIN"]);
 
-    await recordServerAuditLog({
-      action: "DELETE",
-      entityType: "PROJECT",
-      entityId: "system-clear",
-      entityTitle: "Pembersihan Data Transaksi Demo",
-      notes: `Admin ${user.name} membersihkan seluruh rekod transaksi proyek demo`,
+    await db.$transaction(async (tx) => {
+      await deleteAllTransactionTablesTx(tx);
     });
 
-    revalidatePath("/dashboard");
-    revalidatePath("/workspace");
-    revalidatePath("/settings");
-    revalidatePath("/notifications");
-    return { success: true, message: "Seluruh data transaksi demo berhasil dibersihkan dari database!" };
-  } catch (error: any) {
-    console.error("Gagal membersihkan data demo:", error);
-    return { success: false, message: error.message || "Gagal membersihkan data demo." };
-  }
-}
-
-/**
- * 3. Reset to Empty Production Data: Mengosongkan seluruh data proyek dan audit log,
- * hanya menyisakan master data organisasi & akun Admin aktif.
- */
-export async function resetToEmptyProductionAction() {
-  const user = await requireRole(["ADMIN"]);
-
-  try {
-    // Clear all transactions
-    await db.progressLog.deleteMany();
-    await db.goodsHandover.deleteMany();
-    await db.goodsReceipt.deleteMany();
-    await db.poItem.deleteMany();
-    await db.purchaseOrder.deleteMany();
-    await db.vendorEvaluation.deleteMany();
-    await db.purchaseRequisition.deleteMany();
-    await db.technicalEvaluation.deleteMany();
-    await db.spk.deleteMany();
-    await db.uspk.deleteMany();
-    await db.afceApprovalRecord.deleteMany();
-    await db.afceApprovalLevel.deleteMany();
-    await db.afce.deleteMany();
-    await db.scheduleRevision.deleteMany();
-    await db.boqItem.deleteMany();
-    await db.workItem.deleteMany();
-    await db.projectAttachment.deleteMany();
-    await db.projectComment.deleteMany();
-    await db.project.deleteMany();
-    await db.notification.deleteMany();
-    await db.auditLog.deleteMany();
-
     await recordServerAuditLog({
       action: "DELETE",
-      entityType: "PROJECT",
-      entityId: "system-prod-reset",
-      entityTitle: "Reset Basis Data Kosong Produksi",
-      notes: `Admin ${user.name} melakukan reset basis data ke kondisi awal produksi bersih`,
+      entityType: "SYSTEM",
+      entityId: "system-clear",
+      entityTitle: "Pembersihan Data Transaksi Proyek",
+      notes: `Admin ${user.name} membersihkan seluruh data transaksi proyek (rekaman audit log tetap dipertahankan).`,
     });
 
     revalidatePath("/dashboard");
@@ -439,10 +368,48 @@ export async function resetToEmptyProductionAction() {
     revalidatePath("/notifications");
     return {
       success: true,
-      message: "Basis data berhasil direset ke kondisi produksi kosong. Siap untuk penginputan proyek riil!",
+      message: "Seluruh transaksi proyek berhasil dibersihkan. Jejak audit tetap terjaga.",
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    console.error("Gagal membersihkan data transaksi:", error);
+    return { success: false, message: formatActionError(error, "Gagal membersihkan data transaksi.") };
+  }
+}
+
+export async function resetToEmptyProductionAction(confirmationText?: string) {
+  try {
+    const user = await requireRole(["ADMIN"]);
+
+    if (confirmationText !== "PRODUKSI") {
+      return {
+        success: false,
+        message: 'Konfirmasi gagal. Ketik kata kunci "PRODUKSI" secara tepat untuk melanjutkan.',
+      };
+    }
+
+    await db.$transaction(async (tx) => {
+      await deleteAllTransactionTablesTx(tx);
+      await tx.auditLog.deleteMany();
+    });
+
+    await recordServerAuditLog({
+      action: "DELETE",
+      entityType: "SYSTEM",
+      entityId: "system-prod-reset",
+      entityTitle: "Reset Basis Data Produksi Bersih",
+      notes: `Admin ${user.name} melakukan reset basis data ke kondisi awal produksi bersih.`,
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/workspace");
+    revalidatePath("/settings");
+    revalidatePath("/notifications");
+    return {
+      success: true,
+      message: "Basis data berhasil direset ke kondisi produksi kosong.",
+    };
+  } catch (error: unknown) {
     console.error("Gagal melakukan reset produksi:", error);
-    return { success: false, message: error.message || "Gagal melakukan reset produksi." };
+    return { success: false, message: formatActionError(error, "Gagal melakukan reset produksi.") };
   }
 }

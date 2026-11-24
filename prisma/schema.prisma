@@ -89,6 +89,13 @@ enum AuditEntityType {
   SPK
   PROGRESS_LOG
   SCHEDULE_REVISION
+  WORK_ITEM
+  BOQ_ITEM
+  COMMENT
+  ATTACHMENT
+  USER
+  MASTER_DATA
+  SYSTEM
 }
 
 // 1. Users
@@ -100,6 +107,8 @@ model User {
   role                 Role                   @default(PIC)
   jabatan              String?
   estateName           String?
+  bio                  String?                @db.Text
+  timeZone             String?                @default("WIB")
   avatarUrl            String?                @db.Text
   isActive             Boolean                @default(true)
   createdAt            DateTime               @default(now())
@@ -140,12 +149,16 @@ model Project {
   procurementType      String                 @default("Tender")
   locationId           String?
   locationName         String?
+  locationIds          Json?
+  locationNames        Json?
   regionId             String?
   regionName           String?
   companyId            String?
   companyName          String?
   blockId              String?
   blockCode            String?
+  blockIds             Json?
+  blockCodes           Json?
   projectCategoryId    String?
   projectCategoryName  String?
   baselineStartDate    DateTime

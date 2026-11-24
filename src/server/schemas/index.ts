@@ -1,6 +1,95 @@
 import { z } from "zod";
 
-// Project Schema
+const APPROVAL_LEVEL_ENUM = z.enum([
+  "WM",
+  "EM",
+  "GEM",
+  "RH",
+  "PH",
+  "MCA",
+  "CFO",
+  "COO",
+  "Chairman",
+]);
+
+export function isSafeHttpOrInternalUrl(url: string): boolean {
+  const trimmed = url.trim();
+  if (trimmed.startsWith("/api/files/")) return true;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export const WorkItemInputSchema = z.object({
+  id: z.string().optional(),
+  projectId: z.string().optional(),
+  name: z.string().min(2, "Nama item pekerjaan minimal 2 karakter"),
+  type: z.enum(["Physical", "Material"]).default("Physical"),
+  weight: z.number().min(0).max(100).default(0),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  procurementType: z.string().default("Tender"),
+  progressMode: z.enum(["Daily", "Weekly"]).default("Daily"),
+  progress: z.number().min(0).max(100).default(0),
+  status: z.enum(["Planned", "In Progress", "On Hold", "Completed", "Cancelled"]).default("Planned"),
+  phase: z.enum(["Tender", "Physical Execution", "Supporting Materials"]).default("Physical Execution"),
+  notes: z.string().optional().nullable(),
+});
+
+export const UpdateWorkItemSchema = WorkItemInputSchema.partial();
+
+export const BoqItemInputSchema = z.object({
+  id: z.string().optional(),
+  itemCode: z.string().min(1, "Kode item BOQ wajib diisi").default("ITEM-001"),
+  name: z.string().min(2, "Nama item BOQ wajib diisi"),
+  volume: z.number().nonnegative("Volume tidak boleh negatif"),
+  unit: z.string().min(1, "Satuan wajib diisi").default("Unit"),
+  unitPrice: z.number().nonnegative("Harga satuan tidak boleh negatif"),
+  totalPrice: z.number().nonnegative("Total harga tidak boleh negatif"),
+  weight: z.number().min(0).max(100).default(0),
+  status: z.enum(["Draft", "Approved", "In Progress", "Completed"]).default("Draft"),
+});
+
+export const ScheduleMatrixCellSchema = z.object({
+  type: z.enum(["plan", "revised", "extended-revised", "this-week-revised", "empty"]),
+  symbol: z.enum(["#", "DONE", "\u2713"]).nullable().optional(),
+  note: z.string().optional(),
+});
+
+export const ScheduleMatrixTaskSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  name: z.string(),
+  planStartDate: z.string(),
+  planEndDate: z.string(),
+  status: z.enum(["Planned", "In Progress", "On Hold", "Completed", "Cancelled"]).optional(),
+  cells: z.record(z.string(), ScheduleMatrixCellSchema),
+});
+
+export const ScheduleMatrixGroupSchema = z.object({
+  id: z.string(),
+  number: z.number(),
+  title: z.string(),
+  tasks: z.array(ScheduleMatrixTaskSchema),
+});
+
+export const ScheduleRevisionSchema = z.object({
+  revisionNumber: z.number(),
+  previousEndDate: z.string(),
+  newEndDate: z.string(),
+  extendedWeeks: z.number(),
+  reason: z.string().min(5, "Alasan revisi jadwal wajib diisi"),
+  revisedAt: z.string(),
+  approvalDate: z.string().optional(),
+  approvedBy: z.string().optional(),
+  revisedBy: z.string().min(2, "Nama pengaju revisi wajib diisi"),
+  approvalStatus: z.enum(["Approved", "Pending Approval"]).default("Approved"),
+  attachmentName: z.string().optional(),
+});
+
 export const CreateProjectSchema = z.object({
   id: z.string().optional(),
   code: z.string().min(3, "Kode proyek minimal 3 karakter"),
@@ -35,59 +124,78 @@ export const CreateProjectSchema = z.object({
   durationDays: z.number().default(0),
   progress: z.number().min(0).max(100).default(0),
   ewsStatus: z.enum(["Normal", "Warning", "Critical"]).default("Normal"),
-  workItems: z.array(z.any()).optional(),
-  surveyAndBoq: z.array(z.any()).optional(),
-  revisions: z.array(z.any()).optional(),
-  scheduleMatrix: z.array(z.any()).optional(),
+  workItems: z.array(WorkItemInputSchema).optional(),
+  surveyAndBoq: z.array(BoqItemInputSchema).optional(),
+  revisions: z.array(ScheduleRevisionSchema).optional(),
+  scheduleMatrix: z.array(ScheduleMatrixGroupSchema).optional(),
 });
 
 export const UpdateProjectSchema = CreateProjectSchema.partial();
 
-// Schedule Revision Schema
-export const ScheduleRevisionSchema = z.object({
-  revisionNumber: z.number(),
-  previousEndDate: z.string(),
-  newEndDate: z.string(),
-  extendedWeeks: z.number(),
-  reason: z.string().min(5, "Alasan revisi jadwal wajib diisi"),
-  revisedAt: z.string(),
-  approvalDate: z.string().optional(),
-  approvedBy: z.string().optional(),
-  revisedBy: z.string(),
-  approvalStatus: z.enum(["Approved", "Pending Approval"]).default("Approved"),
-  attachmentName: z.string().optional(),
-});
-
-// AFCE Approval Action Schema
 export const ProcessAfceActionSchema = z.object({
-  afceId: z.string(),
+  afceId: z.string().min(1),
   action: z.enum(["Approve", "Revise", "Reject", "Submit"]),
   note: z.string().default(""),
-  approverName: z.string().min(2, "Nama approver wajib diisi"),
-  approverRole: z.string(),
+  approverName: z.string().min(2, "Nama penyetuju wajib diisi"),
+  approverRole: z.string().min(1),
   approverJabatan: z.string().optional(),
   approvalDate: z.string().optional(),
   sapDocNumber: z.string().optional(),
   sapEvidenceUrl: z.string().optional(),
-  targetLevelIndex: z.number().optional(),
+  targetLevelIndex: z.number().int().nonnegative().optional(),
 });
 
-// Purchase Requisition Schema
+export const SubmitAfceApprovalSchema = z.object({
+  afceId: z.string().min(1),
+  note: z.string().default(""),
+  submissionDate: z.string().optional(),
+});
+
+export const UpdateAfceSchema = z.object({
+  afceNumber: z.string().min(3, "Nomor AFCE minimal 3 karakter").optional(),
+  value: z.number().positive("Nilai anggaran AFCE harus lebih dari 0").optional(),
+  status: z.enum(["Draft", "Pending Approval", "Approved", "Rejected", "Need Revision"]).optional(),
+  sapDocNumber: z.string().optional().nullable(),
+  sapReference: z.string().optional().nullable(),
+  sapScreenshotUrl: z.string().optional().nullable(),
+  sapScreenshotPlaceholder: z.string().optional().nullable(),
+});
+
+export const SyncAfceMatrixSchema = z.object({
+  afceId: z.string().min(1),
+  matrixLevels: z
+    .array(
+      z.object({
+        level: z.number().int().positive(),
+        code: z.string().min(1),
+        label: z.string().min(1),
+        isRequired: z.boolean().default(true),
+        status: z.enum(["Approved", "Pending", "Waiting", "Rejected", "Need Revision"]).default("Waiting"),
+        approverName: z.string().optional().nullable(),
+        approverJabatan: z.string().optional().nullable(),
+        decidedAt: z.string().optional().nullable(),
+        note: z.string().optional().nullable(),
+        sapDocNumber: z.string().optional().nullable(),
+        sapEvidenceUrl: z.string().optional().nullable(),
+      })
+    )
+    .optional(),
+});
+
 export const CreatePrSchema = z.object({
   prNumber: z.string().min(3, "Nomor PR wajib diisi"),
-  projectId: z.string(),
+  projectId: z.string().min(1),
   workItemId: z.string().optional(),
-  releaseDate: z.string(),
+  releaseDate: z.string().min(1, "Tanggal rilis wajib diisi"),
   prType: z.enum(["Material", "Service"]).default("Material"),
-  description: z.string(),
+  description: z.string().min(3, "Uraian PR minimal 3 karakter"),
   status: z.enum(["Draft", "Released", "Closed", "Cancelled"]).default("Draft"),
   sapPrNumber: z.string().optional(),
   attachmentName: z.string().optional(),
 });
 
-// Vendor Evaluation Schema
 export const CreateVendorEvaluationSchema = z.object({
-  prId: z.string(),
+  prId: z.string().min(1),
   prNumber: z.string().optional(),
   projectId: z.string().optional(),
   supplierId: z.string().optional(),
@@ -95,51 +203,60 @@ export const CreateVendorEvaluationSchema = z.object({
   evaluatorId: z.string().optional(),
   evaluatorName: z.string().min(2, "Nama evaluator wajib diisi"),
   evaluatorJabatan: z.string().optional(),
-  evaluationDate: z.string(),
+  evaluationDate: z.string().min(1),
   result: z.enum(["RECOMMENDED", "NOT_RECOMMENDED"]),
-  notes: z.string(),
-  score: z.number().optional(),
+  notes: z.string().min(3, "Catatan evaluasi minimal 3 karakter"),
+  score: z.number().min(0).max(100).optional(),
   attachmentName: z.string().optional(),
 });
 
-// Purchase Order Schema
+export const PoItemInputSchema = z.object({
+  materialName: z.string().min(1, "Nama material wajib diisi"),
+  sapMaterialCode: z.string().optional(),
+  volume: z.number().positive("Volume material harus lebih dari 0"),
+  unit: z.string().min(1, "Satuan wajib diisi"),
+  unitPrice: z.number().nonnegative("Harga satuan tidak boleh negatif"),
+  totalPrice: z.number().nonnegative("Total harga tidak boleh negatif"),
+  receivedVolume: z.number().nonnegative().default(0),
+  remainingVolume: z.number().nonnegative().optional(),
+  status: z.enum(["Ordered", "Partially Received", "Received", "Cancelled"]).default("Ordered"),
+});
+
 export const CreatePoSchema = z.object({
   poNumber: z.string().min(3, "Nomor PO wajib diisi"),
-  relatedPrId: z.string().optional(),
-  projectId: z.string(),
+  relatedPrId: z.string().min(1, "PR referensi wajib dipilih"),
+  projectId: z.string().min(1),
   workItemId: z.string().optional(),
   supplierId: z.string().optional(),
-  supplierName: z.string().min(2, "Nama vendor wajib diisi"),
-  poDate: z.string(),
+  supplierName: z.string().min(2, "Nama rekanan wajib diisi"),
+  poDate: z.string().min(1),
   releaseDate: z.string().optional(),
-  poValue: z.number().min(0, "Nilai PO harus positif"),
+  poValue: z.number().nonnegative("Nilai PO harus positif"),
   status: z.enum(["Draft", "Released", "Closed", "Cancelled"]).default("Draft"),
-  items: z.array(z.any()).default([]),
+  items: z.array(PoItemInputSchema).min(1, "PO minimal memiliki 1 item material"),
   attachmentName: z.string().optional(),
 });
 
-// Goods Receipt Schema
 export const CreateGoodsReceiptSchema = z.object({
   grNumber: z.string().min(3, "Nomor GR wajib diisi"),
-  poId: z.string(),
+  poId: z.string().min(1),
   itemId: z.string().optional(),
   materialName: z.string().min(2, "Nama material wajib diisi"),
-  receiptDate: z.string(),
-  receivedVolume: z.number().min(0, "Volume diterima minimal 0"),
-  unit: z.string(),
+  receiptDate: z.string().min(1),
+  receivedVolume: z.number().positive("Volume diterima harus lebih dari 0"),
+  unit: z.string().min(1),
   notes: z.string().optional(),
   attachmentName: z.string().optional(),
-  recordedBy: z.string(),
+  recordedBy: z.string().min(2),
 });
 
-// Goods Handover (BAST) Schema
 export const CreateGoodsHandoverSchema = z.object({
   handoverNumber: z.string().min(3, "Nomor BAST wajib diisi"),
-  poId: z.string(),
-  projectId: z.string(),
+  poId: z.string().min(1),
+  projectId: z.string().min(1),
   supplierId: z.string().optional(),
-  supplierName: z.string(),
-  handoverDate: z.string(),
+  supplierName: z.string().min(2),
+  handoverDate: z.string().min(1),
   receiverName: z.string().min(2, "Pihak penerima wajib diisi"),
   receiverJabatan: z.string().optional(),
   giverName: z.string().min(2, "Pihak penyerah wajib diisi"),
@@ -149,53 +266,57 @@ export const CreateGoodsHandoverSchema = z.object({
   attachmentName: z.string().optional(),
 });
 
-// USPK Schema
 export const CreateUspkSchema = z.object({
   afceId: z.string().optional(),
-  projectId: z.string(),
+  projectId: z.string().min(1),
   workItemId: z.string().optional(),
   uspkNumber: z.string().min(3, "Nomor USPK wajib diisi"),
-  vendorName: z.string().min(2, "Nama vendor wajib diisi"),
+  vendorName: z.string().min(2, "Nama rekanan jasa wajib diisi"),
   vendorId: z.string().optional(),
   scope: z.string().min(5, "Uraian lingkup kerja wajib diisi"),
-  value: z.number().min(0),
-  targetVolume: z.number().optional(),
+  value: z.number().nonnegative("Nilai USPK tidak boleh negatif"),
+  targetVolume: z.number().positive("Target volume harus lebih dari 0").optional(),
   unit: z.string().optional(),
-  startDate: z.string(),
-  endDate: z.string(),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
   status: z.enum(["DRAFT", "SUBMITTED", "APPROVED", "REJECTED"]).default("DRAFT"),
+  submittedAt: z.string().optional(),
   attachmentName: z.string().optional(),
-  createdBy: z.string(),
+  createdBy: z.string().optional(),
 });
 
-// Technical Evaluation Schema
+export const UpdateUspkStatusSchema = z.object({
+  uspkId: z.string().min(1),
+  status: z.enum(["DRAFT", "SUBMITTED", "APPROVED", "REJECTED"]),
+  decidedAt: z.string().optional(),
+});
+
 export const CreateTechnicalEvaluationSchema = z.object({
-  uspkId: z.string(),
+  uspkId: z.string().min(1),
   projectId: z.string().optional(),
   evaluatorId: z.string().optional(),
   evaluatorName: z.string().min(2, "Nama evaluator wajib diisi"),
   evaluatorJabatan: z.string().optional(),
-  evaluationDate: z.string(),
+  evaluationDate: z.string().min(1),
   result: z.enum(["RECOMMENDED", "NOT_RECOMMENDED"]),
-  rekomendasi: z.string().optional(),
-  notes: z.string(),
-  score: z.number().optional(),
+  rekomendasi: z.string().min(2, "Rekomendasi evaluasi wajib diisi").optional(),
+  notes: z.string().min(3, "Catatan evaluasi minimal 3 karakter"),
+  score: z.number().min(0).max(100).optional(),
   attachmentName: z.string().optional(),
 });
 
-// SPK Schema
 export const CreateSpkSchema = z.object({
-  uspkId: z.string(),
-  projectId: z.string(),
+  uspkId: z.string().min(1),
+  projectId: z.string().min(1),
   workItemId: z.string().optional(),
   spkNumber: z.string().min(3, "Nomor SPK wajib diisi"),
-  vendorName: z.string(),
+  vendorName: z.string().min(2),
   vendorId: z.string().optional(),
-  value: z.number().min(0),
-  targetVolume: z.number().optional(),
+  value: z.number().nonnegative(),
+  targetVolume: z.number().positive("Target volume harus lebih dari 0").optional(),
   unit: z.string().optional(),
-  startDate: z.string(),
-  endDate: z.string(),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
   status: z.enum(["DRAFT", "ACTIVE", "CLOSED"]).default("DRAFT"),
   releasedAt: z.string().optional(),
   attachmentName: z.string().optional(),
@@ -203,12 +324,16 @@ export const CreateSpkSchema = z.object({
   createdBy: z.string().optional(),
 });
 
-// Progress Logs Schema
+export const UpdateSpkStatusSchema = z.object({
+  spkId: z.string().min(1),
+  status: z.enum(["DRAFT", "ACTIVE", "CLOSED"]),
+});
+
 export const CreateDailyProgressSchema = z.object({
-  projectId: z.string(),
-  workItemId: z.string(),
+  projectId: z.string().min(1),
+  workItemId: z.string().min(1),
   spkId: z.string().optional(),
-  date: z.string(),
+  date: z.string().min(1),
   activity: z.string().min(3, "Uraian pekerjaan harian wajib diisi"),
   targetVolume: z.number().optional(),
   plannedVolume: z.number().optional(),
@@ -217,7 +342,7 @@ export const CreateDailyProgressSchema = z.object({
   cumulativeVolume: z.number().optional(),
   unit: z.string().optional(),
   progressPercent: z.number().min(0).max(100),
-  manpower: z.number().optional(),
+  manpower: z.number().int().nonnegative().optional(),
   weather: z.enum(["Cerah", "Hujan", "Berawan"]).default("Cerah"),
   notes: z.string().default(""),
   photoName: z.string().optional(),
@@ -225,21 +350,43 @@ export const CreateDailyProgressSchema = z.object({
 });
 
 export const CreateWeeklyProgressSchema = z.object({
-  projectId: z.string(),
-  workItemId: z.string(),
+  projectId: z.string().min(1),
+  workItemId: z.string().min(1),
   spkId: z.string().optional(),
-  period: z.string(),
-  startDate: z.string(),
-  endDate: z.string(),
-  plannedProgress: z.number(),
-  actualProgress: z.number(),
+  period: z.string().min(2),
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
+  plannedProgress: z.number().min(0).max(100),
+  actualProgress: z.number().min(0).max(100),
   variance: z.number(),
-  achievement: z.number(),
+  achievement: z.number().nonnegative(),
   notes: z.string().default(""),
   reportName: z.string().optional(),
 });
 
-// Master Data: Locations & Hierarchy Schemas
+export const AddAttachmentSchema = z.object({
+  projectId: z.string().min(1),
+  commentId: z.string().optional(),
+  source: z.enum(["GOOGLE_DRIVE_LINK", "UPLOAD"]).default("UPLOAD"),
+  fileName: z.string().min(1, "Nama berkas wajib diisi"),
+  fileUrl: z
+    .string()
+    .min(1, "URL berkas wajib diisi")
+    .refine(isSafeHttpOrInternalUrl, "URL berkas harus menggunakan protokol https:// yang valid."),
+  fileSize: z.string().optional().default(""),
+  mimeType: z.string().optional(),
+  category: z.string().optional(),
+  docNumber: z.string().optional(),
+  googleDriveFileId: z.string().optional(),
+});
+
+export const AddCommentSchema = z.object({
+  projectId: z.string().min(1),
+  content: z.string().trim().min(1, "Isi komentar tidak boleh kosong").max(5000),
+  mentionedUserIds: z.array(z.string()).default([]),
+  attachments: z.array(AddAttachmentSchema.omit({ projectId: true, commentId: true })).optional(),
+});
+
 export const CreateRegionSchema = z.object({
   id: z.string().optional(),
   code: z.string().min(2, "Kode wilayah minimal 2 karakter"),
@@ -287,7 +434,6 @@ export const CreateEstateBlockSchema = z.object({
 
 export const UpdateEstateBlockSchema = CreateEstateBlockSchema.partial();
 
-// Master Data: Material Catalog
 export const CreateMaterialCatalogSchema = z.object({
   id: z.string().optional(),
   sapCode: z.string().min(2, "Kode material SAP minimal 2 karakter"),
@@ -300,13 +446,12 @@ export const CreateMaterialCatalogSchema = z.object({
 
 export const UpdateMaterialCatalogSchema = CreateMaterialCatalogSchema.partial();
 
-// Master Data: Supplier / Rekanan
 export const CreateSupplierSchema = z.object({
   id: z.string().optional(),
   code: z.string().min(2, "Kode rekanan minimal 2 karakter"),
   name: z.string().min(2, "Nama rekanan minimal 2 karakter"),
   category: z.string().min(2, "Kategori bidang rekanan wajib diisi"),
-  contactPerson: z.string().min(2, "Kontak personil wajib diisi"),
+  contactPerson: z.string().min(2, "Nama narahubung wajib diisi"),
   phone: z.string().min(5, "Nomor telepon wajib diisi"),
   npwp: z.string().min(5, "NPWP rekanan wajib diisi"),
   rating: z.number().min(1).max(5).default(5),
@@ -315,7 +460,6 @@ export const CreateSupplierSchema = z.object({
 
 export const UpdateSupplierSchema = CreateSupplierSchema.partial();
 
-// Master Data: User / Pengguna
 export const CreateUserSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(2, "Nama lengkap pengguna minimal 2 karakter"),
@@ -325,24 +469,42 @@ export const CreateUserSchema = z.object({
   role: z.enum(["ADMIN", "PIC", "APPROVER", "VIEWER"]).optional(),
   jabatan: z.string().optional().nullable().default("-"),
   estateName: z.string().optional().nullable(),
+  avatarUrl: z.string().optional().nullable(),
   status: z.enum(["Active", "Inactive"]).default("Active"),
 });
 
 export const UpdateUserSchema = CreateUserSchema.partial();
 
-// Master Data: Approval Matrix Rule
-export const CreateApprovalMatrixRuleSchema = z.object({
+export const ApprovalMatrixRuleBaseSchema = z.object({
   id: z.string().optional(),
   tierName: z.string().min(2, "Nama tingkatan otorisasi wajib diisi"),
   minValue: z.number().nonnegative("Batas minimum tidak boleh negatif"),
   maxValue: z.number().positive("Batas maksimum harus lebih besar dari 0"),
-  levels: z.array(z.any()).default([]),
+  levels: z.array(APPROVAL_LEVEL_ENUM.nullable()).default([]),
   active: z.boolean().default(true),
 });
 
-export const UpdateApprovalMatrixRuleSchema = CreateApprovalMatrixRuleSchema.partial();
+export const CreateApprovalMatrixRuleSchema = ApprovalMatrixRuleBaseSchema.refine(
+  (d) => d.maxValue >= d.minValue,
+  {
+    message: "Batas maksimum harus lebih besar atau sama dengan batas minimum",
+    path: ["maxValue"],
+  }
+);
 
-// Master Data: Project Category
+export const UpdateApprovalMatrixRuleSchema = ApprovalMatrixRuleBaseSchema.partial().refine(
+  (d) => d.minValue === undefined || d.maxValue === undefined || d.maxValue >= d.minValue,
+  {
+    message: "Batas maksimum harus lebih besar atau sama dengan batas minimum",
+    path: ["maxValue"],
+  }
+);
+
+export const UpdateApprovalMatrixLevelsSchema = z.object({
+  id: z.string().min(1),
+  levels: z.array(APPROVAL_LEVEL_ENUM.nullable()),
+});
+
 export const CreateProjectCategorySchema = z.object({
   id: z.string().optional(),
   code: z.string().min(2, "Kode kategori minimal 2 karakter"),
@@ -353,7 +515,6 @@ export const CreateProjectCategorySchema = z.object({
 
 export const UpdateProjectCategorySchema = CreateProjectCategorySchema.partial();
 
-// Master Data: Project Type
 export const CreateProjectTypeSchema = z.object({
   id: z.string().optional(),
   code: z.string().min(2, "Kode tipe proyek minimal 2 karakter"),
@@ -364,7 +525,6 @@ export const CreateProjectTypeSchema = z.object({
 
 export const UpdateProjectTypeSchema = CreateProjectTypeSchema.partial();
 
-// Master Data: Procurement Type
 export const CreateProcurementTypeSchema = z.object({
   id: z.string().optional(),
   code: z.string().min(2, "Kode metode pengadaan minimal 2 karakter"),
@@ -375,34 +535,37 @@ export const CreateProcurementTypeSchema = z.object({
 
 export const UpdateProcurementTypeSchema = CreateProcurementTypeSchema.partial();
 
-// Notification Schema
 export const CreateNotificationSchema = z.object({
   id: z.string().optional(),
   userId: z.string().optional(),
   type: z.enum(["LATE_PROJECT", "PENDING_APPROVAL", "NEW_TASK", "DEADLINE_REMINDER", "SYSTEM"]),
   title: z.string().min(3, "Judul notifikasi wajib diisi"),
   message: z.string().min(3, "Isi pesan notifikasi wajib diisi"),
-  priority: z.enum(["info", "warning", "critical"]).default("info"),
+  priority: z.enum(["normal", "info", "warning", "critical"]).default("normal"),
   linkUrl: z.string().optional().nullable(),
   projectId: z.string().optional().nullable(),
   projectCode: z.string().optional().nullable(),
   projectName: z.string().optional().nullable(),
 });
 
-// User Profile Schema
+export const UpdateNotificationSettingSchema = z.object({
+  notificationType: z.enum(["LATE_PROJECT", "PENDING_APPROVAL", "NEW_TASK", "DEADLINE_REMINDER"]),
+  isEnabled: z.boolean(),
+});
+
 export const UpdateUserProfileSchema = z.object({
-  name: z.string().optional(),
-  fullName: z.string().optional(),
+  name: z.string().min(2, "Nama minimal 2 karakter").optional(),
+  fullName: z.string().min(2, "Nama lengkap minimal 2 karakter").optional(),
+  email: z.string().email("Format alamat email tidak valid").optional(),
   jabatan: z.string().optional(),
   role: z.string().optional(),
   estateName: z.string().optional().nullable(),
   selectedLocation: z.string().optional().nullable(),
-  bio: z.string().optional().nullable(),
-  timeZone: z.string().optional(),
+  bio: z.string().max(1000).optional().nullable(),
+  timeZone: z.enum(["WIB", "WITA", "WIT"]).optional(),
   avatarUrl: z.string().optional().nullable(),
 });
 
-// Change Password Schema
 export const ChangePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "Kata sandi saat ini wajib diisi"),
@@ -413,5 +576,3 @@ export const ChangePasswordSchema = z
     message: "Konfirmasi kata sandi tidak cocok dengan kata sandi baru",
     path: ["confirmPassword"],
   });
-
-

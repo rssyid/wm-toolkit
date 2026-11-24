@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,18 +11,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAppState } from "@/context/app-state-context";
-import { Project, POMaterialItem, PurchaseRequisition } from "@/types";
+import { Project, POMaterialItem } from "@/types";
 import { toast } from "sonner";
-import { ShoppingCart, Plus, Trash2, UploadCloud, Check } from "lucide-react";
+import { ShoppingCart, Plus, Trash2, Check, AlertCircle } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 
 interface POCreateDialogProps {
@@ -40,15 +33,26 @@ export function POCreateDialog({
 }: POCreateDialogProps) {
   const { createPo, pos, prs, suppliers, materials, vendorEvaluations } = useAppState();
 
-  const projectPrs = prs.filter((p) => p.projectId === project.id);
-  const [poNumber, setPoNumber] = useState(`PO-2026-0${110 + pos.length}`);
-  const [relatedPrId, setRelatedPrId] = useState(
-    preselectedPrId || projectPrs[0]?.id || ""
+  const recommendedPrs = useMemo(
+    () =>
+      prs.filter(
+        (p) =>
+          p.projectId === project.id &&
+          !p.deletedAt &&
+          vendorEvaluations.some((e) => e.prId === p.id && e.result === "RECOMMENDED")
+      ),
+    [prs, project.id, vendorEvaluations]
   );
-  const [supplierId, setSupplierId] = useState(suppliers[0]?.id || "sup-1");
-  const [poDate, setPoDate] = useState(new Date().toISOString().split("T")[0]);
-  const [releaseDate, setReleaseDate] = useState(new Date().toISOString().split("T")[0]);
+
+  const [poNumber, setPoNumber] = useState("");
+  const [relatedPrId, setRelatedPrId] = useState(
+    preselectedPrId || recommendedPrs[0]?.id || ""
+  );
+  const [supplierId, setSupplierId] = useState(suppliers[0]?.id || "");
+  const [poDate, setPoDate] = useState("");
+  const [releaseDate, setReleaseDate] = useState("");
   const [attachmentName, setAttachmentName] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const recommendedEvalsForPr = vendorEvaluations.filter(
     (e) => e.prId === relatedPrId && e.result === "RECOMMENDED"
@@ -57,13 +61,16 @@ export function POCreateDialog({
 
   useEffect(() => {
     if (open) {
-      const activePrId = preselectedPrId || projectPrs[0]?.id || "";
+      const year = new Date().getFullYear();
+      const seq = String(pos.length + 1).padStart(4, "0");
+      const preferredPr = recommendedPrs.find((p) => p.id === preselectedPrId);
+      const activePrId = preferredPr?.id || recommendedPrs[0]?.id || "";
       setRelatedPrId(activePrId);
-      setPoNumber(`PO-2026-0${110 + pos.length}`);
+      setPoNumber(`PO-${year}-${seq}`);
       setPoDate(new Date().toISOString().split("T")[0]);
       setReleaseDate(new Date().toISOString().split("T")[0]);
+      setAttachmentName("");
 
-      // If active PR has recommended evaluations, auto-select recommended vendor
       const recEvals = vendorEvaluations.filter(
         (e) => e.prId === activePrId && e.result === "RECOMMENDED"
       );
@@ -71,9 +78,11 @@ export function POCreateDialog({
         setSupplierId(recEvals[0].supplierId);
       } else if (suppliers.length > 0) {
         setSupplierId(suppliers[0].id);
+      } else {
+        setSupplierId("");
       }
     }
-  }, [open, preselectedPrId]);
+  }, [open, preselectedPrId, recommendedPrs, pos.length, vendorEvaluations, suppliers]);
 
   const handlePrChange = (newPrId: string) => {
     setRelatedPrId(newPrId);
@@ -147,38 +156,59 @@ export function POCreateDialog({
     );
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!poNumber.trim()) {
       toast.error("Nomor PO wajib diisi");
       return;
     }
-    if (!relatedPrId) {
-      toast.error("Pilih PR terkait");
+    const selectedPr = recommendedPrs.find((p) => p.id === relatedPrId);
+    if (!selectedPr) {
+      toast.error("Pilih PR yang telah memiliki evaluasi vendor RECOMMENDED");
+      return;
+    }
+    const selectedSupplier = suppliers.find((s) => s.id === supplierId);
+    if (!selectedSupplier) {
+      toast.error("Pilih supplier rekanan yang valid");
+      return;
+    }
+    if (!poDate || !releaseDate) {
+      toast.error("Tanggal terbit dan rilis PO wajib diisi");
+      return;
+    }
+    const invalidItem = items.find(
+      (it) => !it.materialName.trim() || !it.unit.trim() || it.volume <= 0 || it.unitPrice < 0
+    );
+    if (invalidItem) {
+      toast.error("Setiap item material wajib memiliki nama, satuan, dan volume > 0");
       return;
     }
 
-    const selectedPr = prs.find((p) => p.id === relatedPrId);
-    const selectedSupplier = suppliers.find((s) => s.id === supplierId);
+    setIsSubmitting(true);
+    try {
+      const ok = await createPo({
+        poNumber: poNumber.trim(),
+        relatedPrId,
+        relatedPrNumber: selectedPr.prNumber,
+        projectId: project.id,
+        projectCode: project.code,
+        workItemId: selectedPr.workItemId || project.workItems[0]?.id || "",
+        supplierId,
+        supplierName: selectedSupplier.name,
+        poDate,
+        releaseDate,
+        poValue: totalPoValue,
+        status: "Released",
+        items,
+        attachmentName: attachmentName.trim() || undefined,
+      });
 
-    createPo({
-      poNumber: poNumber.trim(),
-      relatedPrId,
-      relatedPrNumber: selectedPr?.prNumber || "PR-MOCK",
-      projectId: project.id,
-      projectCode: project.code,
-      workItemId: selectedPr?.workItemId || project.workItems[0]?.id || "",
-      supplierId,
-      supplierName: selectedSupplier?.name || "Supplier Rekanan",
-      poDate,
-      releaseDate,
-      poValue: totalPoValue,
-      status: "Released",
-      items,
-      attachmentName: attachmentName || `SAP_PO_${poNumber.replace(/[^0-9]/g, "")}_Signed.pdf`,
-    });
+      if (!ok) return;
 
-    toast.success(`Purchase Order ${poNumber} berhasil diterbitkan!`);
-    onOpenChange(false);
+      toast.success(`Purchase Order ${poNumber.trim()} berhasil diterbitkan!`);
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -210,28 +240,38 @@ export function POCreateDialog({
 
             <div>
               <label className="font-semibold text-foreground block mb-1">
-                Terkait Dokumen PR <span className="text-rose-500">*</span>
+                Terkait Dokumen PR (Terverifikasi Vendor) <span className="text-rose-600">*</span>
               </label>
               <SearchableSelect
                 value={relatedPrId}
                 onValueChange={handlePrChange}
-                placeholder="Pilih PR..."
+                placeholder={
+                  recommendedPrs.length === 0
+                    ? "Belum ada PR dengan evaluasi RECOMMENDED"
+                    : "Pilih PR..."
+                }
                 searchPlaceholder="Cari nomor PR atau deskripsi..."
                 triggerClassName="h-9 text-xs"
-                options={projectPrs.map((pr) => {
+                options={recommendedPrs.map((pr) => {
                   const evals = vendorEvaluations.filter((e) => e.prId === pr.id && e.result === "RECOMMENDED");
                   return {
                     value: pr.id,
-                    label: `${pr.prNumber} • ${pr.description.slice(0, 30)}...`,
-                    subLabel: `${pr.workItemName} • ${evals.length > 0 ? `${evals.length} Vendor Direkomendasikan` : "Belum Dievaluasi"}`,
+                    label: `${pr.prNumber} (${pr.description.slice(0, 30)})`,
+                    subLabel: `${pr.workItemName} | ${evals.length} Vendor Direkomendasikan`,
                   };
                 })}
               />
+              {recommendedPrs.length === 0 && (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>Belum ada PR dengan status Evaluasi Vendor RECOMMENDED pada proyek ini.</span>
+                </p>
+              )}
             </div>
 
             <div>
               <label className="font-semibold text-foreground block mb-1">
-                Supplier / Rekanan <span className="text-rose-500">*</span>
+                Supplier / Rekanan <span className="text-rose-600">*</span>
               </label>
               <SearchableSelect
                 value={supplierId}
@@ -244,12 +284,12 @@ export function POCreateDialog({
                   return {
                     value: sup.id,
                     label: isRec ? `[Rekomendasi] ${sup.name}` : sup.name,
-                    subLabel: `${isRec ? "[DIREKOMENDASIKAN] " : ""}${sup.category} • NPWP: ${sup.npwp || "-"}`,
+                    subLabel: `${isRec ? "[DIREKOMENDASIKAN] " : ""}${sup.category} | NPWP: ${sup.npwp || "-"}`,
                   };
                 })}
               />
               {recommendedSupplierIds.has(supplierId) && (
-                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
                   <Check className="w-3.5 h-3.5" />
                   <span>Vendor terverifikasi dari Evaluasi Rekanan PR</span>
                 </p>
@@ -354,11 +394,16 @@ export function POCreateDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Batal
           </Button>
-          <Button size="sm" onClick={handleSubmit} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-            Terbitkan Purchase Order
+          <Button
+            size="sm"
+            onClick={handleSubmit}
+            disabled={isSubmitting || recommendedPrs.length === 0}
+            className="bg-indigo-700 hover:bg-indigo-800 text-white"
+          >
+            {isSubmitting ? "Menyimpan..." : "Terbitkan Purchase Order"}
           </Button>
         </DialogFooter>
       </DialogContent>

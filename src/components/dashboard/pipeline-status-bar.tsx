@@ -43,7 +43,7 @@ export function PipelineStatusBar({
   inProgressProjectsCount,
 }: PipelineStatusBarProps) {
   return (
-    <Card className="shadow-xs border bg-card/50 backdrop-blur-xs overflow-hidden">
+    <Card className="shadow-sm border bg-card/50 backdrop-blur-sm overflow-hidden">
       <CardContent className="p-4 space-y-4">
         {/* Header Strip */}
         <div className="flex items-center justify-between border-b pb-2.5">

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +22,7 @@ import {
 import { useAppState } from "@/context/app-state-context";
 import { Project, USPKItem, SPKStatus } from "@/types";
 import { toast } from "sonner";
-import { FileCheck2, Calendar, UploadCloud, AlertCircle } from "lucide-react";
+import { FileCheck2, Calendar, UploadCloud, AlertCircle, Loader2 } from "lucide-react";
 import { formatIDR } from "@/lib/utils";
 
 interface SPKCreateDialogProps {
@@ -41,47 +41,79 @@ export function SPKCreateDialog({
   const { createSpkContract, spkContracts, uspks, technicalEvaluations, userProfile } =
     useAppState();
 
-  // Find all USPKs for this project that have a RECOMMENDED technical evaluation
-  const projectUspks = uspks.filter((u) => u.projectId === project.id);
-  const recommendedUspkIds = new Set(
-    technicalEvaluations
-      .filter((e) => e.projectId === project.id && e.result === "RECOMMENDED")
-      .map((e) => e.uspkId)
+  const activeSpkUspkIds = useMemo(
+    () =>
+      new Set(
+        spkContracts
+          .filter((s) => s.projectId === project.id && !s.deletedAt)
+          .map((s) => s.uspkId)
+      ),
+    [spkContracts, project.id]
   );
 
-  const eligibleUspks = projectUspks.filter(
-    (u) => recommendedUspkIds.has(u.id) || u.status === "APPROVED"
+  const recommendedUspkIds = useMemo(
+    () =>
+      new Set(
+        technicalEvaluations
+          .filter((e) => e.projectId === project.id && e.result === "RECOMMENDED")
+          .map((e) => e.uspkId)
+      ),
+    [technicalEvaluations, project.id]
+  );
+
+  const projectUspks = useMemo(
+    () => uspks.filter((u) => u.projectId === project.id && !u.deletedAt),
+    [uspks, project.id]
+  );
+
+  const eligibleUspks = useMemo(
+    () =>
+      projectUspks.filter(
+        (u) =>
+          !activeSpkUspkIds.has(u.id) &&
+          (recommendedUspkIds.has(u.id) || u.status === "APPROVED")
+      ),
+    [projectUspks, activeSpkUspkIds, recommendedUspkIds]
   );
 
   const [selectedUspkId, setSelectedUspkId] = useState<string>(
     preselectedUspk?.id || eligibleUspks[0]?.id || ""
   );
-  const [spkNumber, setSpkNumber] = useState(
-    `SPK-2026-0${40 + spkContracts.length}`
-  );
+  const [spkNumber, setSpkNumber] = useState("");
   const [value, setValue] = useState<number>(0);
   const [targetVolume, setTargetVolume] = useState<number | "">(0);
   const [unit, setUnit] = useState<string>("M3");
-  const [startDate, setStartDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
-  const [endDate, setEndDate] = useState(
-    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-  );
-  const [releaseDate, setReleaseDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [releaseDate, setReleaseDate] = useState("");
   const [status, setStatus] = useState<SPKStatus>("ACTIVE");
   const [notes, setNotes] = useState("");
   const [attachmentName, setAttachmentName] = useState("");
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const activeUspk =
-    projectUspks.find((u) => u.id === selectedUspkId) || preselectedUspk;
+    eligibleUspks.find((u) => u.id === selectedUspkId) ||
+    (preselectedUspk &&
+    !activeSpkUspkIds.has(preselectedUspk.id) &&
+    (recommendedUspkIds.has(preselectedUspk.id) || preselectedUspk.status === "APPROVED")
+      ? preselectedUspk
+      : undefined);
 
   useEffect(() => {
     if (open) {
-      setSpkNumber(`SPK-2026-0${40 + spkContracts.length}`);
-      const initialUspk = preselectedUspk || eligibleUspks[0] || projectUspks[0];
+      const year = new Date().getFullYear();
+      const seq = String(spkContracts.length + 1).padStart(4, "0");
+      setSpkNumber(`SPK-${year}-${seq}`);
+
+      const preselectedEligible =
+        preselectedUspk &&
+        !activeSpkUspkIds.has(preselectedUspk.id) &&
+        (recommendedUspkIds.has(preselectedUspk.id) || preselectedUspk.status === "APPROVED")
+          ? preselectedUspk
+          : undefined;
+      const initialUspk = preselectedEligible || eligibleUspks[0];
+
       if (initialUspk) {
         setSelectedUspkId(initialUspk.id);
         setValue(initialUspk.value);
@@ -89,19 +121,24 @@ export function SPKCreateDialog({
         setUnit(initialUspk.unit || "M3");
         setStartDate(initialUspk.startDate);
         setEndDate(initialUspk.endDate);
+      } else {
+        setSelectedUspkId("");
+        setValue(0);
+        setTargetVolume(0);
+        setStartDate(new Date().toISOString().split("T")[0]);
+        setEndDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]);
       }
+
       setReleaseDate(new Date().toISOString().split("T")[0]);
       setStatus("ACTIVE");
-      setNotes(
-        "Kontrak borongan jasa konstruksi sipil berpedoman pada spesifikasi teknis dan RAB yang telah dievaluasi."
-      );
+      setNotes("");
       setAttachmentName("");
     }
-  }, [open, preselectedUspk, spkContracts.length, eligibleUspks.length]);
+  }, [open, preselectedUspk, spkContracts.length, eligibleUspks, activeSpkUspkIds, recommendedUspkIds]);
 
   const handleUspkChange = (uspkId: string) => {
     setSelectedUspkId(uspkId);
-    const targetUspk = projectUspks.find((u) => u.id === uspkId);
+    const targetUspk = eligibleUspks.find((u) => u.id === uspkId);
     if (targetUspk) {
       setValue(targetUspk.value);
       setTargetVolume(targetUspk.targetVolume || 0);
@@ -111,9 +148,41 @@ export function SPKCreateDialog({
     }
   };
 
-  const handleSubmit = () => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAttachment(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", project.id);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        toast.error(json.error || "Gagal mengunggah dokumen SPK ke Google Drive.");
+        return;
+      }
+
+      setAttachmentName(
+        json.data.webViewLink ||
+          (json.data.fileId ? `/api/files/${json.data.fileId}/download` : json.data.fileName)
+      );
+      toast.success(`Berkas "${json.data.fileName}" berhasil diunggah ke Google Drive.`);
+    } catch {
+      toast.error("Gagal terhubung ke server saat mengunggah berkas.");
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleSubmit = async () => {
     if (!activeUspk) {
-      toast.error("Pilih usulan SPK (USPK) yang menjadi dasar kontrak");
+      toast.error("Pilih USPK yang sudah lolos evaluasi teknis (RECOMMENDED) dan belum memiliki SPK");
       return;
     }
     if (!spkNumber.trim()) {
@@ -124,49 +193,53 @@ export function SPKCreateDialog({
       toast.error("Nilai kontrak SPK harus lebih besar dari Rp 0");
       return;
     }
-    if (!startDate || !endDate) {
-      toast.error("Masa berlaku kontrak (tanggal mulai dan selesai) wajib diisi");
+    if (!startDate || !endDate || !releaseDate) {
+      toast.error("Tanggal mulai, selesai, dan tanggal penerbitan kontrak wajib diisi");
+      return;
+    }
+    if (new Date(endDate) < new Date(startDate)) {
+      toast.error("Tanggal akhir kontrak tidak boleh lebih awal dari tanggal mulai");
+      return;
+    }
+    if (activeSpkUspkIds.has(activeUspk.id)) {
+      toast.error(`USPK ${activeUspk.uspkNumber} sudah memiliki kontrak SPK aktif (aturan 1:1).`);
       return;
     }
 
-    // Check if USPK already has an SPK
-    const existingSpk = spkContracts.find((s) => s.uspkId === activeUspk.id);
-    if (existingSpk) {
-      toast.error(
-        `USPK ${activeUspk.uspkNumber} sudah memiliki kontrak SPK aktif (${existingSpk.spkNumber}). Satu USPK berlaku untuk satu kontrak SPK.`
+    setIsSubmitting(true);
+    try {
+      const ok = await createSpkContract({
+        uspkId: activeUspk.id,
+        uspkNumber: activeUspk.uspkNumber,
+        projectId: project.id,
+        projectCode: project.code,
+        workItemId: activeUspk.workItemId,
+        workItemName: activeUspk.workItemName,
+        spkNumber: spkNumber.trim(),
+        vendorName: activeUspk.vendorName,
+        vendorId: activeUspk.vendorId,
+        value: Number(value),
+        targetVolume: Number(targetVolume) || 0,
+        unit: unit.trim().toUpperCase(),
+        startDate,
+        endDate,
+        status,
+        releasedAt: releaseDate,
+        notes: notes.trim(),
+        attachmentName: attachmentName.trim() || undefined,
+        createdBy: userProfile?.fullName || "",
+      });
+
+      if (!ok) return;
+
+      toast.success(
+        `Surat Perintah Kerja ${spkNumber.trim()} untuk rekanan ${activeUspk.vendorName} berhasil diterbitkan!`
       );
-      return;
+
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const defaultFilename = `SPK_Kontrak_${spkNumber.replace(/[^a-zA-Z0-9]/g, "_")}_Signed.pdf`;
-
-    createSpkContract({
-      uspkId: activeUspk.id,
-      uspkNumber: activeUspk.uspkNumber,
-      projectId: project.id,
-      projectCode: project.code,
-      workItemId: activeUspk.workItemId,
-      workItemName: activeUspk.workItemName,
-      spkNumber: spkNumber.trim(),
-      vendorName: activeUspk.vendorName,
-      vendorId: activeUspk.vendorId,
-      value: Number(value),
-      targetVolume: Number(targetVolume) || 0,
-      unit: unit.trim().toUpperCase(),
-      startDate,
-      endDate,
-      status,
-      releasedAt: releaseDate,
-      notes: notes.trim(),
-      attachmentName: attachmentName.trim() || defaultFilename,
-      createdBy: userProfile.fullName || "Manager Estate",
-    });
-
-    toast.success(
-      `Surat Perintah Kerja ${spkNumber} untuk rekanan ${activeUspk.vendorName} berhasil diterbitkan!`
-    );
-
-    onOpenChange(false);
   };
 
   return (
@@ -188,13 +261,13 @@ export function SPKCreateDialog({
           </div>
         </DialogHeader>
 
-        {eligibleUspks.length === 0 && !preselectedUspk && (
+        {eligibleUspks.length === 0 && (
           <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold">Belum Ada USPK yang Direkomendasikan</p>
+              <p className="font-semibold">Tidak Ada USPK Tersedia untuk Penerbitan SPK</p>
               <p className="text-[11px] mt-0.5">
-                Penerbitan SPK membutuhkan USPK dengan evaluasi teknis berstatus <strong>RECOMMENDED</strong>. Catat evaluasi teknis pada USPK terlebih dahulu.
+                Penerbitan SPK membutuhkan USPK dengan evaluasi teknis berstatus <strong>RECOMMENDED</strong> yang belum memiliki SPK aktif (hubungan 1:1).
               </p>
             </div>
           </div>
@@ -204,21 +277,18 @@ export function SPKCreateDialog({
           {/* Row 1: Pilih USPK Rujukan */}
           <div className="space-y-1.5">
             <label className="font-semibold text-foreground">
-              Dasar Usulan SPK (USPK) <span className="text-red-500">*</span>
+              Dasar Usulan SPK (USPK) <span className="text-red-600">*</span>
             </label>
-            <Select value={selectedUspkId} onValueChange={handleUspkChange}>
+            <Select value={selectedUspkId} onValueChange={handleUspkChange} disabled={eligibleUspks.length === 0}>
               <SelectTrigger className="text-xs">
-                <SelectValue placeholder="Pilih USPK rujukan..." />
+                <SelectValue placeholder="Pilih USPK lolos evaluasi..." />
               </SelectTrigger>
               <SelectContent>
-                {projectUspks.map((u) => {
-                  const isRec = recommendedUspkIds.has(u.id) || u.status === "APPROVED";
-                  return (
-                    <SelectItem key={u.id} value={u.id} className="text-xs">
-                      {u.uspkNumber} - {u.vendorName} ({formatIDR(u.value)}) {isRec ? "[Lolos Evaluasi]" : "[Belum Direkomendasikan]"}
-                    </SelectItem>
-                  );
-                })}
+                {eligibleUspks.map((u) => (
+                  <SelectItem key={u.id} value={u.id} className="text-xs">
+                    {u.uspkNumber} - {u.vendorName} ({formatIDR(u.value)}) [Lolos Evaluasi]
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -392,14 +462,31 @@ export function SPKCreateDialog({
           {/* Row 7: Lampiran Berkas Kontrak */}
           <div className="space-y-1.5">
             <label className="font-semibold text-foreground flex items-center gap-1">
-              <UploadCloud className="w-3.5 h-3.5 text-muted-foreground" /> Lampiran Dokumen SPK Ditandatangani
+              <UploadCloud className="w-3.5 h-3.5 text-muted-foreground" /> Lampiran Dokumen SPK Ditandatangani (Opsional)
             </label>
-            <Input
-              value={attachmentName}
-              onChange={(e) => setAttachmentName(e.target.value)}
-              placeholder="SPK_Kontrak_Signed.pdf (opsional)"
-              className="text-xs"
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                value={attachmentName}
+                onChange={(e) => setAttachmentName(e.target.value)}
+                placeholder="Tautan Google Drive atau nama berkas kontrak SPK"
+                className="text-xs"
+              />
+              <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1">
+                {uploadingAttachment ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                )}
+                <span>Unggah</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                  onChange={handleFileUpload}
+                  disabled={uploadingAttachment}
+                />
+              </label>
+            </div>
           </div>
         </div>
 
@@ -409,6 +496,7 @@ export function SPKCreateDialog({
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
           >
             Batal
           </Button>
@@ -416,9 +504,11 @@ export function SPKCreateDialog({
             type="button"
             size="sm"
             onClick={handleSubmit}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1"
+            disabled={isSubmitting || uploadingAttachment || eligibleUspks.length === 0}
+            className="bg-indigo-700 hover:bg-indigo-800 text-white gap-1"
           >
-            <FileCheck2 className="w-3.5 h-3.5" /> Terbitkan SPK
+            <FileCheck2 className="w-3.5 h-3.5" />
+            {isSubmitting ? "Menyimpan..." : "Terbitkan SPK"}
           </Button>
         </DialogFooter>
       </DialogContent>

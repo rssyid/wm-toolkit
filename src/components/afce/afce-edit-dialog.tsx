@@ -36,9 +36,10 @@ export function AFCEEditDialog({
   const [value, setValue] = useState(afce.value.toString());
   const [sapDocNumber, setSapDocNumber] = useState(afce.sapDocNumber || "");
   const [sapScreenshotPlaceholder, setSapScreenshotPlaceholder] = useState(
-    afce.sapScreenshotPlaceholder || "SAP_AFCE_Authorization.png"
+    afce.sapScreenshotPlaceholder || ""
   );
   const [note, setNote] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const matchedTier = findMatchingApprovalTier(Number(value) || 0, approvalMatrix);
@@ -49,14 +50,14 @@ export function AFCEEditDialog({
       setValue(afce.value.toString());
       setSapDocNumber(afce.sapDocNumber || "");
       setSapScreenshotPlaceholder(
-        afce.sapScreenshotPlaceholder || "SAP_AFCE_Authorization.png"
+        afce.sapScreenshotPlaceholder || ""
       );
       setNote("");
       setError(null);
     }
   }, [open, afce]);
 
-  const handleSave = (submitForApproval: boolean = false) => {
+  const handleSave = async (submitForApproval: boolean = false) => {
     if (!afceNumber.trim()) {
       setError("Nomor AFCE wajib diisi.");
       return;
@@ -68,26 +69,40 @@ export function AFCEEditDialog({
       return;
     }
 
-    updateAfceDocument(afce.id, {
-      afceNumber: afceNumber.trim(),
-      value: numValue,
-      sapDocNumber: sapDocNumber.trim() || undefined,
-      sapScreenshotPlaceholder: sapScreenshotPlaceholder.trim() || undefined,
-    });
+    setIsSubmitting(true);
+    try {
+      const updated = await updateAfceDocument(afce.id, {
+        afceNumber: afceNumber.trim(),
+        value: numValue,
+        sapDocNumber: sapDocNumber.trim() || undefined,
+        sapScreenshotPlaceholder: sapScreenshotPlaceholder.trim() || undefined,
+      });
 
-    if (submitForApproval) {
-      submitAfceApproval(
-        afce.id,
-        note.trim() || "Pengajuan persetujuan AFCE oleh tim teknis kebun."
-      );
-      toast.success(
-        "Dokumen AFCE berhasil diperbarui dan diajukan ke Level 1 untuk otorisasi!"
-      );
-    } else {
-      toast.success("Data dokumen AFCE berhasil disimpan.");
+      if (!updated) {
+        setError("Gagal memperbarui dokumen AFCE.");
+        return;
+      }
+
+      if (submitForApproval) {
+        const submitted = await submitAfceApproval(
+          afce.id,
+          note.trim() || "Pengajuan persetujuan AFCE oleh tim teknis kebun."
+        );
+        if (!submitted) {
+          setError("Data AFCE tersimpan, tetapi pengajuan otorisasi gagal.");
+          return;
+        }
+        toast.success(
+          "Dokumen AFCE berhasil diperbarui dan diajukan ke Level 1 untuk otorisasi!"
+        );
+      } else {
+        toast.success("Data dokumen AFCE berhasil disimpan.");
+      }
+
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    onOpenChange(false);
   };
 
   return (
@@ -176,7 +191,7 @@ export function AFCEEditDialog({
             <Input
               value={sapScreenshotPlaceholder}
               onChange={(e) => setSapScreenshotPlaceholder(e.target.value)}
-              placeholder="Contoh: SAP_AFCE_Authorization_420M.png"
+              placeholder="Opsional: tautan atau nama berkas bukti SAP"
               className="h-8 text-xs font-mono"
             />
           </div>
@@ -203,8 +218,9 @@ export function AFCEEditDialog({
 
           <Button
             size="sm"
+            disabled={isSubmitting}
             onClick={() => handleSave(false)}
-            className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+            className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white"
           >
             <Save className="w-3.5 h-3.5" /> Simpan
           </Button>
@@ -212,6 +228,7 @@ export function AFCEEditDialog({
           {afce.status === "Draft" && (
             <Button
               size="sm"
+              disabled={isSubmitting}
               onClick={() => handleSave(true)}
               className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold"
             >

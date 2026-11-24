@@ -1,37 +1,21 @@
-# WM-Toolkit - Estate Civil & Technical Project Monitoring (UI Mockup)
+# WM-Toolkit - Estate Civil & Technical Project Monitoring
 
-A modern, high-density, interactive internal operations tool built with **Next.js App Router (TypeScript)**, **Tailwind CSS**, and **shadcn/ui** components for monitoring technical estate work in agricultural/estate engineering (civil infrastructure, water gates, drainage channels, road maintenance, and material procurement).
+Aplikasi internal berbasis web untuk pencatatan dan pemantauan proyek teknis perkebunan sawit (infrastruktur air, tanggul, drainase, jembatan, jalan, dan pengadaan barang/jasa), dibangun dengan Next.js App Router (TypeScript), Tailwind CSS, shadcn/ui, Prisma ORM, PostgreSQL (Neon), NextAuth, dan Google Drive API.
 
 ---
 
 ## Key Features
 
 1. **End-to-End Estate Project Lifecycle**:
-   - **AFCE Initiation & Tiered Approval Matrix** (Estate Manager $\le$ 100M, Area Manager 100-500M, Head Office $>$ 500M).
-   - **PR (Purchase Requisition) Tracking** with SAP doc references.
-   - **Multi-PO Generation from PRs** linked to registered vendors.
-   - **Material Receipt (Goods Receipt / GR)** with automatic partial/full quantity deductions and item status transitions (`Ordered` $\rightarrow$ `Partially Received` $\rightarrow$ `Received`).
-   - **Unified Multi-Project Gantt Visualization**:
-     - Baseline bars (Gray), revision extension bars (Yellow), `#` progress markers, and completion checkmarks.
-     - Weekly, Monthly, and Quarterly zoom levels.
-     - Filter by Running, Delayed, and Pending Approval.
-   - **Physical Progress Tracking**:
-     - Daily site logs with manpower count, weather conditions (Cerah/Hujan/Berawan), volume calculation, and site photo previews.
-     - Weekly progress S-Curve comparison (Plan vs Actual) with interactive Recharts line charts.
-     - Work-item weighted contribution to overall project progress.
-   - **Schedule Revision (Addendum)** retaining baseline schedule history.
-   - **Comprehensive Master Data CRUD**:
-     - Locations/Estates (`/master-data/locations`)
-     - Material Catalog SAP (`/master-data/materials`)
-     - Suppliers & Contractors (`/master-data/suppliers`)
-     - Users & Roles (`/master-data/users`)
-     - Approval Matrix Configuration (`/master-data/approval-matrix`)
-     - Project Types & Procurement Methods
-   - **Settings & Theme**:
-     - Dark / Light / System theme toggle.
-     - Table density toggle (Comfortable vs Compact).
-     - Global Command Palette search (Ctrl+K).
-     - One-click "Reset Mock Data" to restore clean demo state.
+   - **AFCE Initiation & 9-Level Approval Matrix** (`WM -> EM -> GEM -> RH -> PH -> MCA -> CFO -> COO -> Chairman` berdasarkan tier nilai anggaran).
+   - **Dual-Track Procurement Hub (`/workspace/[projectId]/procurement`)**:
+     - Jalur Barang: PR -> Evaluasi Vendor (`RECOMMENDED`) -> PO Multi-Item -> Goods Receipt (GR) -> BAST.
+     - Jalur Jasa: USPK -> Evaluasi Teknis (`RECOMMENDED`) -> Kontrak SPK 1:1.
+   - **Unified Multi-Project Gantt Visualization** (`Weekly`, `Monthly`, `Quarterly` zoom, revisi addendum, dan filter status).
+   - **Execution & Progress Hub (`/workspace/[projectId]/execution`)**:
+     - Kurva-S Recharts (Plan vs Actual), Log Harian & Mingguan, WBS, Matriks Jadwal Mingguan, Adendum Waktu, dan Survey/BOQ.
+   - **Master Data Terpadu (`/master-data/*`)**: Organisasi/Kebun, Kategori/Tipe Proyek & Pengadaan, Material SAP, Supplier, Pengguna, RBAC, dan Matriks Approval AFCE.
+   - **Auth, Audit Trail & Cloud Storage**: NextAuth Credentials, PostgreSQL Immutable Audit Log, dan integrasi unggah Google Drive API (fail-fast apabila kredensial belum terpasang).
 
 2. **Localization & Styling**:
    - Indonesian Rupiah currency formatting (`Rp 120.000.000`).
@@ -79,17 +63,12 @@ pnpm start
 - `/dashboard` - 7 KPI metric cards, Unified multi-project Gantt timeline, 5 operational status widgets.
 - `/workspace` - Project portfolio table with dense filters, search, EWS status, and pagination.
 - `/workspace/new` - 4-Step stepper wizard (Basic Info, Baseline Schedule, Work Items & 100% Weight check, Review & Save).
-- `/workspace/[projectId]` - Project Detail shell with 10 interactive tabs:
-  - `Overview` - Executive summary, AFCE & schedule status, latest logs.
-  - `Work Items` - WBS table with add/edit work item modal.
-  - `Schedule` - Baseline vs revised schedule bars, revision history, and Revise Schedule modal.
-  - `Survey & BOQ` - Topography survey data and Bill of Quantities table.
-  - `AFCE Approval` - AFCE tiered matrix, SAP screenshot mock, approve/revise/reject actions with mandatory notes.
-  - `PR Tracking` - PR release recording form and linked PO counter.
-  - `PO & Materials` - Multi-line material items, partial/full Goods Receipt (GR) modal with auto-deduction.
-  - `Progress` - Plan vs Actual S-Curve chart (Recharts) and daily/weekly logs.
-  - `Documents` - Central document repository with attachment preview modal.
-  - `History & Audit` - Chronological audit trail of all project events.
+- `/workspace/[projectId]` - Project Detail shell dengan hub utama:
+  - `Ringkasan` (`/workspace/[projectId]`) - Ikhtisar eksekutif, Smart Action Stepper, AFCE & jadwal.
+  - `Otorisasi AFCE` (`/workspace/[projectId]/afce`) - Matriks 9 level (`WM..Chairman`) dan pencatatan approval manual SAP.
+  - `Pengadaan` (`/workspace/[projectId]/procurement`) - Hub Jalur Barang (`?track=barang`) & Jalur Jasa (`?track=jasa`). Rute `/pr`, `/po`, `/services`, `/uspk`, `/technical-evaluation`, `/spk` dialihkan otomatis ke hub ini.
+  - `Pelaksanaan` (`/workspace/[projectId]/execution`) - Hub Kurva-S, Log Harian/Mingguan (`?tab=progress`), WBS (`?tab=wbs`), Jadwal Gantt (`?tab=schedule`), Survey/BOQ (`?tab=boq`). Rute `/progress`, `/work-items`, `/schedule`, `/survey-boq` dialihkan otomatis ke hub ini.
+  - `Riwayat Audit` (`/workspace/[projectId]/history`), `Dokumen` (`/documents`), dan `Diskusi` (`/comments`).
 - `/master-data/*` - CRUD management for locations, materials, suppliers, users, and approval matrix.
 - `/settings` - Preferences, table density, notifications, SAP validations, and demo reset.
 

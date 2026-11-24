@@ -33,7 +33,7 @@ import { useAppState } from "@/context/app-state-context";
 import { toast } from "sonner";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 
 interface AppTopbarProps {
   onToggleSidebar?: () => void;
@@ -41,7 +41,8 @@ interface AppTopbarProps {
 }
 
 export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
+  const { status: sessionStatus } = useSession();
   const {
     notifications,
     unreadNotificationCount,
@@ -54,6 +55,11 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
   const handleLogout = async () => {
     try {
       toast.info("Sedang keluar dari sesi akun...");
+      if (typeof window !== "undefined") {
+        Object.keys(window.localStorage)
+          .filter((k) => k.startsWith("wm-toolkit") || k.startsWith("wm_"))
+          .forEach((k) => window.localStorage.removeItem(k));
+      }
       await signOut({ callbackUrl: "/login" });
     } catch {
       window.location.href = "/login";
@@ -87,61 +93,66 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b bg-card/95 px-4 backdrop-blur-md">
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between gap-2 border-b bg-card/95 px-3 sm:px-4 backdrop-blur-md">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         <Button
           variant="ghost"
           size="icon"
           onClick={onToggleSidebar}
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-          title="Toggle Sidebar"
+          className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
+          title="Menu Navigasi"
+          aria-label="Menu Navigasi"
         >
           <Menu className="h-4 w-4" />
         </Button>
 
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="sm:hidden text-xs font-bold tracking-tight text-foreground truncate">
+            WM-Toolkit
+          </span>
+          <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 whitespace-nowrap shrink-0">
             ESTATE ENG. OPS
           </span>
-          <span className="text-xs text-muted-foreground hidden sm:inline">&bull;</span>
-          <span className="text-xs font-medium text-muted-foreground hidden sm:inline">
-            Wilayah Sumatera Utara
+          <span className="text-xs text-muted-foreground hidden md:inline shrink-0">&bull;</span>
+          <span className="text-xs font-medium text-muted-foreground hidden md:inline truncate max-w-[200px]">
+            {userProfile?.selectedLocation || "Operasional Perkebunan"}
           </span>
         </div>
       </div>
 
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
         <GlobalSearch />
 
         {/* Notifications Dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative h-8 w-8">
+            <Button variant="ghost" size="icon" className="relative h-8 w-8" aria-label="Notifikasi">
               <Bell className="h-4 w-4 text-muted-foreground" />
               {unreadNotificationCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[10px] font-bold text-white shadow-xs">
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[10px] font-bold text-white shadow-sm">
                   {unreadNotificationCount}
                 </span>
               )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-88 p-2">
+          <DropdownMenuContent align="end" className="w-80 p-2">
             <DropdownMenuLabel className="text-xs font-semibold flex items-center justify-between pb-1.5">
               <div className="flex items-center gap-1.5">
-                <span>Pemberitahuan & Peringatan</span>
+                <span>Pemberitahuan &amp; Peringatan</span>
                 {unreadNotificationCount > 0 && (
-                  <span className="text-[10px] bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 px-1.5 py-0.2 rounded font-semibold">
+                  <span className="text-[10px] bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 px-1.5 py-0.5 rounded font-semibold">
                     {unreadNotificationCount} Baru
                   </span>
                 )}
               </div>
               {unreadNotificationCount > 0 && (
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     markAllNotificationsAsRead();
                   }}
-                  className="text-[10px] text-emerald-600 hover:text-emerald-700 font-medium hover:underline flex items-center gap-1"
+                  className="text-[10px] text-emerald-700 dark:text-emerald-400 hover:underline font-medium flex items-center gap-1"
                 >
                   <CheckCheck className="w-3 h-3" />
                   <span>Tandai dibaca</span>
@@ -197,16 +208,17 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
             </div>
 
             <DropdownMenuSeparator />
-            <Link href="/notifications">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full h-8 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 justify-center flex items-center gap-1.5"
-              >
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="w-full h-8 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 justify-center flex items-center gap-1.5"
+            >
+              <Link href="/notifications">
                 <span>Lihat Semua Notifikasi ({notifications.length})</span>
                 <ArrowRight className="w-3.5 h-3.5" />
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -215,20 +227,32 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
           title="Ubah Mode Gelap / Terang"
         >
           <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 text-amber-500" />
           <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 text-slate-300" />
-          <span className="sr-only">Toggle theme</span>
+          <span className="sr-only">Ubah tema tampilan</span>
         </Button>
 
-        {/* Active User Profile & Role Switcher */}
         {/* Active User Profile (Immutable Session) */}
+        {sessionStatus === "loading" ? (
+          <div
+            className="flex items-center gap-2 pl-2 border-l shrink-0"
+            aria-label="Memuat profil sesi"
+          >
+            <span className="h-8 w-8 rounded-full bg-muted animate-pulse shrink-0" />
+            <div className="hidden lg:flex flex-col gap-1">
+              <span className="h-3 w-24 rounded bg-muted animate-pulse" />
+              <span className="h-2.5 w-16 rounded bg-muted animate-pulse" />
+            </div>
+          </div>
+        ) : (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="flex items-center gap-2 pl-2 border-l hover:opacity-85 transition-opacity text-left cursor-pointer outline-none select-none"
+              type="button"
+              className="flex items-center gap-2 pl-2 border-l hover:opacity-85 transition-opacity text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md select-none"
               title="Profil Pengguna & Sesi Aktif"
             >
               <Avatar className="h-8 w-8 border shrink-0">
@@ -329,6 +353,7 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        )}
       </div>
     </header>
   );

@@ -43,7 +43,7 @@ export function DashboardFilterBar({
   };
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-card border shadow-xs">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-card border shadow-sm">
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mr-1">
           <Filter className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />

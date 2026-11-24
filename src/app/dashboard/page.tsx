@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useAppState } from "@/context/app-state-context";
-import { formatIDR, cn } from "@/lib/utils";
+import { formatIDR, isProjectDelayed } from "@/lib/utils";
 
 function formatCompactIDR(amount: number): string {
   if (isNaN(amount) || amount === 0) return "Rp 0";
@@ -81,9 +81,14 @@ function DashboardContent() {
     router.replace(`/dashboard?${params.toString()}`);
   };
 
+  const activeProjects = useMemo(
+    () => projects.filter((p) => !p.deletedAt),
+    [projects]
+  );
+
   // Filtered projects based on Location and Focus
   const filteredProjects = useMemo(() => {
-    return projects.filter((p) => {
+    return activeProjects.filter((p) => {
       if (
         filters.locationName !== "all" &&
         p.locationName !== filters.locationName
@@ -91,11 +96,7 @@ function DashboardContent() {
         return false;
       }
       if (filters.focusFilter === "critical") {
-        return (
-          p.scheduleVarianceDays > 7 ||
-          p.ewsStatus === "Warning" ||
-          p.ewsStatus === "Critical"
-        );
+        return isProjectDelayed(p);
       }
       if (filters.focusFilter === "in_progress") {
         return p.status === "In Progress";
@@ -105,7 +106,12 @@ function DashboardContent() {
       }
       return true;
     });
-  }, [projects, filters]);
+  }, [activeProjects, filters]);
+
+  const filteredProjectIds = useMemo(
+    () => new Set(filteredProjects.map((p) => p.id)),
+    [filteredProjects]
+  );
 
   // Executive Tier-1 Metrics
   const totalProjects = filteredProjects.length;
@@ -123,22 +129,32 @@ function DashboardContent() {
         )
       : 0;
 
-  const delayedProjects = filteredProjects.filter(
-    (p) =>
-      p.scheduleVarianceDays > 7 ||
-      p.ewsStatus === "Warning" ||
-      p.ewsStatus === "Critical"
-  ).length;
+  const delayedProjects = filteredProjects.filter((p) => isProjectDelayed(p)).length;
 
-  // Operational Pipeline Metrics
-  const afceApprovedCount = afces.filter((a) => a.status === "Approved").length;
-  const prReleased = prs.filter((p) => p.status === "Released").length;
-  const poReleased = pos.filter((p) => p.status === "Released").length;
-  const materialsReceived = grs.length;
-  const activeSpks = spkContracts.filter((s) => s.status === "ACTIVE").length;
-  const uspkCount = uspks.length;
+  // Operational Pipeline Metrics (mengikuti filter aktif dan mengecualikan entitas terhapus)
+  const afceApprovedCount = afces.filter(
+    (a) => !a.deletedAt && filteredProjectIds.has(a.projectId) && a.status === "Approved"
+  ).length;
+  const prReleased = prs.filter(
+    (p) => !p.deletedAt && filteredProjectIds.has(p.projectId) && p.status === "Released"
+  ).length;
+  const activePoIds = new Set(
+    pos
+      .filter((po) => !po.deletedAt && filteredProjectIds.has(po.projectId))
+      .map((po) => po.id)
+  );
+  const poReleased = pos.filter(
+    (p) => !p.deletedAt && filteredProjectIds.has(p.projectId) && p.status === "Released"
+  ).length;
+  const materialsReceived = grs.filter((g) => activePoIds.has(g.poId)).length;
+  const activeSpks = spkContracts.filter(
+    (s) => !s.deletedAt && filteredProjectIds.has(s.projectId) && s.status === "ACTIVE"
+  ).length;
+  const uspkCount = uspks.filter(
+    (u) => !u.deletedAt && filteredProjectIds.has(u.projectId)
+  ).length;
   const techEvalCompletedCount = technicalEvaluations.filter(
-    (t) => t.result === "RECOMMENDED"
+    (t) => filteredProjectIds.has(t.projectId) && t.result === "RECOMMENDED"
   ).length;
 
   return (
@@ -159,12 +175,16 @@ function DashboardContent() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Link href="/workspace/new">
-            <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs">
+          <Button
+            asChild
+            size="sm"
+            className="gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm"
+          >
+            <Link href="/workspace/new">
               <PlusCircle className="w-4 h-4" />
-              <span>+ Tambah Proyek Baru</span>
-            </Button>
-          </Link>
+              <span>Tambah Proyek Baru</span>
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -207,11 +227,9 @@ function DashboardContent() {
                 </div>
               </div>
               <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-                <Link href="/workspace/new">
-                  <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium">
-                    + Buat Proyek
-                  </Button>
-                </Link>
+                <Button asChild size="sm" className="h-8 text-xs bg-emerald-700 hover:bg-emerald-800 text-white font-medium">
+                  <Link href="/workspace/new">Buat Proyek</Link>
+                </Button>
               </div>
             </div>
           )}
@@ -222,7 +240,7 @@ function DashboardContent() {
             onFilterChange={setFilters}
             locations={locations}
             filteredCount={filteredProjects.length}
-            totalCount={projects.length}
+            totalCount={activeProjects.length}
           />
 
           {/* Tier 1: 4 Executive KPI Hero Cards (Spacious, Clear & High Hierarchy) */}
@@ -280,13 +298,16 @@ function DashboardContent() {
             inProgressProjectsCount={runningProjects}
           />
 
-          {/* Unified Multi-Project Gantt (Preserved Intact) */}
-          <div className="rounded-xl border bg-card p-1 shadow-xs">
+          {/* Unified Multi-Project Gantt */}
+          <div className="rounded-xl border bg-card p-1 shadow-sm">
             <UnifiedGantt projects={filteredProjects} />
           </div>
 
-          {/* Reorganized Operational Workstation (Balanced 2-Column Grid) */}
-          <DashboardWidgets onViewAuditLog={() => handleTabChange("audit-log")} />
+          {/* Reorganized Operational Workstation */}
+          <DashboardWidgets
+            filteredProjectIds={filteredProjectIds}
+            onViewAuditLog={() => handleTabChange("audit-log")}
+          />
         </TabsContent>
 
         {/* Tab 2: System Audit Log Center (Preserved Intact) */}

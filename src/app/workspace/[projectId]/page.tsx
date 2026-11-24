@@ -3,37 +3,26 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import {
-  Calendar,
-  FileCheck2,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
-  Layers,
-  ArrowRight,
-  TrendingUp,
-  ShieldCheck,
-  Building,
-  ShoppingCart,
-  Briefcase,
-} from "lucide-react";
+import { Clock } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { CurrencyText } from "@/components/shared/currency-text";
 import { SmartActionStepper } from "@/components/workspace/smart-action-stepper";
 
-// Attached Dialogs
 import { AFCEActionDialog } from "@/components/afce/afce-action-dialog";
 import { PRRecordDialog } from "@/components/procurement/pr-record-dialog";
+import { VendorEvaluationDialog } from "@/components/procurement/vendor-evaluation-dialog";
 import { POCreateDialog } from "@/components/procurement/po-create-dialog";
 import { USPKCreateDialog } from "@/components/services/uspk-create-dialog";
+import { TechnicalEvaluationDialog } from "@/components/services/technical-evaluation-dialog";
 import { SPKCreateDialog } from "@/components/services/spk-create-dialog";
 import { DailyProgressDialog } from "@/components/progress/daily-progress-dialog";
 
 import { useAppState } from "@/context/app-state-context";
 import { formatIDDate, formatIDR } from "@/lib/utils";
+import { PurchaseRequisition, USPKItem } from "@/types";
+import { toast } from "sonner";
 
 export default function ProjectOverviewTab() {
   const params = useParams();
@@ -48,50 +37,77 @@ export default function ProjectOverviewTab() {
     technicalEvaluations,
     spkContracts,
     dailyProgress,
+    submitAfceApproval,
     isViewerOnly,
   } = useAppState();
 
   const project = projects.find((p) => p.id === projectId);
-  const afce = afces.find((a) => a.projectId === projectId);
-  const projectPrs = prs.filter((p) => p.projectId === projectId);
-  const projectPos = pos.filter((p) => p.projectId === projectId);
-  const projectUspks = uspks.filter((u) => u.projectId === projectId);
-  const projectSpks = spkContracts.filter((s) => s.projectId === projectId);
-  const projectLogs = dailyProgress
-    .filter((d) => d.projectId === projectId)
-    .slice(0, 5);
+  const afce = afces.find((a) => a.projectId === projectId && !a.deletedAt);
+  const projectPrs = prs.filter((p) => p.projectId === projectId && !p.deletedAt);
+  const projectPos = pos.filter((p) => p.projectId === projectId && !p.deletedAt);
+  const projectVendorEvals = vendorEvaluations.filter((ve) =>
+    projectPrs.some((pr) => pr.id === ve.prId)
+  );
+  const projectUspks = uspks.filter((u) => u.projectId === projectId && !u.deletedAt);
+  const projectTechEvals = technicalEvaluations.filter(
+    (te) => te.projectId === projectId && projectUspks.some((u) => u.id === te.uspkId)
+  );
+  const projectSpks = spkContracts.filter((s) => s.projectId === projectId && !s.deletedAt);
+  const projectLogs = dailyProgress.filter((d) => d.projectId === projectId).slice(0, 5);
 
-  // Dialog states for Quick Actions
   const [afceDialogOpen, setAfceDialogOpen] = useState(false);
   const [prDialogOpen, setPrDialogOpen] = useState(false);
+  const [vendorEvalDialogOpen, setVendorEvalDialogOpen] = useState(false);
+  const [selectedPrForEval, setSelectedPrForEval] = useState<PurchaseRequisition | null>(null);
   const [poDialogOpen, setPoDialogOpen] = useState(false);
   const [selectedPrIdForPo, setSelectedPrIdForPo] = useState<string | undefined>(undefined);
   const [uspkDialogOpen, setUspkDialogOpen] = useState(false);
+  const [techEvalDialogOpen, setTechEvalDialogOpen] = useState(false);
+  const [selectedUspkForEval, setSelectedUspkForEval] = useState<USPKItem | null>(null);
   const [spkDialogOpen, setSpkDialogOpen] = useState(false);
-  const [selectedUspkForSpk, setSelectedUspkForSpk] = useState<any>(null);
+  const [selectedUspkForSpk, setSelectedUspkForSpk] = useState<USPKItem | null>(null);
   const [progressDialogOpen, setProgressDialogOpen] = useState(false);
 
   if (!project) return null;
 
+  const handleSubmitDraftAfce = async () => {
+    if (!afce) return;
+    const ok = await submitAfceApproval(
+      afce.id,
+      "Pengajuan dokumen AFCE dari ringkasan proyek."
+    );
+    if (ok) {
+      toast.success("Permintaan persetujuan AFCE berhasil diajukan.");
+    }
+  };
+
   return (
     <div className="space-y-5">
-      {/* Smart Lifecycle Action Stepper */}
       <SmartActionStepper
         project={project}
         afce={afce}
         prs={projectPrs}
         pos={projectPos}
-        vendorEvaluations={vendorEvaluations}
+        vendorEvaluations={projectVendorEvals}
         uspks={projectUspks}
-        technicalEvaluations={technicalEvaluations}
+        technicalEvaluations={projectTechEvals}
         spkContracts={projectSpks}
+        onSubmitDraftAfce={() => void handleSubmitDraftAfce()}
         onOpenAfceAction={() => setAfceDialogOpen(true)}
         onOpenPrDialog={() => setPrDialogOpen(true)}
+        onOpenVendorEvalDialog={(pr) => {
+          setSelectedPrForEval(pr);
+          setVendorEvalDialogOpen(true);
+        }}
         onOpenPoDialog={(prId) => {
           setSelectedPrIdForPo(prId);
           setPoDialogOpen(true);
         }}
         onOpenUspkDialog={() => setUspkDialogOpen(true)}
+        onOpenTechEvalDialog={(uspk) => {
+          setSelectedUspkForEval(uspk);
+          setTechEvalDialogOpen(true);
+        }}
         onOpenSpkDialog={(uspkId) => {
           const matchUspk = projectUspks.find((u) => u.id === uspkId);
           setSelectedUspkForSpk(matchUspk || null);
@@ -101,12 +117,11 @@ export default function ProjectOverviewTab() {
         isViewerOnly={isViewerOnly}
       />
 
-      {/* 4 Summary Highlight Cards */}
+      {/* 4 Kartu Metrik Ringkas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Info Card 1: AFCE Summary */}
-        <Card className="p-4 shadow-xs">
+        <Card className="p-4 shadow-sm">
           <span className="text-xs text-muted-foreground font-medium block">
-            Anggaran AFCE Disetujui
+            Nilai Anggaran AFCE
           </span>
           <span className="text-lg font-bold font-mono text-foreground mt-1 block">
             {formatIDR(project.afceValue)}
@@ -117,10 +132,9 @@ export default function ProjectOverviewTab() {
           </div>
         </Card>
 
-        {/* Info Card 2: Schedule Summary */}
-        <Card className="p-4 shadow-xs">
+        <Card className="p-4 shadow-sm">
           <span className="text-xs text-muted-foreground font-medium block">
-            Durasi & Target Selesai
+            Durasi &amp; Target Selesai
           </span>
           <span className="text-lg font-bold font-mono text-foreground mt-1 block">
             {project.durationDays} Hari
@@ -128,19 +142,20 @@ export default function ProjectOverviewTab() {
           <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t text-muted-foreground">
             <span>Target: {formatIDDate(project.targetEndDate)}</span>
             {project.scheduleVarianceDays > 7 ? (
-              <span className="text-rose-600 font-semibold">
+              <span className="text-rose-700 dark:text-rose-400 font-semibold">
                 +{project.scheduleVarianceDays} hr
               </span>
             ) : (
-              <span className="text-emerald-600 font-semibold">Tepat Waktu</span>
+              <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
+                Tepat Waktu
+              </span>
             )}
           </div>
         </Card>
 
-        {/* Info Card 3: Procurement Summary */}
-        <Card className="p-4 shadow-xs">
+        <Card className="p-4 shadow-sm">
           <span className="text-xs text-muted-foreground font-medium block">
-            Pengadaan & Kontrak
+            Pengadaan &amp; Kontrak
           </span>
           <div className="flex items-baseline gap-2 mt-1">
             <span className="text-lg font-bold font-mono text-foreground">
@@ -148,22 +163,21 @@ export default function ProjectOverviewTab() {
             </span>
           </div>
           <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t text-muted-foreground">
-            <span>Jasa: {projectSpks.length} SPK Aktif</span>
+            <span>Jasa: {projectSpks.length} SPK</span>
             <Link
               href={`/workspace/${projectId}/procurement`}
-              className="text-emerald-600 hover:underline font-medium"
+              className="text-emerald-700 dark:text-emerald-400 hover:underline font-medium"
             >
-              Buka Hub &rarr;
+              Buka Hub &gt;
             </Link>
           </div>
         </Card>
 
-        {/* Info Card 4: Overall Progress */}
-        <Card className="p-4 shadow-xs">
+        <Card className="p-4 shadow-sm">
           <span className="text-xs text-muted-foreground font-medium block">
-            Progress Fisik Lapangan
+            Progres Fisik Lapangan
           </span>
-          <span className="text-lg font-bold font-mono text-emerald-600 mt-1 block">
+          <span className="text-lg font-bold font-mono text-emerald-700 dark:text-emerald-400 mt-1 block">
             {project.progress}%
           </span>
           <div className="mt-2 pt-2 border-t">
@@ -173,24 +187,22 @@ export default function ProjectOverviewTab() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Left Column (2 cols): Work Item Progress Table & Project Info */}
         <div className="lg:col-span-2 space-y-5">
-          {/* Work Item Progress Card */}
-          <Card className="shadow-xs">
+          <Card className="shadow-sm">
             <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-sm font-semibold">
-                  Progress Item Pekerjaan (Work Items)
+                  Progres Item Pekerjaan (WBS)
                 </CardTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Kemajuan fisik masing-masing komponen kerja berbobot.
                 </p>
               </div>
-              <Link href={`/workspace/${projectId}/work-items`}>
-                <Button size="sm" variant="outline" className="h-7 text-xs">
-                  Semua Item &rarr;
-                </Button>
-              </Link>
+              <Button asChild size="sm" variant="outline" className="h-8 text-xs">
+                <Link href={`/workspace/${projectId}/execution?tab=work-items`}>
+                  Kelola WBS &gt;
+                </Link>
+              </Button>
             </CardHeader>
             <CardContent className="p-4 space-y-3.5">
               {(project.workItems || []).length === 0 ? (
@@ -199,65 +211,61 @@ export default function ProjectOverviewTab() {
                 </p>
               ) : (
                 (project.workItems || []).map((wi) => (
-                <div key={wi.id} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-foreground">{wi.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground font-mono">
-                        Bobot: {wi.weight}%
+                  <div key={wi.id} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-foreground">{wi.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground font-mono">
+                          Bobot: {wi.weight}%
+                        </span>
+                        <span className="font-mono font-bold text-foreground">
+                          {wi.progress}%
+                        </span>
+                      </div>
+                    </div>
+                    <Progress
+                      value={wi.progress}
+                      className="h-2"
+                      indicatorClassName={
+                        wi.progress >= 100
+                          ? "bg-emerald-700"
+                          : wi.progress > 0
+                          ? "bg-blue-700"
+                          : "bg-slate-300"
+                      }
+                    />
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span>
+                        Jadwal: {formatIDDate(wi.startDate)} s/d {formatIDDate(wi.endDate)}
                       </span>
-                      <span className="font-mono font-bold text-foreground">
-                        {wi.progress}%
-                      </span>
+                      <StatusBadge status={wi.status} showDot={false} />
                     </div>
                   </div>
-                  <Progress
-                    value={wi.progress}
-                    className="h-2"
-                    indicatorClassName={
-                      wi.progress >= 100
-                        ? "bg-emerald-600"
-                        : wi.progress > 0
-                        ? "bg-blue-600"
-                        : "bg-slate-300"
-                    }
-                  />
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span>
-                      Jadwal: {formatIDDate(wi.startDate)} s/d {formatIDDate(wi.endDate)}
-                    </span>
-                    <StatusBadge status={wi.status} showDot={false} />
-                  </div>
-                </div>
-              )))
-            }
+                ))
+              )}
             </CardContent>
           </Card>
 
-          {/* Project Details Description */}
-          <Card className="shadow-xs">
+          <Card className="shadow-sm">
             <CardHeader className="pb-2 border-b">
               <CardTitle className="text-sm font-semibold">
-                Spesifikasi & Uraian Teknis Proyek
+                Spesifikasi &amp; Uraian Teknis Proyek
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 text-xs space-y-3 leading-relaxed text-muted-foreground">
-              <p>{project.description}</p>
+              <p>{project.description || "Belum ada deskripsi uraian teknis proyek."}</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 border-t pt-3 text-foreground">
                 <div>
                   <span className="text-muted-foreground block text-[11px]">
-                    Lokasi Kebun & Blok:
+                    Lokasi Kebun &amp; Blok:
                   </span>
                   <div className="flex flex-wrap items-center gap-1 mt-0.5">
                     {project.locationNames && project.locationNames.length > 0 ? (
-                      project.locationNames.map((loc, idx) => (
-                        <span key={idx} className="font-semibold text-foreground text-xs">
-                          {loc}
-                          {idx < project.locationNames!.length - 1 ? ", " : ""}
-                        </span>
-                      ))
+                      <span className="font-semibold text-foreground text-xs">
+                        {project.locationNames.join(", ")}
+                      </span>
                     ) : (
-                      <span className="font-semibold">{project.locationName}</span>
+                      <span className="font-semibold">{project.locationName || "-"}</span>
                     )}
                     {project.blockCodes && project.blockCodes.length > 0 ? (
                       <span className="text-muted-foreground font-mono text-[11px]">
@@ -272,6 +280,12 @@ export default function ProjectOverviewTab() {
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-[11px]">
+                    PIC Proyek:
+                  </span>
+                  <span className="font-semibold">{project.picName || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">
                     Kategori Proyek:
                   </span>
                   <span className="font-semibold text-emerald-700 dark:text-emerald-400">
@@ -280,32 +294,21 @@ export default function ProjectOverviewTab() {
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-[11px]">
-                    Jenis Konstruksi:
+                    Jenis &amp; Pengadaan:
                   </span>
-                  <span className="font-semibold">{project.projectType}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-[11px]">
-                    Sistem Pengadaan:
+                  <span className="font-semibold">
+                    {project.projectType} / {project.procurementType}
                   </span>
-                  <span className="font-semibold">{project.procurementType}</span>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Right Column (1 col): Outstanding Approvals & Recent Site Activity */}
         <div className="space-y-5">
-          {/* Outstanding Approvals Widget */}
-          <Card className="shadow-xs border-amber-200 dark:border-amber-800/60 bg-amber-50/20 dark:bg-amber-950/10">
-            <CardHeader className="pb-2 border-b border-amber-200 dark:border-amber-800/40">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-amber-600" />
-                <CardTitle className="text-sm font-semibold text-foreground">
-                  Status Persetujuan (Approval)
-                </CardTitle>
-              </div>
+          <Card className="shadow-sm border-amber-200 dark:border-amber-900/60">
+            <CardHeader className="pb-2 border-b">
+              <CardTitle className="text-sm font-semibold">Status Otorisasi AFCE</CardTitle>
             </CardHeader>
             <CardContent className="p-3.5 space-y-2 text-xs">
               <div className="flex items-start justify-between">
@@ -314,7 +317,7 @@ export default function ProjectOverviewTab() {
                     {project.approvalStatus}
                   </span>
                   <span className="text-[11px] text-muted-foreground mt-0.5 block">
-                    Level Penyetuju: {afce?.currentApproverRole || "Manager Estate"}
+                    Level Penyetuju: {afce?.currentApproverRole || "Water Management"}
                   </span>
                 </div>
                 <StatusBadge status={project.afceStatus} />
@@ -322,13 +325,17 @@ export default function ProjectOverviewTab() {
 
               {project.afceStatus !== "Approved" ? (
                 <div className="pt-2">
-                  <Link href={`/workspace/${projectId}/afce`}>
-                    <Button size="sm" className="w-full text-xs h-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold">
+                  <Button
+                    asChild
+                    size="sm"
+                    className="w-full text-xs h-9 bg-amber-800 hover:bg-amber-900 text-white font-semibold"
+                  >
+                    <Link href={`/workspace/${projectId}/afce`}>
                       {project.afceStatus === "Pending Approval"
-                        ? "Input Persetujuan AFCE Sekarang →"
-                        : "Buka Modul Persetujuan AFCE →"}
-                    </Button>
-                  </Link>
+                        ? "Buka Pencatatan Approval AFCE"
+                        : "Buka Modul AFCE"}
+                    </Link>
+                  </Button>
                 </div>
               ) : (
                 <div className="pt-1.5 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/40">
@@ -341,17 +348,19 @@ export default function ProjectOverviewTab() {
             </CardContent>
           </Card>
 
-          {/* Recent Site Activity Feed */}
-          <Card className="shadow-xs">
+          <Card className="shadow-sm">
             <CardHeader className="pb-2 border-b flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-emerald-600" />
+                <Clock className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
                 <CardTitle className="text-sm font-semibold">
                   Aktivitas Lapangan Terkini
                 </CardTitle>
               </div>
-              <Link href={`/workspace/${projectId}/progress`}>
-                <span className="text-xs text-emerald-600 hover:underline">Semua</span>
+              <Link
+                href={`/workspace/${projectId}/execution?tab=progress`}
+                className="text-xs text-emerald-700 dark:text-emerald-400 hover:underline font-medium"
+              >
+                Semua
               </Link>
             </CardHeader>
             <CardContent className="p-3 divide-y divide-border/60">
@@ -364,14 +373,14 @@ export default function ProjectOverviewTab() {
                   <div key={log.id} className="py-2.5 text-xs space-y-1">
                     <div className="flex items-center justify-between text-muted-foreground">
                       <span className="font-mono text-[11px]">{formatIDDate(log.date)}</span>
-                      <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-medium">
+                      <span className="text-[11px] bg-muted px-1.5 py-0.5 rounded font-medium">
                         {log.weather}
                       </span>
                     </div>
                     <p className="font-medium text-foreground">{log.activity}</p>
                     <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                      <span>Tenaga: {log.manpower} orang</span>
-                      <span>Progress WI: {log.progressPercent}%</span>
+                      {log.manpower !== undefined && <span>Tenaga: {log.manpower} org</span>}
+                      <span>Progres WI: {log.progressPercent}%</span>
                     </div>
                   </div>
                 ))
@@ -381,7 +390,6 @@ export default function ProjectOverviewTab() {
         </div>
       </div>
 
-      {/* Quick Action Dialogs */}
       {afce && (
         <AFCEActionDialog
           open={afceDialogOpen}
@@ -389,21 +397,27 @@ export default function ProjectOverviewTab() {
           afce={afce}
         />
       )}
-      <PRRecordDialog
-        open={prDialogOpen}
-        onOpenChange={setPrDialogOpen}
-        project={project}
-      />
+      <PRRecordDialog open={prDialogOpen} onOpenChange={setPrDialogOpen} project={project} />
+      {selectedPrForEval && (
+        <VendorEvaluationDialog
+          open={vendorEvalDialogOpen}
+          onOpenChange={setVendorEvalDialogOpen}
+          project={project}
+          pr={selectedPrForEval}
+        />
+      )}
       <POCreateDialog
         open={poDialogOpen}
         onOpenChange={setPoDialogOpen}
         project={project}
         preselectedPrId={selectedPrIdForPo}
       />
-      <USPKCreateDialog
-        open={uspkDialogOpen}
-        onOpenChange={setUspkDialogOpen}
+      <USPKCreateDialog open={uspkDialogOpen} onOpenChange={setUspkDialogOpen} project={project} />
+      <TechnicalEvaluationDialog
+        open={techEvalDialogOpen}
+        onOpenChange={setTechEvalDialogOpen}
         project={project}
+        uspk={selectedUspkForEval}
       />
       <SPKCreateDialog
         open={spkDialogOpen}

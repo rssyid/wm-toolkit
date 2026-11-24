@@ -3,7 +3,6 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  Sparkles,
   Shuffle,
   Check,
   Palette,
@@ -198,7 +197,7 @@ export function AvatarPickerDialog({
         <DialogHeader className="p-5 pb-3 border-b bg-muted/20">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
-              <Sparkles className="w-4 h-4" />
+              <Smile className="w-4 h-4" />
             </div>
             <div>
               <DialogTitle className="text-base font-semibold text-foreground">
@@ -234,7 +233,7 @@ export function AvatarPickerDialog({
                   <TabsTrigger
                     key={style.id}
                     value={style.id}
-                    className="text-xs py-2 px-2.5 flex flex-col gap-0.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
+                    className="text-xs py-2 px-2.5 flex flex-col gap-0.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
                   >
                     <span className="font-semibold">{style.label}</span>
                     <span className="text-[9px] text-muted-foreground font-mono">
@@ -253,7 +252,7 @@ export function AvatarPickerDialog({
           <div className="p-4 rounded-xl border bg-muted/30 flex flex-col sm:flex-row items-center gap-4">
             {/* Enlarged Avatar Preview */}
             <div className="relative group shrink-0">
-              <div className="w-24 h-24 rounded-2xl border-2 border-emerald-500/40 bg-background shadow-xs overflow-hidden flex items-center justify-center p-1.5">
+              <div className="w-24 h-24 rounded-2xl border-2 border-emerald-500/40 bg-background shadow-sm overflow-hidden flex items-center justify-center p-1.5">
                 <img
                   src={activeUrl}
                   alt={seed}
@@ -263,7 +262,7 @@ export function AvatarPickerDialog({
               </div>
               <Badge
                 variant="outline"
-                className="absolute -bottom-2 -right-2 bg-emerald-600 text-white border-0 text-[9px] px-1.5 py-0 shadow-xs"
+                className="absolute -bottom-2 -right-2 bg-emerald-700 text-white border-0 text-[9px] px-1.5 py-0 shadow-sm"
               >
                 Aktif
               </Badge>
@@ -333,7 +332,7 @@ export function AvatarPickerDialog({
                         )}
                       >
                         <span
-                          className={cn("w-3 h-3 rounded-full border shadow-2xs", bg.colorClass)}
+                          className={cn("w-3 h-3 rounded-full border shadow-sm", bg.colorClass)}
                         />
                         <span>{bg.label}</span>
                         {isSelected && <Check className="w-3 h-3 text-emerald-600 ml-0.5" />}
@@ -385,7 +384,7 @@ export function AvatarPickerDialog({
                       {presetSeed}
                     </span>
                     {isCurrentSeed && (
-                      <div className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                      <div className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-emerald-700 text-white flex items-center justify-center shadow-sm">
                         <Check className="w-2.5 h-2.5" />
                       </div>
                     )}
@@ -411,7 +410,7 @@ export function AvatarPickerDialog({
             type="button"
             size="sm"
             onClick={handleApply}
-            className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-xs"
+            className="text-xs bg-emerald-700 hover:bg-emerald-800 text-white gap-1.5 shadow-sm"
           >
             <Check className="w-3.5 h-3.5" />
             Gunakan Avatar Ini

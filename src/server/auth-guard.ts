@@ -12,8 +12,8 @@ export interface SessionUser {
 }
 
 export async function getCurrentUser(): Promise<SessionUser | null> {
-  // Support internal test scripts with explicit TEST_AUTH_USER_ID
-  if (process.env.TEST_AUTH_USER_ID) {
+  // Hanya untuk skrip uji lokal; dinonaktifkan di produksi.
+  if (process.env.TEST_AUTH_USER_ID && process.env.NODE_ENV !== "production") {
     const testUser = await db.user.findUnique({
       where: { id: process.env.TEST_AUTH_USER_ID },
     });
@@ -33,13 +33,19 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   if (!session?.user?.id) {
     return null;
   }
+
+  // Peran dan status aktif dibaca dari database, bukan dari token sesi yang bisa usang.
+  const dbUser = await db.user.findUnique({ where: { id: session.user.id } });
+  if (!dbUser || !dbUser.isActive) {
+    return null;
+  }
   return {
-    id: session.user.id,
-    name: session.user.name || "Pengguna",
-    email: session.user.email || "",
-    role: (session.user as any).role || "PIC",
-    jabatan: (session.user as any).jabatan,
-    estateName: (session.user as any).estateName,
+    id: dbUser.id,
+    name: dbUser.name,
+    email: dbUser.email,
+    role: dbUser.role,
+    jabatan: dbUser.jabatan || undefined,
+    estateName: dbUser.estateName || undefined,
   };
 }
 

@@ -1,6 +1,13 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
@@ -37,38 +44,21 @@ import {
   APPROVAL_LEVEL_LABELS,
   APPROVAL_LEVEL_ORDER,
   UserProfile,
-  SystemSettings,
   DEFAULT_USER_PROFILE,
-  DEFAULT_SYSTEM_SETTINGS,
   ProjectComment,
   ProjectAttachment,
   NotificationItem,
   NotificationSetting,
   NotificationType,
   AuditLog,
-  AuditLogAction,
-  AuditEntityType,
   SystemRole,
+  WorkItem,
+  BOQItem,
 } from "@/types";
-import { INITIAL_NOTIFICATION_SETTINGS } from "@/lib/mock-data/notifications";
-import {
-  INITIAL_REGIONS,
-  INITIAL_COMPANIES,
-  INITIAL_LOCATIONS,
-  INITIAL_BLOCKS,
-  INITIAL_MATERIALS,
-  INITIAL_SUPPLIERS,
-  INITIAL_USERS,
-  INITIAL_APPROVAL_MATRIX,
-  INITIAL_PROJECT_CATEGORIES,
-  INITIAL_PROJECT_TYPES,
-  INITIAL_PROCUREMENT_TYPES,
-} from "@/lib/mock-data/master-data";
 import {
   findMatchingApprovalTier,
   generateMatrixLevelsFromTier,
   getInitialApprovalStatus,
-  isAfceLevelsOutOfSync,
 } from "@/lib/approval-matrix-utils";
 import { getInitialAppStateAction } from "@/server/actions/initial-state";
 import {
@@ -79,26 +69,41 @@ import {
   hardDeleteProjectAction,
   emptyRecycleBinAction,
   reviseScheduleAction,
+  addWorkItemAction,
+  updateWorkItemAction,
+  deleteWorkItemAction,
+  addBoqItemAction,
+  deleteBoqItemAction,
 } from "@/server/actions/projects";
 import {
   processAfceApprovalAction,
   submitAfceApprovalAction,
   updateAfceAction,
   syncAfceWithMatrixAction,
+  softDeleteAfceAction,
+  restoreAfceAction,
 } from "@/server/actions/afce";
 import {
   createPrAction,
+  softDeletePrAction,
+  restorePrAction,
   recordVendorEvaluationAction,
   createPoAction,
+  softDeletePoAction,
+  restorePoAction,
   recordGoodsReceiptAction,
   recordGoodsHandoverAction,
 } from "@/server/actions/procurement";
 import {
   createUspkAction,
   updateUspkStatusAction,
+  softDeleteUspkAction,
+  restoreUspkAction,
   recordTechnicalEvaluationAction,
   createSpkAction,
   updateSpkStatusAction,
+  softDeleteSpkAction,
+  restoreSpkAction,
 } from "@/server/actions/services";
 import {
   addDailyProgressAction,
@@ -162,7 +167,38 @@ import {
 } from "@/server/actions/master-data";
 import { updateCurrentUserProfileAction } from "@/server/actions/users";
 
+export interface WorkItemInput {
+  id?: string;
+  name: string;
+  type: "Physical" | "Material";
+  weight: number;
+  startDate?: string;
+  endDate?: string;
+  procurementType: string;
+  progressMode: "Daily" | "Weekly";
+  progress?: number;
+  status?: WorkItem["status"];
+  phase: "Tender" | "Physical Execution" | "Supporting Materials";
+  notes?: string | null;
+}
+
+export interface BoqItemInput {
+  id?: string;
+  itemCode: string;
+  name: string;
+  volume: number;
+  unit: string;
+  unitPrice: number;
+  totalPrice: number;
+  weight?: number;
+  status?: BOQItem["status"];
+}
+
 interface AppStateContextType {
+  isLoading: boolean;
+  loadError: string | null;
+  activeUserId: string | null;
+
   projects: Project[];
   afces: AFCEDocument[];
   prs: PurchaseRequisition[];
@@ -195,17 +231,12 @@ interface AppStateContextType {
   tableDensity: "comfortable" | "compact";
   setTableDensity: (density: "comfortable" | "compact") => void;
 
-  // Settings & Profile
+  // Profil pengguna aktif
   userProfile: UserProfile;
-  updateUserProfile: (profile: Partial<UserProfile>) => void;
-  systemSettings: SystemSettings;
-  updateSystemSettings: (settings: Partial<SystemSettings>) => void;
-  restoreBackupFromJson: (data: any) => { success: boolean; message: string; counts?: Record<string, number> };
+  updateUserProfile: (profile: Partial<UserProfile>) => Promise<boolean>;
 
-  // Roles & Permissions
+  // Peran & Hak Akses
   activeRole: SystemRole;
-  setActiveRole: (role: SystemRole) => void;
-  switchDemoUser: (user: AppUser, systemRole?: SystemRole) => void;
   isAdmin: boolean;
   isPic: boolean;
   isApprover: boolean;
@@ -215,17 +246,24 @@ interface AppStateContextType {
   canManageSystem: boolean;
   isViewerOnly: boolean;
 
-  // Actions
-  addProject: (projectData: Partial<Project>) => string;
-  updateProject: (id: string, updates: Partial<Project>) => void;
-  deleteProject: (projectId: string) => void;
-  restoreProject: (projectId: string) => void;
+  // Proyek, WBS, BOQ & Revisi Jadwal
+  addProject: (projectData: Partial<Project> & { sapDocNumber?: string }) => Promise<string | null>;
+  updateProject: (id: string, updates: Partial<Project>) => Promise<boolean>;
+  deleteProject: (projectId: string) => Promise<boolean>;
+  restoreProject: (projectId: string) => Promise<boolean>;
   hardDeleteProject: (projectId: string) => Promise<boolean>;
   emptyRecycleBin: () => Promise<boolean>;
-  reviseProjectSchedule: (projectId: string, revision: Omit<ScheduleRevision, "id">) => void;
-  updateAfceDocument: (afceId: string, updates: Partial<AFCEDocument>) => void;
-  syncAfceWithMatrix: (afceId: string) => void;
-  submitAfceApproval: (afceId: string, note: string, submissionDate?: string) => void;
+  reviseProjectSchedule: (projectId: string, revision: Omit<ScheduleRevision, "id">) => Promise<boolean>;
+  addWorkItem: (projectId: string, data: WorkItemInput) => Promise<boolean>;
+  updateWorkItem: (workItemId: string, projectId: string, updates: Partial<WorkItemInput>) => Promise<boolean>;
+  deleteWorkItem: (workItemId: string, projectId: string) => Promise<boolean>;
+  addBoqItem: (projectId: string, data: BoqItemInput) => Promise<boolean>;
+  deleteBoqItem: (boqItemId: string, projectId: string) => Promise<boolean>;
+
+  // AFCE
+  updateAfceDocument: (afceId: string, updates: Partial<AFCEDocument>) => Promise<boolean>;
+  syncAfceWithMatrix: (afceId: string) => Promise<boolean>;
+  submitAfceApproval: (afceId: string, note: string, submissionDate?: string) => Promise<boolean>;
   processAfceAction: (
     afceId: string,
     action: "Approve" | "Revise" | "Reject",
@@ -236,17 +274,33 @@ interface AppStateContextType {
     sapDocNumber?: string,
     sapEvidenceUrl?: string,
     targetLevelIndex?: number
-  ) => void;
-  createPr: (prData: Omit<PurchaseRequisition, "id" | "createdAt">) => void;
-  recordVendorEvaluation: (evaluationData: Omit<VendorEvaluation, "id" | "createdAt">) => void;
-  createPo: (poData: Omit<PurchaseOrder, "id" | "receiptProgressPercent">) => void;
-  recordGoodsReceipt: (grData: Omit<GoodsReceipt, "id">) => void;
-  recordGoodsHandover: (handoverData: Omit<GoodsHandover, "id" | "createdAt">) => void;
-  createUspk: (data: Omit<USPKItem, "id" | "createdAt">) => void;
-  updateUspkStatus: (id: string, status: USPKStatus, decidedAt?: string) => void;
-  recordTechnicalEvaluation: (data: Omit<TechnicalEvaluation, "id" | "createdAt">) => void;
-  createSpkContract: (data: Omit<SPKContract, "id" | "createdAt">) => void;
-  updateSpkStatus: (id: string, status: SPKStatus) => void;
+  ) => Promise<boolean>;
+  softDeleteAfce: (afceId: string) => Promise<boolean>;
+  restoreAfce: (afceId: string) => Promise<boolean>;
+
+  // Pengadaan Barang
+  createPr: (prData: Omit<PurchaseRequisition, "id" | "createdAt">) => Promise<boolean>;
+  softDeletePr: (prId: string) => Promise<boolean>;
+  restorePr: (prId: string) => Promise<boolean>;
+  recordVendorEvaluation: (evaluationData: Omit<VendorEvaluation, "id" | "createdAt">) => Promise<boolean>;
+  createPo: (poData: Omit<PurchaseOrder, "id" | "receiptProgressPercent">) => Promise<boolean>;
+  softDeletePo: (poId: string) => Promise<boolean>;
+  restorePo: (poId: string) => Promise<boolean>;
+  recordGoodsReceipt: (grData: Omit<GoodsReceipt, "id">) => Promise<boolean>;
+  recordGoodsHandover: (handoverData: Omit<GoodsHandover, "id" | "createdAt">) => Promise<boolean>;
+
+  // Pengadaan Jasa
+  createUspk: (data: Omit<USPKItem, "id" | "createdAt">) => Promise<boolean>;
+  updateUspkStatus: (id: string, status: USPKStatus, decidedAt?: string) => Promise<boolean>;
+  softDeleteUspk: (uspkId: string) => Promise<boolean>;
+  restoreUspk: (uspkId: string) => Promise<boolean>;
+  recordTechnicalEvaluation: (data: Omit<TechnicalEvaluation, "id" | "createdAt">) => Promise<boolean>;
+  createSpkContract: (data: Omit<SPKContract, "id" | "createdAt">) => Promise<boolean>;
+  updateSpkStatus: (id: string, status: SPKStatus) => Promise<boolean>;
+  softDeleteSpk: (spkId: string) => Promise<boolean>;
+  restoreSpk: (spkId: string) => Promise<boolean>;
+
+  // Progres
   getSpkProgressSummary: (spkId: string) => {
     spk?: SPKContract;
     targetVolume: number;
@@ -255,46 +309,39 @@ interface AppStateContextType {
     percentComplete: number;
     unit: string;
   };
-  addDailyProgress: (record: Omit<DailyProgressRecord, "id" | "recordedAt">) => void;
-  addWeeklyProgress: (record: Omit<WeeklyProgressRecord, "id" | "recordedAt">) => void;
+  addDailyProgress: (record: Omit<DailyProgressRecord, "id" | "recordedAt">) => Promise<boolean>;
+  addWeeklyProgress: (record: Omit<WeeklyProgressRecord, "id" | "recordedAt">) => Promise<boolean>;
 
-  // Comments & Attachments (Google Drive)
+  // Diskusi & Lampiran
   addComment: (
     projectId: string,
     content: string,
     mentionedUserIds: string[],
     newAttachments?: ProjectAttachment[]
-  ) => ProjectComment;
-  deleteComment: (commentId: string) => void;
+  ) => Promise<ProjectComment | null>;
+  deleteComment: (commentId: string) => Promise<boolean>;
   addAttachment: (
     attachmentData: Omit<ProjectAttachment, "id" | "uploadedAt">
-  ) => ProjectAttachment;
-  deleteAttachment: (attachmentId: string) => void;
+  ) => Promise<ProjectAttachment | null>;
+  deleteAttachment: (attachmentId: string) => Promise<boolean>;
 
-  // Notifications & Reminders (Gap #6 / F7)
-  markNotificationAsRead: (id: string) => void;
-  markAllNotificationsAsRead: () => void;
-  deleteNotification: (id: string) => void;
-  clearAllNotifications: () => void;
+  // Notifikasi & Pengingat
+  markNotificationAsRead: (id: string) => Promise<void>;
+  markAllNotificationsAsRead: () => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
+  clearAllNotifications: () => Promise<void>;
   addNotification: (
     item: Omit<NotificationItem, "id" | "createdAt">
-  ) => NotificationItem;
+  ) => Promise<NotificationItem | null>;
   updateNotificationSetting: (
     type: NotificationType,
     isEnabled: boolean
-  ) => void;
-  simulateCronReminderCheck: () => { generatedCount: number };
-
-  // Audit Logs (Gap #7 / docs/DATA-MODEL.md & docs/PRD.md F10)
-  addAuditLog: (
-    log: Omit<AuditLog, "id" | "createdAt" | "userId" | "userName" | "ipAddress"> & {
-      id?: string;
-      createdAt?: string;
-      userId?: string;
-      userName?: string;
-      ipAddress?: string;
-    }
-  ) => AuditLog;
+  ) => Promise<void>;
+  runCronDeadlineCheck: () => Promise<{
+    success: boolean;
+    generatedCount: number;
+    message: string;
+  }>;
 
   // Master Data
   addMasterDataRegion: (reg: Omit<Region, "id" | "updatedAt">) => Promise<boolean>;
@@ -321,7 +368,7 @@ interface AppStateContextType {
   addApprovalMatrixRule: (rule: Omit<ApprovalMatrixRule, "id" | "updatedAt">) => Promise<boolean>;
   updateApprovalMatrixRule: (id: string, rule: Partial<ApprovalMatrixRule>) => Promise<boolean>;
   deleteApprovalMatrixRule: (id: string) => Promise<boolean>;
-  toggleApprovalLevel: (tierId: string, levelIndex: number) => void;
+  toggleApprovalLevel: (tierId: string, levelIndex: number) => Promise<boolean>;
   addMasterDataProjectCategory: (item: Omit<ProjectCategoryItem, "id" | "updatedAt">) => Promise<boolean>;
   updateMasterDataProjectCategory: (id: string, item: Partial<ProjectCategoryItem>) => Promise<boolean>;
   deleteMasterDataProjectCategory: (id: string) => Promise<boolean>;
@@ -332,18 +379,32 @@ interface AppStateContextType {
   updateMasterDataProcurementType: (id: string, item: Partial<ProcurementTypeItem>) => Promise<boolean>;
   deleteMasterDataProcurementType: (id: string) => Promise<boolean>;
 
-  resetToMockData: () => void;
+  // Pemeliharaan & Sinkronisasi
   refreshFromDatabase: () => Promise<void>;
-  clearDemoData: () => Promise<void>;
-  resetToEmptyProduction: () => Promise<void>;
+  clearDemoData: () => Promise<boolean>;
+  resetToEmptyProduction: (confirmationText?: string) => Promise<boolean>;
 }
 
 const AppStateContext = createContext<AppStateContextType | undefined>(undefined);
 
 const STORAGE_KEY = "wm_toolkit_prefs_v2";
 
+function formatErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
+function getTodayDateString(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
 export function AppStateProvider({ children }: { children: React.ReactNode }) {
+  const { data: session, status: sessionStatus, update: updateSession } = useSession();
+
   const [mounted, setMounted] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const hasBootstrappedRef = useRef(false);
+
   const [tableDensity, setTableDensity] = useState<"comfortable" | "compact">("comfortable");
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -359,263 +420,40 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [comments, setComments] = useState<ProjectComment[]>([]);
   const [attachments, setAttachments] = useState<ProjectAttachment[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSetting[]>(INITIAL_NOTIFICATION_SETTINGS);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSetting[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [dailyProgress, setDailyProgress] = useState<DailyProgressRecord[]>([]);
   const [weeklyProgress, setWeeklyProgress] = useState<WeeklyProgressRecord[]>([]);
-  const [regions, setRegions] = useState<Region[]>(INITIAL_REGIONS);
-  const [companies, setCompanies] = useState<Company[]>(INITIAL_COMPANIES);
-  const [locations, setLocations] = useState<EstateLocation[]>(INITIAL_LOCATIONS);
-  const [blocks, setBlocks] = useState<EstateBlock[]>(INITIAL_BLOCKS);
-  const [materials, setMaterials] = useState<MaterialCatalogItem[]>(INITIAL_MATERIALS);
-  const [suppliers, setSuppliers] = useState<Supplier[]>(INITIAL_SUPPLIERS);
-  const [users, setUsers] = useState<AppUser[]>(INITIAL_USERS);
-  const [approvalMatrix, setApprovalMatrix] = useState<ApprovalMatrixRule[]>(INITIAL_APPROVAL_MATRIX);
-  const [projectCategories, setProjectCategories] = useState<ProjectCategoryItem[]>(INITIAL_PROJECT_CATEGORIES);
-  const [projectTypes, setProjectTypes] = useState<ProjectTypeItem[]>(INITIAL_PROJECT_TYPES);
-  const [procurementTypes, setProcurementTypes] = useState<ProcurementTypeItem[]>(INITIAL_PROCUREMENT_TYPES);
 
-  // User Profile & System Settings
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [locations, setLocations] = useState<EstateLocation[]>([]);
+  const [blocks, setBlocks] = useState<EstateBlock[]>([]);
+  const [materials, setMaterials] = useState<MaterialCatalogItem[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [approvalMatrix, setApprovalMatrix] = useState<ApprovalMatrixRule[]>([]);
+  const [projectCategories, setProjectCategories] = useState<ProjectCategoryItem[]>([]);
+  const [projectTypes, setProjectTypes] = useState<ProjectTypeItem[]>([]);
+  const [procurementTypes, setProcurementTypes] = useState<ProcurementTypeItem[]>([]);
+
   const [userProfile, setUserProfile] = useState<UserProfile>(DEFAULT_USER_PROFILE);
-  const [systemSettings, setSystemSettings] = useState<SystemSettings>(DEFAULT_SYSTEM_SETTINGS);
 
-  const updateUserProfile = (updates: Partial<UserProfile>) => {
-    setUserProfile((prev) => {
-      const next = { ...prev, ...updates };
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        const parsed = stored ? JSON.parse(stored) : {};
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...parsed, userProfile: next }));
-      } catch {}
-      return next;
-    });
-    updateCurrentUserProfileAction(updates).catch((err) =>
-      console.warn("Sync DB error (updateCurrentUserProfileAction):", err)
-    );
-  };
-
-  const updateSystemSettings = (updates: Partial<SystemSettings>) => {
-    setSystemSettings((prev) => ({ ...prev, ...updates }));
-  };
-
-  const { data: session } = useSession();
-
-  // Synchronize profile and role with active NextAuth session
-  useEffect(() => {
-    if (session?.user) {
-      const u = session.user as any;
-      const userRole = (u.role as SystemRole) || "VIEWER";
-      setUserProfile((prev) => ({
-        ...prev,
-        fullName: u.name || prev.fullName,
-        email: u.email || prev.email,
-        username: u.id || prev.username,
-        role: u.jabatan || prev.role,
-        systemRole: userRole,
-        selectedLocation: u.estateName || prev.selectedLocation,
-        avatarUrl: u.avatarUrl || u.image || prev.avatarUrl,
-      }));
-    }
-  }, [session]);
-
-  const activeRole: SystemRole = (session?.user as any)?.role || userProfile.systemRole || "VIEWER";
-
-  const setActiveRole = (_role: SystemRole) => {
-    // Roles are strictly governed by server session and cannot be spoofed client-side
-    console.warn("Peran pengguna ditentukan oleh sesi autentikasi dan tidak dapat dimodifikasi di browser.");
-  };
-
-  const switchDemoUser = (_user: AppUser, _targetRole?: SystemRole) => {
-    // Role/user switching is disabled in production mode
-    console.warn("Peralihan demo dinonaktifkan. Silakan login kembali dengan kredensial akun yang bersangkutan.");
-  };
-
-  const isAdmin = activeRole === "ADMIN";
-  const isPic = activeRole === "PIC";
-  const isApprover = activeRole === "APPROVER";
-  const isViewer = activeRole === "VIEWER";
-  const canEditProjects = activeRole === "PIC" || activeRole === "ADMIN";
-  const canApproveAfce = activeRole === "APPROVER" || activeRole === "ADMIN";
-  const canManageSystem = activeRole === "ADMIN";
-  const isViewerOnly = activeRole === "VIEWER";
-
-  const applyDbData = (d: any) => {
-    if (d.projects && Array.isArray(d.projects)) setProjects(d.projects);
-    if (d.afces && Array.isArray(d.afces)) setAfces(d.afces);
-    if (d.prs && Array.isArray(d.prs)) setPrs(d.prs);
-    if (d.pos && Array.isArray(d.pos)) setPos(d.pos);
-    if (d.grs && Array.isArray(d.grs)) setGrs(d.grs);
-    if (d.vendorEvaluations && Array.isArray(d.vendorEvaluations)) setVendorEvaluations(d.vendorEvaluations);
-    if (d.goodsHandovers && Array.isArray(d.goodsHandovers)) setGoodsHandovers(d.goodsHandovers);
-    if (d.uspks && Array.isArray(d.uspks)) setUspks(d.uspks);
-    if (d.technicalEvaluations && Array.isArray(d.technicalEvaluations)) setTechnicalEvaluations(d.technicalEvaluations);
-    if (d.spkContracts && Array.isArray(d.spkContracts)) setSpkContracts(d.spkContracts);
-    if (d.dailyProgress && Array.isArray(d.dailyProgress)) setDailyProgress(d.dailyProgress);
-    if (d.weeklyProgress && Array.isArray(d.weeklyProgress)) setWeeklyProgress(d.weeklyProgress);
-    if (d.comments && Array.isArray(d.comments)) setComments(d.comments);
-    if (d.attachments && Array.isArray(d.attachments)) setAttachments(d.attachments);
-    if (d.regions && Array.isArray(d.regions)) setRegions(d.regions);
-    if (d.companies && Array.isArray(d.companies)) setCompanies(d.companies);
-    if (d.locations && Array.isArray(d.locations)) setLocations(d.locations);
-    if (d.blocks && Array.isArray(d.blocks)) setBlocks(d.blocks);
-    if (d.materials && Array.isArray(d.materials)) setMaterials(d.materials);
-    if (d.suppliers && Array.isArray(d.suppliers)) setSuppliers(d.suppliers);
-    if (d.users && Array.isArray(d.users)) setUsers(d.users);
-    if (d.approvalMatrix && Array.isArray(d.approvalMatrix)) setApprovalMatrix(d.approvalMatrix);
-    if (d.projectCategories && Array.isArray(d.projectCategories)) setProjectCategories(d.projectCategories);
-    if (d.projectTypes && Array.isArray(d.projectTypes)) setProjectTypes(d.projectTypes);
-    if (d.procurementTypes && Array.isArray(d.procurementTypes)) setProcurementTypes(d.procurementTypes);
-    if (d.auditLogs && Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
-    if (d.notifications && Array.isArray(d.notifications)) setNotifications(d.notifications);
-    if (d.notificationSettings && Array.isArray(d.notificationSettings)) setNotificationSettings(d.notificationSettings);
-  };
-
-  const refreshFromDatabase = async () => {
-    try {
-      const res = await getInitialAppStateAction();
-      if (res.success && res.hasDbData && res.data) {
-        applyDbData(res.data);
+  const sessionUser = session?.user as
+    | {
+        id?: string;
+        name?: string | null;
+        email?: string | null;
+        role?: SystemRole;
+        jabatan?: string | null;
+        estateName?: string | null;
+        image?: string | null;
       }
-    } catch (e) {
-      console.warn("Gagal menyegarkan data dari database:", e);
-    }
-  };
+    | undefined;
 
-  // Load preferences from LocalStorage & Clean Legacy Keys
-  useEffect(() => {
-    try {
-      // Bersihkan cache usang versi 1 yang menyimpan data proyek demo/uji coba di peramban
-      localStorage.removeItem("wm_toolkit_state_v1");
-      localStorage.removeItem("wm_toolkit_state");
+  const activeUserId: string | null = sessionUser?.id ?? null;
 
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.tableDensity) setTableDensity(parsed.tableDensity);
-        if (parsed.userProfile) setUserProfile((prev) => ({ ...prev, ...parsed.userProfile }));
-        if (parsed.systemSettings) setSystemSettings((prev) => ({ ...prev, ...parsed.systemSettings }));
-      }
-    } catch {
-      // Abaikan jika localStorage tidak diizinkan oleh peramban
-    }
-    setMounted(true);
-
-    // Sync authoritative state directly with Neon PostgreSQL
-    getInitialAppStateAction()
-      .then((res) => {
-        if (res.success && res.data) {
-          applyDbData(res.data);
-        }
-      })
-      .catch((err) => {
-        console.warn("Gagal sinkronisasi data awal dari database:", err);
-      });
-  }, []);
-
-  // Save UI Preferences to LocalStorage (hanya preferensi antarmuka, bukan transaksi proyek)
-  useEffect(() => {
-    if (!mounted) return;
-    try {
-      const stateToSave = {
-        tableDensity,
-        userProfile,
-        systemSettings,
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
-    } catch {
-      // Abaikan kuota penyimpanan
-    }
-  }, [
-    mounted,
-    tableDensity,
-    userProfile,
-    systemSettings,
-  ]);
-
-  const restoreBackupFromJson = (raw: any): { success: boolean; message: string; counts?: Record<string, number> } => {
-    try {
-      const data = raw?.data && typeof raw.data === "object" ? raw.data : raw;
-      if (!data || typeof data !== "object") {
-        return { success: false, message: "Format berkas cadangan JSON tidak valid." };
-      }
-
-      let restoredItemsCount = 0;
-      const counts: Record<string, number> = {};
-
-      if (Array.isArray(data.projects)) {
-        setProjects(data.projects);
-        counts.projects = data.projects.length;
-        restoredItemsCount += data.projects.length;
-      }
-      if (Array.isArray(data.afces)) {
-        setAfces(data.afces);
-        counts.afces = data.afces.length;
-        restoredItemsCount += data.afces.length;
-      }
-      if (Array.isArray(data.prs)) {
-        setPrs(data.prs);
-        counts.prs = data.prs.length;
-      }
-      if (Array.isArray(data.pos)) {
-        setPos(data.pos);
-        counts.pos = data.pos.length;
-      }
-      if (Array.isArray(data.grs)) {
-        setGrs(data.grs);
-        counts.grs = data.grs.length;
-      }
-      if (Array.isArray(data.vendorEvaluations)) {
-        setVendorEvaluations(data.vendorEvaluations);
-        counts.vendorEvaluations = data.vendorEvaluations.length;
-      }
-      if (Array.isArray(data.goodsHandovers)) {
-        setGoodsHandovers(data.goodsHandovers);
-        counts.goodsHandovers = data.goodsHandovers.length;
-      }
-      if (Array.isArray(data.uspks)) {
-        setUspks(data.uspks);
-        counts.uspks = data.uspks.length;
-      }
-      if (Array.isArray(data.technicalEvaluations)) {
-        setTechnicalEvaluations(data.technicalEvaluations);
-        counts.technicalEvaluations = data.technicalEvaluations.length;
-      }
-      if (Array.isArray(data.spkContracts)) {
-        setSpkContracts(data.spkContracts);
-        counts.spkContracts = data.spkContracts.length;
-      }
-      if (Array.isArray(data.dailyProgress)) setDailyProgress(data.dailyProgress);
-      if (Array.isArray(data.weeklyProgress)) setWeeklyProgress(data.weeklyProgress);
-      if (Array.isArray(data.regions)) setRegions(data.regions);
-      if (Array.isArray(data.companies)) setCompanies(data.companies);
-      if (Array.isArray(data.locations)) setLocations(data.locations);
-      if (Array.isArray(data.blocks)) setBlocks(data.blocks);
-      if (Array.isArray(data.materials)) setMaterials(data.materials);
-      if (Array.isArray(data.suppliers)) setSuppliers(data.suppliers);
-      if (Array.isArray(data.users)) setUsers(data.users);
-      if (Array.isArray(data.approvalMatrix)) setApprovalMatrix(data.approvalMatrix);
-      if (data.userProfile && typeof data.userProfile === "object") {
-        setUserProfile((prev) => ({ ...prev, ...data.userProfile }));
-      }
-      if (data.systemSettings && typeof data.systemSettings === "object") {
-        setSystemSettings((prev) => ({ ...prev, ...data.systemSettings }));
-      }
-
-      if (restoredItemsCount === 0 && !data.userProfile && !data.systemSettings) {
-        return { success: false, message: "Berkas JSON tidak memiliki data proyek yang valid." };
-      }
-
-      return {
-        success: true,
-        message: `Cadangan berhasil dipulihkan (${counts.projects || 0} proyek, ${counts.afces || 0} AFCE).`,
-        counts,
-      };
-    } catch (err: any) {
-      return { success: false, message: `Gagal memulihkan cadangan: ${err?.message || "Format salah"}` };
-    }
-  };
-
-  const resetToMockData = () => {
+  const clearAllClientState = useCallback(() => {
     setProjects([]);
     setAfces([]);
     setPrs([]);
@@ -629,77 +467,242 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setComments([]);
     setAttachments([]);
     setNotifications([]);
-    setNotificationSettings(INITIAL_NOTIFICATION_SETTINGS);
+    setNotificationSettings([]);
     setAuditLogs([]);
     setDailyProgress([]);
     setWeeklyProgress([]);
-    setRegions(INITIAL_REGIONS);
-    setCompanies(INITIAL_COMPANIES);
-    setLocations(INITIAL_LOCATIONS);
-    setBlocks(INITIAL_BLOCKS);
-    setMaterials(INITIAL_MATERIALS);
-    setSuppliers(INITIAL_SUPPLIERS);
-    setUsers(INITIAL_USERS);
-    setApprovalMatrix(INITIAL_APPROVAL_MATRIX);
-    setProjectCategories(INITIAL_PROJECT_CATEGORIES);
-    setProjectTypes(INITIAL_PROJECT_TYPES);
-    setProcurementTypes(INITIAL_PROCUREMENT_TYPES);
-    setTableDensity("comfortable");
+    setRegions([]);
+    setCompanies([]);
+    setLocations([]);
+    setBlocks([]);
+    setMaterials([]);
+    setSuppliers([]);
+    setUsers([]);
+    setApprovalMatrix([]);
+    setProjectCategories([]);
+    setProjectTypes([]);
+    setProcurementTypes([]);
     setUserProfile(DEFAULT_USER_PROFILE);
-    setSystemSettings(DEFAULT_SYSTEM_SETTINGS);
+  }, []);
+
+  const applyDbData = useCallback((d: Record<string, unknown>, activeProfile?: UserProfile) => {
+    if (Array.isArray(d.projects)) setProjects(d.projects as Project[]);
+    if (Array.isArray(d.afces)) setAfces(d.afces as AFCEDocument[]);
+    if (Array.isArray(d.prs)) setPrs(d.prs as PurchaseRequisition[]);
+    if (Array.isArray(d.pos)) setPos(d.pos as PurchaseOrder[]);
+    if (Array.isArray(d.grs)) setGrs(d.grs as GoodsReceipt[]);
+    if (Array.isArray(d.vendorEvaluations)) setVendorEvaluations(d.vendorEvaluations as VendorEvaluation[]);
+    if (Array.isArray(d.goodsHandovers)) setGoodsHandovers(d.goodsHandovers as GoodsHandover[]);
+    if (Array.isArray(d.uspks)) setUspks(d.uspks as USPKItem[]);
+    if (Array.isArray(d.technicalEvaluations)) setTechnicalEvaluations(d.technicalEvaluations as TechnicalEvaluation[]);
+    if (Array.isArray(d.spkContracts)) setSpkContracts(d.spkContracts as SPKContract[]);
+    if (Array.isArray(d.dailyProgress)) setDailyProgress(d.dailyProgress as DailyProgressRecord[]);
+    if (Array.isArray(d.weeklyProgress)) setWeeklyProgress(d.weeklyProgress as WeeklyProgressRecord[]);
+    if (Array.isArray(d.comments)) setComments(d.comments as ProjectComment[]);
+    if (Array.isArray(d.attachments)) setAttachments(d.attachments as ProjectAttachment[]);
+    if (Array.isArray(d.regions)) setRegions(d.regions as Region[]);
+    if (Array.isArray(d.companies)) setCompanies(d.companies as Company[]);
+    if (Array.isArray(d.locations)) setLocations(d.locations as EstateLocation[]);
+    if (Array.isArray(d.blocks)) setBlocks(d.blocks as EstateBlock[]);
+    if (Array.isArray(d.materials)) setMaterials(d.materials as MaterialCatalogItem[]);
+    if (Array.isArray(d.suppliers)) setSuppliers(d.suppliers as Supplier[]);
+    if (Array.isArray(d.users)) setUsers(d.users as AppUser[]);
+    if (Array.isArray(d.approvalMatrix)) setApprovalMatrix(d.approvalMatrix as ApprovalMatrixRule[]);
+    if (Array.isArray(d.projectCategories)) setProjectCategories(d.projectCategories as ProjectCategoryItem[]);
+    if (Array.isArray(d.projectTypes)) setProjectTypes(d.projectTypes as ProjectTypeItem[]);
+    if (Array.isArray(d.procurementTypes)) setProcurementTypes(d.procurementTypes as ProcurementTypeItem[]);
+    if (Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs as AuditLog[]);
+    if (Array.isArray(d.notifications)) setNotifications(d.notifications as NotificationItem[]);
+    if (Array.isArray(d.notificationSettings)) {
+      setNotificationSettings(d.notificationSettings as NotificationSetting[]);
+    }
+    if (activeProfile) {
+      setUserProfile(activeProfile);
+    }
+  }, []);
+
+  const refreshFromDatabase = useCallback(async () => {
+    if (sessionStatus !== "authenticated") return;
     try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {}
-  };
+      const res = await getInitialAppStateAction();
+      if (res.success && res.data) {
+        applyDbData(
+          res.data as unknown as Record<string, unknown>,
+          res.activeUserProfile as UserProfile | undefined
+        );
+        setLoadError(null);
+      } else if (!res.success) {
+        setLoadError(res.error || "Gagal memuat data aplikasi dari server.");
+      }
+    } catch (err) {
+      const msg = formatErrorMessage(err, "Gagal menyegarkan data dari database.");
+      setLoadError(msg);
+      console.warn("Gagal menyegarkan data dari database:", err);
+    }
+  }, [applyDbData, sessionStatus]);
 
-  const addProject = (projectData: Partial<Project> & { sapDocNumber?: string }): string => {
-    const newId = `prj-${Date.now()}`;
-    const afceVal = projectData.afceValue || 250000000;
-    const afceNum = projectData.afceNumber || `AFCE-2026-0${120 + projects.length}`;
-    const initialAfceStatus = projectData.afceStatus || "Pending Approval";
+  // Baca preferensi tampilan lokal dan bersihkan kunci cache usang
+  useEffect(() => {
+    try {
+      localStorage.removeItem("wm_toolkit_state_v1");
+      localStorage.removeItem("wm_toolkit_state");
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.tableDensity === "comfortable" || parsed.tableDensity === "compact") {
+          setTableDensity(parsed.tableDensity);
+        }
+      }
+    } catch {
+      // Abaikan jika penyimpanan lokal tidak tersedia
+    }
+    setMounted(true);
+  }, []);
 
-    // 1. Dapatkan tier matriks approval yang cocok
-    const matchedTier = findMatchingApprovalTier(afceVal, approvalMatrix);
-    const matrixLevels: AFCEApprovalLevelItem[] = matchedTier
-      ? generateMatrixLevelsFromTier(matchedTier, newId, initialAfceStatus)
-      : [
-          {
-            id: `aml-${newId}-1`,
-            level: 1,
-            code: "WM",
-            label: "Water Management",
-            isRequired: true,
-            status: (initialAfceStatus === "Approved"
-              ? "Approved"
-              : initialAfceStatus === "Pending Approval"
-              ? "Pending"
-              : "Waiting") as AFCEApprovalLevelItem["status"],
-            approverJabatan: "Water Management",
-          },
-        ];
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ tableDensity }));
+    } catch {
+      // Abaikan kuota penyimpanan
+    }
+  }, [mounted, tableDensity]);
 
-    const requiredLevels = matrixLevels.length;
-    const currentLevel = initialAfceStatus === "Approved" ? requiredLevels : initialAfceStatus === "Pending Approval" ? 1 : 0;
-    const currentApproverRole = matrixLevels[0]?.label || "Water Management";
-
-    let initialApprovalStatus = projectData.approvalStatus;
-    if (!initialApprovalStatus) {
-      initialApprovalStatus = getInitialApprovalStatus(matrixLevels, initialAfceStatus);
+  // Hidrasi state dari PostgreSQL hanya setelah sesi terautentikasi
+  useEffect(() => {
+    if (sessionStatus === "loading") {
+      return;
     }
 
-    const newProject: Project = {
-      id: newId,
-      code: projectData.code || `PRJ-2026-${String(projects.length + 1).padStart(3, "0")}`,
+    if (sessionStatus === "unauthenticated") {
+      hasBootstrappedRef.current = false;
+      clearAllClientState();
+      setLoadError(null);
+      setIsLoading(false);
+      return;
+    }
+
+    if (sessionUser) {
+      setUserProfile((prev) => ({
+        ...prev,
+        fullName: sessionUser.name || prev.fullName,
+        email: sessionUser.email || prev.email,
+        username: sessionUser.id || prev.username,
+        role: sessionUser.jabatan || prev.role,
+        systemRole: sessionUser.role || prev.systemRole,
+        selectedLocation: sessionUser.estateName || prev.selectedLocation,
+        avatarUrl: sessionUser.image || prev.avatarUrl,
+      }));
+    }
+
+    let cancelled = false;
+    const isInitialLoad = !hasBootstrappedRef.current;
+    if (isInitialLoad) {
+      setIsLoading(true);
+    }
+
+    getInitialAppStateAction()
+      .then((res) => {
+        if (cancelled) return;
+        if (res.success && res.data) {
+          applyDbData(
+            res.data as unknown as Record<string, unknown>,
+            res.activeUserProfile as UserProfile | undefined
+          );
+          setLoadError(null);
+          hasBootstrappedRef.current = true;
+        } else {
+          setLoadError(res.error || "Gagal memuat data awal dari server.");
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setLoadError(formatErrorMessage(err, "Gagal terhubung ke server database."));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionStatus, sessionUser, applyDbData, clearAllClientState]);
+
+  const activeRole: SystemRole = sessionUser?.role || userProfile.systemRole || "VIEWER";
+  const isAdmin = activeRole === "ADMIN";
+  const isPic = activeRole === "PIC";
+  const isApprover = activeRole === "APPROVER";
+  const isViewer = activeRole === "VIEWER";
+  const canEditProjects = activeRole === "PIC" || activeRole === "ADMIN";
+  const canApproveAfce = activeRole === "APPROVER" || activeRole === "ADMIN";
+  const canManageSystem = activeRole === "ADMIN";
+  const isViewerOnly = activeRole === "VIEWER";
+
+  const updateUserProfile = async (updates: Partial<UserProfile>): Promise<boolean> => {
+    const previous = userProfile;
+    const next = { ...previous, ...updates };
+    setUserProfile(next);
+
+    try {
+      const res = await updateCurrentUserProfileAction(updates);
+      if (!res.success) {
+        setUserProfile(previous);
+        toast.error(res.error || "Gagal menyimpan profil pengguna.");
+        return false;
+      }
+
+      await updateSession({
+        name: next.fullName,
+        email: next.email,
+        jabatan: next.role,
+        estateName: next.selectedLocation,
+      });
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      setUserProfile(previous);
+      toast.error(formatErrorMessage(err, "Gagal menyimpan profil pengguna."));
+      return false;
+    }
+  };
+
+  // =========================================================================
+  // Proyek, WBS, BOQ & Revisi Jadwal
+  // =========================================================================
+
+  const addProject = async (
+    projectData: Partial<Project> & { sapDocNumber?: string }
+  ): Promise<string | null> => {
+    const today = getTodayDateString();
+    const defaultEnd = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const primaryLoc = locations[0];
+
+    const payload = {
+      code: projectData.code || `PRJ-${new Date().getFullYear()}-${String(projects.length + 1).padStart(3, "0")}`,
       name: projectData.name || "Proyek Baru",
       description: projectData.description || "",
-      afceNumber: afceNum,
-      afceValue: afceVal,
-      afceStatus: initialAfceStatus,
-      approvalStatus: initialApprovalStatus,
-      locationId: projectData.locationId || locations[0].id,
-      locationName: projectData.locationName || locations[0].name,
-      locationIds: projectData.locationIds || [projectData.locationId || locations[0].id],
-      locationNames: projectData.locationNames || [projectData.locationName || locations[0].name],
+      picId: projectData.picId || activeUserId || undefined,
+      status: projectData.status || "Planned",
+      projectType: projectData.projectType || "Physical Work",
+      procurementType: projectData.procurementType || "Tender",
+      locationId: projectData.locationId || primaryLoc?.id,
+      locationName: projectData.locationName || primaryLoc?.name,
+      locationIds: projectData.locationIds?.length
+        ? projectData.locationIds
+        : projectData.locationId
+        ? [projectData.locationId]
+        : primaryLoc?.id
+        ? [primaryLoc.id]
+        : [],
+      locationNames: projectData.locationNames?.length
+        ? projectData.locationNames
+        : projectData.locationName
+        ? [projectData.locationName]
+        : primaryLoc?.name
+        ? [primaryLoc.name]
+        : [],
       regionId: projectData.regionId,
       regionName: projectData.regionName,
       companyId: projectData.companyId,
@@ -710,217 +713,147 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       blockCodes: projectData.blockCodes,
       projectCategoryId: projectData.projectCategoryId,
       projectCategoryName: projectData.projectCategoryName,
-      projectType: projectData.projectType || "Physical Work",
-      procurementType: projectData.procurementType || "Tender",
-      status: projectData.status || "Planned",
-      progress: 0,
-      baselineStartDate: projectData.baselineStartDate || new Date().toISOString().split("T")[0],
-      baselineEndDate: projectData.baselineEndDate || new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-      targetEndDate: projectData.targetEndDate || projectData.baselineEndDate || new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+      afceNumber: projectData.afceNumber || `AFCE-${new Date().getFullYear()}-${String(projects.length + 1).padStart(3, "0")}`,
+      afceValue: projectData.afceValue || 250000000,
+      afceStatus: projectData.afceStatus || "Pending Approval",
+      sapDocNumber: projectData.sapDocNumber || "",
+      baselineStartDate: projectData.baselineStartDate || today,
+      baselineEndDate: projectData.baselineEndDate || defaultEnd,
+      targetEndDate: projectData.targetEndDate || projectData.baselineEndDate || defaultEnd,
       durationDays: projectData.durationDays || 60,
-      scheduleVarianceDays: 0,
-      ewsStatus: "Normal",
-      lastUpdated: new Date().toISOString().split("T")[0],
-      revisions: [],
-      workItems: projectData.workItems || [],
-      surveyAndBoq: projectData.surveyAndBoq || [],
+      progress: 0,
+      ewsStatus: "Normal" as const,
+      workItems: (projectData.workItems || []).map((w) => ({
+        name: w.name,
+        type: w.type || "Physical",
+        weight: Number(w.weight) || 0,
+        startDate: w.startDate || projectData.baselineStartDate || today,
+        endDate: w.endDate || projectData.baselineEndDate || defaultEnd,
+        procurementType: w.procurementType || projectData.procurementType || "Tender",
+        progressMode: w.progressMode || "Daily",
+        progress: Number(w.progress) || 0,
+        status: w.status || "Planned",
+        phase: w.phase || "Physical Execution",
+        notes: w.notes ?? undefined,
+      })),
+      surveyAndBoq: (projectData.surveyAndBoq || []).map((b) => ({
+        itemCode: b.itemCode || "ITEM-001",
+        name: b.name,
+        volume: Number(b.volume) || 0,
+        unit: b.unit || "Unit",
+        unitPrice: Number(b.unitPrice) || 0,
+        totalPrice: Number(b.totalPrice) || 0,
+        weight: Number(b.weight) || 0,
+        status: b.status || "Draft",
+      })),
+      scheduleMatrix: projectData.scheduleMatrix,
     };
 
-    // Automatically create the linked AFCE document together with the project
-    const newAfce: AFCEDocument = {
-      id: `afce-${Date.now()}`,
-      afceNumber: afceNum,
-      projectId: newId,
-      projectCode: newProject.code,
-      projectName: newProject.name,
-      value: afceVal,
-      status: initialAfceStatus,
-      currentLevel,
-      requiredLevels,
-      currentApproverRole,
-      submittedAt: initialAfceStatus !== "Draft" ? new Date().toISOString().split("T")[0] : undefined,
-      approvedAt:
-        initialAfceStatus === "Approved"
-          ? new Date().toISOString().split("T")[0]
-          : undefined,
-      sapDocNumber:
-        projectData.sapDocNumber || `AFCE-SAP-${Date.now().toString().slice(-7)}`,
-      sapScreenshotPlaceholder: `SAP_AFCE_${afceNum.replace(/[^0-9]/g, "")}.png`,
-      approvalMatrixLevels: matrixLevels,
-      history:
-        initialAfceStatus === "Pending Approval"
-          ? [
-              {
-                id: `rec-${Date.now()}`,
-                afceNumber: afceNum,
-                matrixLevelId: matrixLevels[0]?.id,
-                approverName: "Dedi Setiawan, S.T.",
-                approverRole: currentApproverRole,
-                approverJabatan: currentApproverRole,
-                action: "Submit",
-                approvalDate: new Date().toISOString().split("T")[0],
-                timestamp: `${new Date().toISOString().split("T")[0]} ${new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}`,
-                note: "Dokumen AFCE dibuat bersamaan dengan proyek baru dan diajukan sesuai matriks SOP.",
-                previousStatus: "Draft",
-                newStatus: "Pending Approval",
-                sapDocNumber: projectData.sapDocNumber || `AFCE-SAP-${Date.now().toString().slice(-7)}`,
-              },
-            ]
-          : initialAfceStatus === "Approved"
-          ? matrixLevels.map((lvl, i) => ({
-              id: `rec-${Date.now()}-${i}`,
-              afceNumber: afceNum,
-              matrixLevelId: lvl.id,
-              approverName: i === 0 ? "Dedi Setiawan, S.T." : i === 1 ? "Budi Santoso, S.T." : "Ir. Ahmad Dahlan",
-              approverRole: lvl.label,
-              approverJabatan: lvl.label,
-              action: "Approve" as const,
-              approvalDate: new Date().toISOString().split("T")[0],
-              timestamp: `${new Date().toISOString().split("T")[0]} 12:00`,
-              note: `Disetujui Level ${lvl.level}: ${lvl.label} sesuai verifikasi SAP.`,
-              previousStatus: "Pending Approval" as AFCEStatus,
-              newStatus: (i === matrixLevels.length - 1 ? "Approved" : "Pending Approval") as AFCEStatus,
-            }))
-          : [],
-    };
+    try {
+      const res = await createProjectAction(payload);
+      if (!res.success || !res.project) {
+        toast.error(res.error || "Gagal menyimpan proyek baru ke database.");
+        return null;
+      }
 
-    setProjects((prev) => [newProject, ...prev]);
-    setAfces((prev) => [newAfce, ...prev]);
-
-    // Persist to Neon DB in background
-    createProjectAction({
-      ...newProject,
-      afceId: newAfce.id,
-      afceNumber: newAfce.afceNumber,
-      afceValue: newAfce.value,
-      afceStatus: newAfce.status,
-      sapDocNumber: newAfce.sapDocNumber,
-    }).catch((err) => console.warn("Sync DB error (createProjectAction):", err));
-
-    // Record Immutable Audit Log
-    addAuditLog({
-      action: "CREATE",
-      entityType: "PROJECT",
-      entityId: newId,
-      entityTitle: `${newProject.code} • ${newProject.name}`,
-      projectId: newId,
-      projectName: newProject.name,
-      beforeData: null,
-      afterData: {
-        code: newProject.code,
-        name: newProject.name,
-        afceValue: newProject.afceValue,
-        targetEndDate: newProject.targetEndDate,
-        status: newProject.status,
-      },
-      ipAddress: "10.20.4.15",
-      notes: "Inisiasi proyek baru dan penetapan baseline",
-    });
-
-    return newId;
+      await refreshFromDatabase();
+      return res.project.id;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal menyimpan proyek baru."));
+      return null;
+    }
   };
 
-  const updateProject = (id: string, updates: Partial<Project>) => {
+  const updateProject = async (id: string, updates: Partial<Project>): Promise<boolean> => {
+    const previousProjects = projects;
     setProjects((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) return p;
-        const updated = { ...p, ...updates, lastUpdated: new Date().toISOString().split("T")[0] };
-        return updated;
-      })
+      prev.map((p) => (p.id === id ? { ...p, ...updates, lastUpdated: getTodayDateString() } : p))
     );
-    updateProjectAction(id, updates).catch((err) => console.warn("Sync DB error (updateProjectAction):", err));
+
+    try {
+      const res = await updateProjectAction(id, updates);
+      if (!res.success) {
+        setProjects(previousProjects);
+        toast.error(res.error || "Gagal memperbarui data proyek.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      setProjects(previousProjects);
+      toast.error(formatErrorMessage(err, "Gagal memperbarui data proyek."));
+      return false;
+    }
   };
 
-  const deleteProject = (projectId: string) => {
+  const deleteProject = async (projectId: string): Promise<boolean> => {
     const project = projects.find((p) => p.id === projectId);
-    if (!project) return;
+    if (!project) return false;
+
+    const previousProjects = projects;
     const nowIso = new Date().toISOString();
     setProjects((prev) =>
       prev.map((p) => (p.id === projectId ? { ...p, deletedAt: nowIso } : p))
     );
-    deleteProjectAction(projectId).catch((err) => console.warn("Sync DB error (deleteProjectAction):", err));
-    addAuditLog({
-      action: "DELETE",
-      entityType: "PROJECT",
-      entityId: projectId,
-      entityTitle: `Proyek ${project.code}`,
-      projectId: project.id,
-      projectName: project.name,
-      beforeData: { deletedAt: null },
-      afterData: { deletedAt: nowIso },
-      notes: `Proyek ${project.code} (${project.name}) dipindahkan ke Recycle Bin`,
-    });
-    toast.success(`Proyek ${project.code} berhasil dipindahkan ke Recycle Bin.`);
+
+    try {
+      const res = await deleteProjectAction(projectId);
+      if (!res.success) {
+        setProjects(previousProjects);
+        toast.error(res.error || "Gagal memindahkan proyek ke Recycle Bin.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success(`Proyek ${project.code} berhasil dipindahkan ke Recycle Bin.`);
+      return true;
+    } catch (err) {
+      setProjects(previousProjects);
+      toast.error(formatErrorMessage(err, "Gagal menghapus proyek."));
+      return false;
+    }
   };
 
-  const restoreProject = (projectId: string) => {
+  const restoreProject = async (projectId: string): Promise<boolean> => {
     const project = projects.find((p) => p.id === projectId);
-    if (!project) return;
-    const prevDeletedAt = project.deletedAt;
+    if (!project) return false;
+
+    const previousProjects = projects;
     setProjects((prev) =>
       prev.map((p) => (p.id === projectId ? { ...p, deletedAt: null } : p))
     );
-    restoreProjectAction(projectId).catch((err) => console.warn("Sync DB error (restoreProjectAction):", err));
-    addAuditLog({
-      action: "UPDATE",
-      entityType: "PROJECT",
-      entityId: projectId,
-      entityTitle: `Proyek ${project.code}`,
-      projectId: project.id,
-      projectName: project.name,
-      beforeData: { deletedAt: prevDeletedAt },
-      afterData: { deletedAt: null },
-      notes: `Proyek ${project.code} (${project.name}) dipulihkan dari Recycle Bin`,
-    });
-    toast.success(`Proyek ${project.code} berhasil dipulihkan dari Recycle Bin.`);
+
+    try {
+      const res = await restoreProjectAction(projectId);
+      if (!res.success) {
+        setProjects(previousProjects);
+        toast.error(res.error || "Gagal memulihkan proyek dari Recycle Bin.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success(`Proyek ${project.code} berhasil dipulihkan dari Recycle Bin.`);
+      return true;
+    } catch (err) {
+      setProjects(previousProjects);
+      toast.error(formatErrorMessage(err, "Gagal memulihkan proyek."));
+      return false;
+    }
   };
 
   const hardDeleteProject = async (projectId: string): Promise<boolean> => {
     const project = projects.find((p) => p.id === projectId);
     const projectCode = project?.code || projectId;
-    const projectName = project?.name || "";
 
     try {
       const res = await hardDeleteProjectAction(projectId);
       if (!res.success) {
-        toast.error("Gagal menghapus proyek secara permanen.");
+        toast.error(res.error || "Gagal menghapus proyek secara permanen.");
         return false;
       }
-
-      // Remove project from state
-      setProjects((prev) => prev.filter((p) => p.id !== projectId));
-
-      // Cascade remove dependent entities from state
-      const targetPoIds = new Set(pos.filter((po) => po.projectId === projectId).map((po) => po.id));
-      setAfces((prev) => prev.filter((a) => a.projectId !== projectId));
-      setPrs((prev) => prev.filter((pr) => pr.projectId !== projectId));
-      setPos((prev) => prev.filter((po) => po.projectId !== projectId));
-      setGrs((prev) => prev.filter((gr) => !targetPoIds.has(gr.poId)));
-      setGoodsHandovers((prev) => prev.filter((gh) => gh.projectId !== projectId));
-      setUspks((prev) => prev.filter((u) => u.projectId !== projectId));
-      setSpkContracts((prev) => prev.filter((spk) => spk.projectId !== projectId));
-      setDailyProgress((prev) => prev.filter((dp) => dp.projectId !== projectId));
-      setWeeklyProgress((prev) => prev.filter((wp) => wp.projectId !== projectId));
-      setComments((prev) => prev.filter((c) => c.projectId !== projectId));
-      setAttachments((prev) => prev.filter((a) => a.projectId !== projectId));
-
-      addAuditLog({
-        action: "DELETE",
-        entityType: "PROJECT",
-        entityId: projectId,
-        entityTitle: `Proyek ${projectCode}`,
-        projectId: projectId,
-        projectName: projectName,
-        beforeData: project || null,
-        afterData: null,
-        notes: `Proyek ${projectCode} (${projectName}) dihapus permanen dari sistem.`,
-      });
-
+      await refreshFromDatabase();
       toast.success(`Proyek ${projectCode} berhasil dihapus permanen dari sistem.`);
       return true;
-    } catch (err: any) {
-      console.error("Error in hardDeleteProject:", err);
-      toast.error(err.message || "Gagal menghapus proyek permanen.");
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal menghapus proyek permanen."));
       return false;
     }
   };
@@ -929,53 +862,31 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await emptyRecycleBinAction();
       if (!res.success) {
-        toast.error("Gagal mengosongkan Recycle Bin.");
+        toast.error(res.error || "Gagal mengosongkan Recycle Bin.");
         return false;
       }
-
-      const deletedProjectIds = new Set(
-        projects.filter((p) => !!p.deletedAt).map((p) => p.id)
-      );
-
-      // Remove all deleted projects
-      setProjects((prev) => prev.filter((p) => !p.deletedAt));
-
-      // Remove dependent records
-      const deletedPoIds = new Set(pos.filter((po) => deletedProjectIds.has(po.projectId)).map((po) => po.id));
-      setAfces((prev) => prev.filter((a) => !deletedProjectIds.has(a.projectId)));
-      setPrs((prev) => prev.filter((pr) => !deletedProjectIds.has(pr.projectId)));
-      setPos((prev) => prev.filter((po) => !deletedProjectIds.has(po.projectId)));
-      setGrs((prev) => prev.filter((gr) => !deletedPoIds.has(gr.poId)));
-      setGoodsHandovers((prev) => prev.filter((gh) => !deletedProjectIds.has(gh.projectId)));
-      setUspks((prev) => prev.filter((u) => !deletedProjectIds.has(u.projectId)));
-      setSpkContracts((prev) => prev.filter((spk) => !deletedProjectIds.has(spk.projectId)));
-      setDailyProgress((prev) => prev.filter((dp) => !deletedProjectIds.has(dp.projectId)));
-      setWeeklyProgress((prev) => prev.filter((wp) => !deletedProjectIds.has(wp.projectId)));
-      setComments((prev) => prev.filter((c) => !deletedProjectIds.has(c.projectId)));
-      setAttachments((prev) => prev.filter((a) => !deletedProjectIds.has(a.projectId)));
-
+      await refreshFromDatabase();
       toast.success(`Recycle Bin berhasil dikosongkan (${res.count || 0} proyek dihapus permanen).`);
       return true;
-    } catch (err: any) {
-      console.error("Error in emptyRecycleBin:", err);
-      toast.error(err.message || "Gagal mengosongkan Recycle Bin.");
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mengosongkan Recycle Bin."));
       return false;
     }
   };
 
-  const reviseProjectSchedule = (
+  const reviseProjectSchedule = async (
     projectId: string,
     revision: Omit<ScheduleRevision, "id">
-  ) => {
+  ): Promise<boolean> => {
+    const previousProjects = projects;
     setProjects((prev) =>
       prev.map((p) => {
         if (p.id !== projectId) return p;
         const newRev: ScheduleRevision = {
           ...revision,
-          id: `rev-${Date.now()}`,
+          id: `rev-temp-${Date.now()}`,
           revisionNumber: p.revisions.length + 1,
         };
-
         const variance = Math.max(
           0,
           Math.ceil(
@@ -983,246 +894,436 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
               (1000 * 60 * 60 * 24)
           )
         );
-
         return {
           ...p,
           targetEndDate: revision.newEndDate,
           scheduleVarianceDays: variance,
           ewsStatus: variance > 14 ? "Critical" : variance > 7 ? "Warning" : "Normal",
           revisions: [...p.revisions, newRev],
-          lastUpdated: new Date().toISOString().split("T")[0],
+          lastUpdated: getTodayDateString(),
         };
       })
     );
-    reviseScheduleAction(projectId, revision).catch((err) => console.warn("Sync DB error (reviseScheduleAction):", err));
+
+    try {
+      const res = await reviseScheduleAction(projectId, revision);
+      if (!res.success) {
+        setProjects(previousProjects);
+        toast.error(res.error || "Gagal mencatat revisi jadwal.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      setProjects(previousProjects);
+      toast.error(formatErrorMessage(err, "Gagal mencatat revisi jadwal."));
+      return false;
+    }
   };
 
-  const updateAfceDocument = (afceId: string, updates: Partial<AFCEDocument>) => {
-    setAfces((prev) =>
-      prev.map((a) => {
-        if (a.id !== afceId) return a;
-        let matrixUpdates: Partial<AFCEDocument> = {};
+  const addWorkItem = async (projectId: string, data: WorkItemInput): Promise<boolean> => {
+    try {
+      const res = await addWorkItemAction(projectId, data);
+      if (!res.success) {
+        toast.error(res.error || "Gagal menambahkan item pekerjaan.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Item pekerjaan WBS berhasil ditambahkan.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal menambahkan item pekerjaan."));
+      return false;
+    }
+  };
 
-        // Jika nilai berubah dan dokumen masih Draft atau belum ada approval apapun
-        if (updates.value !== undefined && updates.value !== a.value) {
-          const hasApprovedLevels =
-            (a.approvalMatrixLevels || []).some((l) => l.status === "Approved") ||
-            a.history.some((h) => h.action === "Approve");
+  const updateWorkItem = async (
+    workItemId: string,
+    _projectId: string,
+    updates: Partial<WorkItemInput>
+  ): Promise<boolean> => {
+    try {
+      const res = await updateWorkItemAction(workItemId, updates);
+      if (!res.success) {
+        toast.error(res.error || "Gagal memperbarui item pekerjaan.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Item pekerjaan WBS berhasil diperbarui.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal memperbarui item pekerjaan."));
+      return false;
+    }
+  };
 
-          if (!hasApprovedLevels) {
-            const matchedTier = findMatchingApprovalTier(updates.value, approvalMatrix);
-            if (matchedTier) {
-              const newLevels = generateMatrixLevelsFromTier(
-                matchedTier,
-                a.id,
-                a.status === "Draft" ? "Draft" : "Pending Approval"
-              );
-              matrixUpdates = {
-                approvalMatrixLevels: newLevels,
-                requiredLevels: newLevels.length,
-                currentLevel: a.status === "Draft" ? 0 : 1,
-                currentApproverRole: newLevels[0]?.label || "Water Management",
-              };
-            }
-          }
+  const deleteWorkItem = async (workItemId: string, _projectId: string): Promise<boolean> => {
+    try {
+      const res = await deleteWorkItemAction(workItemId);
+      if (!res.success) {
+        toast.error(res.error || "Gagal menghapus item pekerjaan.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Item pekerjaan WBS berhasil dihapus.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal menghapus item pekerjaan."));
+      return false;
+    }
+  };
+
+  const addBoqItem = async (projectId: string, data: BoqItemInput): Promise<boolean> => {
+    try {
+      const res = await addBoqItemAction(projectId, data);
+      if (!res.success) {
+        toast.error(res.error || "Gagal menambahkan item BOQ.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Item Survey & BOQ berhasil ditambahkan.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal menambahkan item BOQ."));
+      return false;
+    }
+  };
+
+  const deleteBoqItem = async (boqItemId: string, _projectId: string): Promise<boolean> => {
+    try {
+      const res = await deleteBoqItemAction(boqItemId);
+      if (!res.success) {
+        toast.error(res.error || "Gagal menghapus item BOQ.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Item Survey & BOQ berhasil dihapus.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal menghapus item BOQ."));
+      return false;
+    }
+  };
+
+  // =========================================================================
+  // AFCE
+  // =========================================================================
+
+  const updateAfceDocument = async (
+    afceId: string,
+    updates: Partial<AFCEDocument>
+  ): Promise<boolean> => {
+    const target = afces.find((a) => a.id === afceId);
+    if (!target) return false;
+
+    const previousAfces = afces;
+    const previousProjects = projects;
+
+    let matrixUpdates: Partial<AFCEDocument> = {};
+    if (updates.value !== undefined && updates.value !== target.value) {
+      const hasApprovedLevels =
+        (target.approvalMatrixLevels || []).some((l) => l.status === "Approved") ||
+        target.history.some((h) => h.action === "Approve");
+
+      if (!hasApprovedLevels) {
+        const matchedTier = findMatchingApprovalTier(updates.value, approvalMatrix);
+        if (matchedTier) {
+          const newLevels = generateMatrixLevelsFromTier(
+            matchedTier,
+            target.id,
+            target.status === "Draft" ? "Draft" : "Pending Approval"
+          );
+          matrixUpdates = {
+            approvalMatrixLevels: newLevels,
+            requiredLevels: newLevels.length,
+            currentLevel: target.status === "Draft" ? 0 : 1,
+            currentApproverRole: newLevels[0]?.label || "Water Management",
+          };
         }
+      }
+    }
 
-        const updated: AFCEDocument = { ...a, ...updates, ...matrixUpdates };
+    setAfces((prev) =>
+      prev.map((a) => (a.id === afceId ? { ...a, ...updates, ...matrixUpdates } : a))
+    );
 
-        if (
-          updates.value !== undefined ||
-          updates.afceNumber !== undefined ||
-          updates.status !== undefined ||
-          matrixUpdates.approvalMatrixLevels !== undefined
-        ) {
-          updateProject(a.projectId, {
+    if (
+      updates.value !== undefined ||
+      updates.afceNumber !== undefined ||
+      updates.status !== undefined ||
+      matrixUpdates.approvalMatrixLevels !== undefined
+    ) {
+      setProjects((prev) =>
+        prev.map((p) => {
+          if (p.id !== target.projectId) return p;
+          return {
+            ...p,
             ...(updates.value !== undefined ? { afceValue: updates.value } : {}),
             ...(updates.afceNumber !== undefined ? { afceNumber: updates.afceNumber } : {}),
             ...(updates.status !== undefined ? { afceStatus: updates.status } : {}),
             ...(matrixUpdates.currentApproverRole
               ? {
                   approvalStatus:
-                    a.status === "Draft"
+                    target.status === "Draft"
                       ? "Draft AFCE Preparation"
                       : `Waiting Level 1: ${matrixUpdates.currentApproverRole} Approval`,
                 }
               : {}),
-          });
-        }
-        return updated;
-      })
-    );
-    updateAfceAction(afceId, updates).catch((err) => console.warn("Sync DB error (updateAfceAction):", err));
-  };
-
-  const syncAfceWithMatrix = (afceId: string) => {
-    setAfces((prev) =>
-      prev.map((a) => {
-        if (a.id !== afceId) return a;
-        const matchedTier = findMatchingApprovalTier(a.value, approvalMatrix);
-        if (!matchedTier) return a;
-
-        const activeCodes = matchedTier.levels.filter(Boolean) as ApprovalLevel[];
-        const oldLevels = a.approvalMatrixLevels || [];
-
-        // Rekonsiliasi level lama dengan level baru:
-        // Jika level lama dengan kode yang sama sudah "Approved", pertahankan status approval-nya!
-        const newLevels: AFCEApprovalLevelItem[] = activeCodes.map((code, idx) => {
-          const existing = oldLevels.find((l) => l.code === code);
-          const label = APPROVAL_LEVEL_LABELS[code] || code;
-          if (existing && existing.status === "Approved") {
-            return {
-              ...existing,
-              level: idx + 1,
-              label,
-            };
-          }
-          return {
-            id: existing?.id || `aml-${a.id}-${idx + 1}`,
-            level: idx + 1,
-            code,
-            label,
-            isRequired: true,
-            status: "Waiting" as const,
-            approverJabatan: label,
+            lastUpdated: getTodayDateString(),
           };
-        });
+        })
+      );
+    }
 
-        const firstUnapprovedIdx = newLevels.findIndex((l) => l.status !== "Approved");
-        let newStatus: AFCEStatus = a.status;
-        let newCurrentLevel = 1;
-        let newRole = newLevels[0]?.label || "Water Management";
-
-        if (firstUnapprovedIdx === -1) {
-          newStatus = "Approved";
-          newCurrentLevel = newLevels.length;
-          newRole = newLevels[newLevels.length - 1]?.label || "Direksi";
-        } else {
-          if (a.status !== "Draft") {
-            newLevels[firstUnapprovedIdx].status = "Pending";
-            newStatus = "Pending Approval";
-            newCurrentLevel = firstUnapprovedIdx + 1;
-            newRole = newLevels[firstUnapprovedIdx].label;
-          } else {
-            newStatus = "Draft";
-            newCurrentLevel = 0;
-            newRole = newLevels[0]?.label || "Water Management";
-          }
-        }
-
-        const updated: AFCEDocument = {
-          ...a,
-          status: newStatus,
-          currentLevel: newCurrentLevel,
-          requiredLevels: newLevels.length,
-          currentApproverRole: newRole,
-          approvalMatrixLevels: newLevels,
-        };
-
-        updateProject(a.projectId, {
-          afceStatus: newStatus,
-          approvalStatus:
-            newStatus === "Approved"
-              ? `Approved by ${newRole}`
-              : newStatus === "Draft"
-              ? "Draft AFCE Preparation"
-              : `Waiting Level ${newCurrentLevel}: ${newRole} Approval`,
-        });
-
-        syncAfceWithMatrixAction(a.id, newLevels).catch((err) =>
-          console.warn("Sync DB error (syncAfceWithMatrixAction):", err)
-        );
-
-        toast.success(`Matriks dokumen ${a.afceNumber} berhasil disinkronkan dengan SOP terbaru.`);
-        return updated;
-      })
-    );
+    try {
+      const res = await updateAfceAction(afceId, {
+        ...updates,
+        ...(matrixUpdates.approvalMatrixLevels
+          ? { approvalMatrixLevels: matrixUpdates.approvalMatrixLevels }
+          : {}),
+      });
+      if (!res.success) {
+        setAfces(previousAfces);
+        setProjects(previousProjects);
+        toast.error(res.error || "Gagal memperbarui dokumen AFCE.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      setAfces(previousAfces);
+      setProjects(previousProjects);
+      toast.error(formatErrorMessage(err, "Gagal memperbarui dokumen AFCE."));
+      return false;
+    }
   };
 
-  const submitAfceApproval = (afceId: string, note: string, submissionDate?: string) => {
-    const subDate = submissionDate || new Date().toISOString().split("T")[0];
+  const syncAfceWithMatrix = async (afceId: string): Promise<boolean> => {
+    const target = afces.find((a) => a.id === afceId);
+    if (!target) return false;
+
+    const matchedTier = findMatchingApprovalTier(target.value, approvalMatrix);
+    if (!matchedTier) {
+      toast.error("Tidak ditemukan tingkatan matriks SOP yang sesuai untuk nilai AFCE ini.");
+      return false;
+    }
+
+    const activeCodes = matchedTier.levels.filter(Boolean) as ApprovalLevel[];
+    const oldLevels = target.approvalMatrixLevels || [];
+
+    const newLevels: AFCEApprovalLevelItem[] = activeCodes.map((code, idx) => {
+      const existing = oldLevels.find((l) => l.code === code);
+      const label = APPROVAL_LEVEL_LABELS[code] || code;
+      if (existing && existing.status === "Approved") {
+        return {
+          ...existing,
+          level: idx + 1,
+          label,
+        };
+      }
+      return {
+        id: existing?.id || `aml-${target.id}-${idx + 1}`,
+        level: idx + 1,
+        code,
+        label,
+        isRequired: true,
+        status: "Waiting" as const,
+        approverJabatan: label,
+      };
+    });
+
+    const firstUnapprovedIdx = newLevels.findIndex((l) => l.status !== "Approved");
+    let newStatus: AFCEStatus = target.status;
+    let newCurrentLevel = 1;
+    let newRole = newLevels[0]?.label || "Water Management";
+
+    if (firstUnapprovedIdx === -1) {
+      newStatus = "Approved";
+      newCurrentLevel = newLevels.length;
+      newRole = newLevels[newLevels.length - 1]?.label || "Chairman";
+    } else if (target.status !== "Draft") {
+      newLevels[firstUnapprovedIdx].status = "Pending";
+      newStatus = "Pending Approval";
+      newCurrentLevel = firstUnapprovedIdx + 1;
+      newRole = newLevels[firstUnapprovedIdx].label;
+    } else {
+      newStatus = "Draft";
+      newCurrentLevel = 0;
+      newRole = newLevels[0]?.label || "Water Management";
+    }
+
+    const previousAfces = afces;
+    const previousProjects = projects;
+
     setAfces((prev) =>
-      prev.map((a) => {
-        if (a.id !== afceId) return a;
-
-        let matrixLevels: AFCEApprovalLevelItem[] = [];
-        if (a.approvalMatrixLevels && a.approvalMatrixLevels.length > 0) {
-          matrixLevels = a.approvalMatrixLevels.map((lvl) => {
-            if (lvl.status === "Need Revision" || lvl.status === "Rejected") {
-              return { ...lvl, status: "Pending" as const };
+      prev.map((a) =>
+        a.id === afceId
+          ? {
+              ...a,
+              status: newStatus,
+              currentLevel: newCurrentLevel,
+              requiredLevels: newLevels.length,
+              currentApproverRole: newRole,
+              approvalMatrixLevels: newLevels,
             }
-            return { ...lvl };
-          });
-          if (!matrixLevels.some((l) => l.status === "Pending")) {
-            const firstWaitIdx = matrixLevels.findIndex((l) => l.status === "Waiting");
-            if (firstWaitIdx !== -1) {
-              matrixLevels[firstWaitIdx].status = "Pending";
-            } else if (matrixLevels.length > 0 && !matrixLevels.some((l) => l.status === "Approved")) {
-              matrixLevels[0].status = "Pending";
-            }
-          }
-        } else {
-          const matchedTier = findMatchingApprovalTier(a.value, approvalMatrix);
-          matrixLevels = matchedTier
-            ? generateMatrixLevelsFromTier(matchedTier, a.id, "Pending Approval")
-            : [
-                {
-                  id: `aml-${a.id}-1`,
-                  level: 1,
-                  code: "WM",
-                  label: "Water Management",
-                  isRequired: true,
-                  status: "Pending",
-                  approverJabatan: "Water Management",
-                },
-              ];
-        }
-
-        const pendingIdx = matrixLevels.findIndex((l) => l.status === "Pending");
-        const activeIdx = pendingIdx !== -1 ? pendingIdx : 0;
-        const targetLevel = matrixLevels[activeIdx];
-        const targetRole = targetLevel?.label || "Water Management";
-
-        const historyRecord = {
-          id: `rec-${Date.now()}`,
-          afceNumber: a.afceNumber,
-          matrixLevelId: targetLevel?.id,
-          approverName: "Dedi Setiawan, S.T.",
-          approverRole: targetRole,
-          approverJabatan: targetRole,
-          action: "Submit" as const,
-          approvalDate: subDate,
-          timestamp: `${subDate} ${new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}`,
-          note,
-          previousStatus: a.status,
-          newStatus: "Pending Approval" as AFCEStatus,
-          sapDocNumber: a.sapDocNumber,
-        };
-
-        const updated: AFCEDocument = {
-          ...a,
-          submittedAt: a.submittedAt || subDate,
-          status: "Pending Approval",
-          currentLevel: activeIdx + 1,
-          requiredLevels: matrixLevels.length,
-          currentApproverRole: targetRole,
-          approvalMatrixLevels: matrixLevels,
-          history: [...a.history, historyRecord],
-        };
-
-        updateProject(a.projectId, {
-          afceStatus: "Pending Approval",
-          approvalStatus: `Waiting Level ${activeIdx + 1}: ${targetRole} Approval`,
-          lastUpdated: subDate,
-        });
-
-        return updated;
-      })
+          : a
+      )
     );
-    submitAfceApprovalAction(afceId, note).catch((err) => console.warn("Sync DB error (submitAfceApprovalAction):", err));
+
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === target.projectId
+          ? {
+              ...p,
+              afceStatus: newStatus,
+              approvalStatus:
+                newStatus === "Approved"
+                  ? `Approved by ${newRole}`
+                  : newStatus === "Draft"
+                  ? "Draft AFCE Preparation"
+                  : `Waiting Level ${newCurrentLevel}: ${newRole} Approval`,
+            }
+          : p
+      )
+    );
+
+    try {
+      const res = await syncAfceWithMatrixAction(target.id, newLevels);
+      if (!res.success) {
+        setAfces(previousAfces);
+        setProjects(previousProjects);
+        toast.error(res.error || "Gagal menyinkronkan matriks AFCE.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success(`Matriks dokumen ${target.afceNumber} berhasil disinkronkan dengan SOP terbaru.`);
+      return true;
+    } catch (err) {
+      setAfces(previousAfces);
+      setProjects(previousProjects);
+      toast.error(formatErrorMessage(err, "Gagal menyinkronkan matriks AFCE."));
+      return false;
+    }
   };
 
-  const processAfceAction = (
+  const submitAfceApproval = async (
+    afceId: string,
+    note: string,
+    submissionDate?: string
+  ): Promise<boolean> => {
+    const target = afces.find((a) => a.id === afceId);
+    if (!target) return false;
+
+    const subDate = submissionDate || getTodayDateString();
+    const previousAfces = afces;
+    const previousProjects = projects;
+
+    let matrixLevels: AFCEApprovalLevelItem[] = [];
+    if (target.approvalMatrixLevels && target.approvalMatrixLevels.length > 0) {
+      matrixLevels = target.approvalMatrixLevels.map((lvl) =>
+        lvl.status === "Need Revision" || lvl.status === "Rejected"
+          ? { ...lvl, status: "Pending" as const }
+          : { ...lvl }
+      );
+      if (!matrixLevels.some((l) => l.status === "Pending")) {
+        const firstWaitIdx = matrixLevels.findIndex((l) => l.status === "Waiting");
+        if (firstWaitIdx !== -1) {
+          matrixLevels[firstWaitIdx].status = "Pending";
+        } else if (matrixLevels.length > 0 && !matrixLevels.some((l) => l.status === "Approved")) {
+          matrixLevels[0].status = "Pending";
+        }
+      }
+    } else {
+      const matchedTier = findMatchingApprovalTier(target.value, approvalMatrix);
+      matrixLevels = matchedTier
+        ? generateMatrixLevelsFromTier(matchedTier, target.id, "Pending Approval")
+        : [
+            {
+              id: `aml-${target.id}-1`,
+              level: 1,
+              code: "WM",
+              label: "Water Management",
+              isRequired: true,
+              status: "Pending",
+              approverJabatan: "Water Management",
+            },
+          ];
+    }
+
+    const pendingIdx = matrixLevels.findIndex((l) => l.status === "Pending");
+    const activeIdx = pendingIdx !== -1 ? pendingIdx : 0;
+    const targetLevel = matrixLevels[activeIdx];
+    const targetRole = targetLevel?.label || "Water Management";
+    const submitterName = userProfile.fullName || "PIC Proyek";
+
+    const historyRecord = {
+      id: `rec-temp-${Date.now()}`,
+      afceNumber: target.afceNumber,
+      matrixLevelId: targetLevel?.id,
+      approverName: submitterName,
+      approverRole: targetRole,
+      approverJabatan: targetRole,
+      action: "Submit" as const,
+      approvalDate: subDate,
+      timestamp: `${subDate} ${new Date().toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`,
+      note,
+      previousStatus: target.status,
+      newStatus: "Pending Approval" as AFCEStatus,
+      sapDocNumber: target.sapDocNumber,
+    };
+
+    setAfces((prev) =>
+      prev.map((a) =>
+        a.id === afceId
+          ? {
+              ...a,
+              submittedAt: a.submittedAt || subDate,
+              status: "Pending Approval",
+              currentLevel: activeIdx + 1,
+              requiredLevels: matrixLevels.length,
+              currentApproverRole: targetRole,
+              approvalMatrixLevels: matrixLevels,
+              history: [...a.history, historyRecord],
+            }
+          : a
+      )
+    );
+
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === target.projectId
+          ? {
+              ...p,
+              afceStatus: "Pending Approval",
+              approvalStatus: `Waiting Level ${activeIdx + 1}: ${targetRole} Approval`,
+              lastUpdated: subDate,
+            }
+          : p
+      )
+    );
+
+    try {
+      const res = await submitAfceApprovalAction(afceId, note, subDate);
+      if (!res.success) {
+        setAfces(previousAfces);
+        setProjects(previousProjects);
+        toast.error(res.error || "Gagal mengajukan dokumen AFCE.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      setAfces(previousAfces);
+      setProjects(previousProjects);
+      toast.error(formatErrorMessage(err, "Gagal mengajukan dokumen AFCE."));
+      return false;
+    }
+  };
+
+  const processAfceAction = async (
     afceId: string,
     action: "Approve" | "Revise" | "Reject",
     note: string,
@@ -1232,335 +1333,539 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     sapDocNumber?: string,
     sapEvidenceUrl?: string,
     targetLevelIndex?: number
-  ) => {
-    const actDate = approvalDate || new Date().toISOString().split("T")[0];
-    setAfces((prev) =>
-      prev.map((a) => {
-        if (a.id !== afceId) return a;
+  ): Promise<boolean> => {
+    const target = afces.find((a) => a.id === afceId);
+    if (!target) return false;
 
-        let nextStatus: AFCEStatus = a.status;
-        let nextLevel = a.currentLevel;
-        let nextRole = a.currentApproverRole;
+    const actDate = approvalDate || getTodayDateString();
+    const previousAfces = afces;
+    const previousProjects = projects;
 
-        const currentLevels: AFCEApprovalLevelItem[] = a.approvalMatrixLevels && a.approvalMatrixLevels.length > 0
-          ? a.approvalMatrixLevels.map((lvl) => ({ ...lvl }))
-          : [
-              {
-                id: `aml-${a.id}-1`,
-                level: 1,
-                code: "WM",
-                label: approverRole,
-                isRequired: true,
-                status: "Pending" as const,
-                approverJabatan: approverRole,
-              },
-            ];
+    let nextStatus: AFCEStatus = target.status;
+    let nextLevel = target.currentLevel;
+    let nextRole = target.currentApproverRole;
 
-        // Tentukan indeks level yang sedang diapprove
-        const currentIdx =
-          targetLevelIndex !== undefined && targetLevelIndex >= 0 && targetLevelIndex < currentLevels.length
-            ? targetLevelIndex
-            : Math.max(0, Math.min(a.currentLevel - 1, currentLevels.length - 1));
-
-        if (action === "Approve") {
-          if (currentLevels[currentIdx]) {
-            currentLevels[currentIdx] = {
-              ...currentLevels[currentIdx],
-              status: "Approved",
-              approverName,
+    const currentLevels: AFCEApprovalLevelItem[] =
+      target.approvalMatrixLevels && target.approvalMatrixLevels.length > 0
+        ? target.approvalMatrixLevels.map((lvl) => ({ ...lvl }))
+        : [
+            {
+              id: `aml-${target.id}-1`,
+              level: 1,
+              code: "WM",
+              label: approverRole,
+              isRequired: true,
+              status: "Pending" as const,
               approverJabatan: approverRole,
-              decidedAt: actDate,
-              note,
-              sapDocNumber: sapDocNumber || a.sapDocNumber,
-              sapEvidenceUrl: sapEvidenceUrl || currentLevels[currentIdx].sapEvidenceUrl,
-            };
-          }
+            },
+          ];
 
-          // Cek apakah seluruh level yang diwajibkan sudah approved
-          const remainingUnapproved = currentLevels.findIndex((l) => l.status !== "Approved");
-          if (remainingUnapproved === -1 || currentIdx >= currentLevels.length - 1) {
-            nextStatus = "Approved";
-            nextRole = approverRole;
-          } else {
-            nextLevel = remainingUnapproved + 1;
-            nextStatus = "Pending Approval";
-            currentLevels[remainingUnapproved] = {
-              ...currentLevels[remainingUnapproved],
-              status: "Pending",
-            };
-            nextRole = currentLevels[remainingUnapproved].label;
-          }
-        } else if (action === "Revise") {
-          nextStatus = "Need Revision";
-          if (currentLevels[currentIdx]) {
-            currentLevels[currentIdx] = {
-              ...currentLevels[currentIdx],
-              status: "Need Revision",
-              approverName,
-              approverJabatan: approverRole,
-              decidedAt: actDate,
-              note,
-            };
-          }
-        } else if (action === "Reject") {
-          nextStatus = "Rejected";
-          if (currentLevels[currentIdx]) {
-            currentLevels[currentIdx] = {
-              ...currentLevels[currentIdx],
-              status: "Rejected",
-              approverName,
-              approverJabatan: approverRole,
-              decidedAt: actDate,
-              note,
-            };
-          }
-        }
+    const currentIdx =
+      targetLevelIndex !== undefined &&
+      targetLevelIndex >= 0 &&
+      targetLevelIndex < currentLevels.length
+        ? targetLevelIndex
+        : Math.max(0, Math.min(target.currentLevel - 1, currentLevels.length - 1));
 
-        const historyRecord = {
-          id: `rec-${Date.now()}`,
-          afceNumber: a.afceNumber,
-          matrixLevelId: currentLevels[currentIdx]?.id,
+    if (action === "Approve") {
+      if (currentLevels[currentIdx]) {
+        currentLevels[currentIdx] = {
+          ...currentLevels[currentIdx],
+          status: "Approved",
           approverName,
-          approverRole,
           approverJabatan: approverRole,
-          action,
-          approvalDate: actDate,
-          timestamp: `${actDate} ${new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}`,
+          decidedAt: actDate,
           note,
-          previousStatus: a.status,
-          newStatus: nextStatus,
-          sapDocNumber: sapDocNumber || a.sapDocNumber,
-          sapEvidenceUrl,
+          sapDocNumber: sapDocNumber || target.sapDocNumber,
+          sapEvidenceUrl: sapEvidenceUrl || currentLevels[currentIdx].sapEvidenceUrl,
         };
-
-        const updated: AFCEDocument = {
-          ...a,
-          status: nextStatus,
-          currentLevel: nextLevel,
-          currentApproverRole: nextRole,
-          approvedAt: nextStatus === "Approved" ? actDate : a.approvedAt,
-          sapDocNumber: sapDocNumber || a.sapDocNumber,
-          approvalMatrixLevels: currentLevels,
-          history: [...a.history, historyRecord],
+      }
+      const remainingUnapproved = currentLevels.findIndex((l) => l.status !== "Approved");
+      if (remainingUnapproved === -1 || currentIdx >= currentLevels.length - 1) {
+        nextStatus = "Approved";
+        nextRole = approverRole;
+      } else {
+        nextLevel = remainingUnapproved + 1;
+        nextStatus = "Pending Approval";
+        currentLevels[remainingUnapproved] = {
+          ...currentLevels[remainingUnapproved],
+          status: "Pending",
         };
+        nextRole = currentLevels[remainingUnapproved].label;
+      }
+    } else if (action === "Revise") {
+      nextStatus = "Need Revision";
+      if (currentLevels[currentIdx]) {
+        currentLevels[currentIdx] = {
+          ...currentLevels[currentIdx],
+          status: "Need Revision",
+          approverName,
+          approverJabatan: approverRole,
+          decidedAt: actDate,
+          note,
+        };
+      }
+    } else {
+      nextStatus = "Rejected";
+      if (currentLevels[currentIdx]) {
+        currentLevels[currentIdx] = {
+          ...currentLevels[currentIdx],
+          status: "Rejected",
+          approverName,
+          approverJabatan: approverRole,
+          decidedAt: actDate,
+          note,
+        };
+      }
+    }
 
-        updateProject(a.projectId, {
-          afceStatus: nextStatus,
-          approvalStatus:
-            nextStatus === "Approved"
-              ? `Approved by ${approverRole}`
-              : nextStatus === "Need Revision"
-              ? `Needs Revision (${approverRole})`
-              : nextStatus === "Rejected"
-              ? `Rejected by ${approverRole}`
-              : `Waiting Level ${nextLevel}: ${nextRole} Approval`,
-          lastUpdated: actDate,
-        });
-
-        // Record Audit Log for approval action
-        addAuditLog({
-          action: action === "Approve" ? "APPROVE" : action === "Reject" ? "REJECT" : "UPDATE",
-          entityType: "AFCE",
-          entityId: a.id,
-          entityTitle: `${a.afceNumber} • Level ${currentIdx + 1} (${approverRole})`,
-          projectId: a.projectId,
-          projectName: a.projectName,
-          beforeData: { status: a.status, currentLevel: a.currentLevel },
-          afterData: { status: nextStatus, action, approver: approverName },
-          ipAddress: "10.20.4.15",
-          notes: `Pencatatan keputusan otorisasi SAP ${action} oleh ${approverName} (${approverRole})`,
-        });
-
-        return updated;
-      })
-    );
-    processAfceApprovalAction({
-      afceId,
-      action,
-      note,
+    const historyRecord = {
+      id: `rec-temp-${Date.now()}`,
+      afceNumber: target.afceNumber,
+      matrixLevelId: currentLevels[currentIdx]?.id,
       approverName,
       approverRole,
-      approverJabatan: approverRole || "Approver",
+      approverJabatan: approverRole,
+      action,
       approvalDate: actDate,
-      sapDocNumber,
+      timestamp: `${actDate} ${new Date().toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`,
+      note,
+      previousStatus: target.status,
+      newStatus: nextStatus,
+      sapDocNumber: sapDocNumber || target.sapDocNumber,
       sapEvidenceUrl,
-      targetLevelIndex,
-    }).catch((err) => console.warn("Sync DB error (processAfceApprovalAction):", err));
-  };
-
-  const createPr = (prData: Omit<PurchaseRequisition, "id" | "createdAt">) => {
-    const newPr: PurchaseRequisition = {
-      ...prData,
-      id: `pr-${Date.now()}`,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    setPrs((prev) => [newPr, ...prev]);
-    createPrAction(newPr).catch((err) => console.warn("Sync DB error (createPrAction):", err));
-  };
-
-  const recordVendorEvaluation = (
-    evaluationData: Omit<VendorEvaluation, "id" | "createdAt">
-  ) => {
-    const newEval: VendorEvaluation = {
-      ...evaluationData,
-      id: `ve-${Date.now()}`,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    setVendorEvaluations((prev) => [newEval, ...prev]);
-    recordVendorEvaluationAction(newEval).catch((err) => console.warn("Sync DB error (recordVendorEvaluationAction):", err));
-  };
-
-  const createPo = (poData: Omit<PurchaseOrder, "id" | "receiptProgressPercent">) => {
-    const totalItems = poData.items.reduce((acc, it) => acc + it.volume, 0);
-    const totalReceived = poData.items.reduce((acc, it) => acc + it.receivedVolume, 0);
-    const progress = totalItems > 0 ? Math.round((totalReceived / totalItems) * 100) : 0;
-
-    const newPo: PurchaseOrder = {
-      ...poData,
-      id: `po-${Date.now()}`,
-      receiptProgressPercent: progress,
     };
 
-    setPos((prev) => [newPo, ...prev]);
-    createPoAction(newPo).catch((err) => console.warn("Sync DB error (createPoAction):", err));
-
-    // Update PR linkedPoCount
-    setPrs((prev) =>
-      prev.map((pr) =>
-        pr.id === poData.relatedPrId ? { ...pr, linkedPoCount: pr.linkedPoCount + 1 } : pr
+    setAfces((prev) =>
+      prev.map((a) =>
+        a.id === afceId
+          ? {
+              ...a,
+              status: nextStatus,
+              currentLevel: nextLevel,
+              currentApproverRole: nextRole,
+              approvedAt: nextStatus === "Approved" ? actDate : a.approvedAt,
+              sapDocNumber: sapDocNumber || a.sapDocNumber,
+              approvalMatrixLevels: currentLevels,
+              history: [...a.history, historyRecord],
+            }
+          : a
       )
     );
-  };
 
-  const recordGoodsReceipt = (grData: Omit<GoodsReceipt, "id">) => {
-    const newGr: GoodsReceipt = {
-      ...grData,
-      id: `gr-${Date.now()}`,
-    };
-    setGrs((prev) => [newGr, ...prev]);
-    recordGoodsReceiptAction(newGr).catch((err) => console.warn("Sync DB error (recordGoodsReceiptAction):", err));
-
-    // Update PO item volumes and item status
-    setPos((prev) =>
-      prev.map((po) => {
-        if (po.id !== grData.poId) return po;
-
-        const updatedItems = po.items.map((it) => {
-          if (it.id !== grData.itemId) return it;
-          const newReceived = it.receivedVolume + grData.receivedVolume;
-          const newRemaining = Math.max(0, it.volume - newReceived);
-          const newStatus =
-            newRemaining === 0 ? "Received" : newReceived > 0 ? "Partially Received" : "Ordered";
-          return {
-            ...it,
-            receivedVolume: newReceived,
-            remainingVolume: newRemaining,
-            status: newStatus as any,
-          };
-        });
-
-        const totalVol = updatedItems.reduce((acc, it) => acc + it.volume, 0);
-        const recVol = updatedItems.reduce((acc, it) => acc + it.receivedVolume, 0);
-        const progress = totalVol > 0 ? Math.round((recVol / totalVol) * 100) : 0;
-
-        return {
-          ...po,
-          items: updatedItems,
-          receiptProgressPercent: progress,
-        };
-      })
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === target.projectId
+          ? {
+              ...p,
+              afceStatus: nextStatus,
+              approvalStatus:
+                nextStatus === "Approved"
+                  ? `Approved by ${approverRole}`
+                  : nextStatus === "Need Revision"
+                  ? `Needs Revision (${approverRole})`
+                  : nextStatus === "Rejected"
+                  ? `Rejected by ${approverRole}`
+                  : `Waiting Level ${nextLevel}: ${nextRole} Approval`,
+              lastUpdated: actDate,
+            }
+          : p
+      )
     );
-  };
 
-  const recordGoodsHandover = (
-    handoverData: Omit<GoodsHandover, "id" | "createdAt">
-  ) => {
-    const newHandover: GoodsHandover = {
-      ...handoverData,
-      id: `gh-${Date.now()}`,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    setGoodsHandovers((prev) => [newHandover, ...prev]);
-    recordGoodsHandoverAction(newHandover).catch((err) => console.warn("Sync DB error (recordGoodsHandoverAction):", err));
-
-    // If handover is COMPLETED and PO receipt is 100%, we can optionally mark PO as CLOSED
-    if (handoverData.status === "COMPLETED") {
-      setPos((prev) =>
-        prev.map((po) => {
-          if (po.id === handoverData.poId && po.receiptProgressPercent >= 100) {
-            return { ...po, status: "Closed" };
-          }
-          return po;
-        })
-      );
+    try {
+      const res = await processAfceApprovalAction({
+        afceId,
+        action,
+        note,
+        approverName,
+        approverRole,
+        approverJabatan: approverRole || "Approver",
+        approvalDate: actDate,
+        sapDocNumber,
+        sapEvidenceUrl,
+        targetLevelIndex,
+      });
+      if (!res.success) {
+        setAfces(previousAfces);
+        setProjects(previousProjects);
+        toast.error(res.error || "Gagal memproses persetujuan AFCE.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      setAfces(previousAfces);
+      setProjects(previousProjects);
+      toast.error(formatErrorMessage(err, "Gagal memproses persetujuan AFCE."));
+      return false;
     }
   };
 
-  const createUspk = (data: Omit<USPKItem, "id" | "createdAt">) => {
-    const newUspk: USPKItem = {
-      ...data,
-      id: `uspk-${Date.now()}`,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    setUspks((prev) => [newUspk, ...prev]);
-    createUspkAction(newUspk).catch((err) => console.warn("Sync DB error (createUspkAction):", err));
+  const softDeleteAfce = async (afceId: string): Promise<boolean> => {
+    try {
+      const res = await softDeleteAfceAction(afceId);
+      if (!res.success) {
+        toast.error(res.error || "Gagal mengarsipkan dokumen AFCE.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Dokumen AFCE berhasil diarsipkan.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mengarsipkan dokumen AFCE."));
+      return false;
+    }
   };
 
-  const updateUspkStatus = (id: string, status: USPKStatus, decidedAt?: string) => {
+  const restoreAfce = async (afceId: string): Promise<boolean> => {
+    try {
+      const res = await restoreAfceAction(afceId);
+      if (!res.success) {
+        toast.error(res.error || "Gagal memulihkan dokumen AFCE.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Dokumen AFCE berhasil dipulihkan.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal memulihkan dokumen AFCE."));
+      return false;
+    }
+  };
+
+  // =========================================================================
+  // Pengadaan Barang (PR, Evaluasi Rekanan, PO, GR, BAST)
+  // =========================================================================
+
+  const createPr = async (
+    prData: Omit<PurchaseRequisition, "id" | "createdAt">
+  ): Promise<boolean> => {
+    try {
+      const res = await createPrAction(prData);
+      if (!res.success) {
+        toast.error(res.error || "Gagal mencatat Purchase Requisition.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mencatat Purchase Requisition."));
+      return false;
+    }
+  };
+
+  const softDeletePr = async (prId: string): Promise<boolean> => {
+    try {
+      const res = await softDeletePrAction(prId);
+      if (!res.success) {
+        toast.error(res.error || "Gagal mengarsipkan Purchase Requisition.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Purchase Requisition berhasil diarsipkan.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mengarsipkan Purchase Requisition."));
+      return false;
+    }
+  };
+
+  const restorePr = async (prId: string): Promise<boolean> => {
+    try {
+      const res = await restorePrAction(prId);
+      if (!res.success) {
+        toast.error(res.error || "Gagal memulihkan Purchase Requisition.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Purchase Requisition berhasil dipulihkan.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal memulihkan Purchase Requisition."));
+      return false;
+    }
+  };
+
+  const recordVendorEvaluation = async (
+    evaluationData: Omit<VendorEvaluation, "id" | "createdAt">
+  ): Promise<boolean> => {
+    try {
+      const res = await recordVendorEvaluationAction(evaluationData);
+      if (!res.success) {
+        toast.error(res.error || "Gagal mencatat evaluasi rekanan.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mencatat evaluasi rekanan."));
+      return false;
+    }
+  };
+
+  const createPo = async (
+    poData: Omit<PurchaseOrder, "id" | "receiptProgressPercent">
+  ): Promise<boolean> => {
+    try {
+      const res = await createPoAction(poData);
+      if (!res.success) {
+        toast.error(res.error || "Gagal menerbitkan Purchase Order.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal menerbitkan Purchase Order."));
+      return false;
+    }
+  };
+
+  const softDeletePo = async (poId: string): Promise<boolean> => {
+    try {
+      const res = await softDeletePoAction(poId);
+      if (!res.success) {
+        toast.error(res.error || "Gagal mengarsipkan Purchase Order.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Purchase Order berhasil diarsipkan.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mengarsipkan Purchase Order."));
+      return false;
+    }
+  };
+
+  const restorePo = async (poId: string): Promise<boolean> => {
+    try {
+      const res = await restorePoAction(poId);
+      if (!res.success) {
+        toast.error(res.error || "Gagal memulihkan Purchase Order.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Purchase Order berhasil dipulihkan.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal memulihkan Purchase Order."));
+      return false;
+    }
+  };
+
+  const recordGoodsReceipt = async (grData: Omit<GoodsReceipt, "id">): Promise<boolean> => {
+    try {
+      const res = await recordGoodsReceiptAction(grData);
+      if (!res.success) {
+        toast.error(res.error || "Gagal mencatat penerimaan barang.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mencatat penerimaan barang."));
+      return false;
+    }
+  };
+
+  const recordGoodsHandover = async (
+    handoverData: Omit<GoodsHandover, "id" | "createdAt">
+  ): Promise<boolean> => {
+    try {
+      const res = await recordGoodsHandoverAction(handoverData);
+      if (!res.success) {
+        toast.error(res.error || "Gagal mencatat serah terima barang.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mencatat serah terima barang."));
+      return false;
+    }
+  };
+
+  // =========================================================================
+  // Pengadaan Jasa (USPK, Evaluasi Teknis, SPK)
+  // =========================================================================
+
+  const createUspk = async (data: Omit<USPKItem, "id" | "createdAt">): Promise<boolean> => {
+    try {
+      const res = await createUspkAction(data);
+      if (!res.success) {
+        toast.error(res.error || "Gagal mencatat Usulan SPK.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mencatat Usulan SPK."));
+      return false;
+    }
+  };
+
+  const updateUspkStatus = async (
+    id: string,
+    status: USPKStatus,
+    decidedAt?: string
+  ): Promise<boolean> => {
+    const previousUspks = uspks;
     setUspks((prev) =>
-      prev.map((u) => {
-        if (u.id !== id) return u;
-        return {
-          ...u,
-          status,
-          decidedAt: decidedAt || (status === "APPROVED" || status === "REJECTED" ? new Date().toISOString().split("T")[0] : u.decidedAt),
-        };
-      })
+      prev.map((u) =>
+        u.id === id
+          ? {
+              ...u,
+              status,
+              decidedAt:
+                decidedAt ||
+                (status === "APPROVED" || status === "REJECTED"
+                  ? getTodayDateString()
+                  : u.decidedAt),
+            }
+          : u
+      )
     );
-    updateUspkStatusAction(id, status, decidedAt).catch((err) => console.warn("Sync DB error (updateUspkStatusAction):", err));
+
+    try {
+      const res = await updateUspkStatusAction(id, status, decidedAt);
+      if (!res.success) {
+        setUspks(previousUspks);
+        toast.error(res.error || "Gagal memperbarui status USPK.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      setUspks(previousUspks);
+      toast.error(formatErrorMessage(err, "Gagal memperbarui status USPK."));
+      return false;
+    }
   };
 
-  const recordTechnicalEvaluation = (
+  const softDeleteUspk = async (uspkId: string): Promise<boolean> => {
+    try {
+      const res = await softDeleteUspkAction(uspkId);
+      if (!res.success) {
+        toast.error(res.error || "Gagal mengarsipkan USPK.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Usulan SPK berhasil diarsipkan.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mengarsipkan USPK."));
+      return false;
+    }
+  };
+
+  const restoreUspk = async (uspkId: string): Promise<boolean> => {
+    try {
+      const res = await restoreUspkAction(uspkId);
+      if (!res.success) {
+        toast.error(res.error || "Gagal memulihkan USPK.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Usulan SPK berhasil dipulihkan.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal memulihkan USPK."));
+      return false;
+    }
+  };
+
+  const recordTechnicalEvaluation = async (
     data: Omit<TechnicalEvaluation, "id" | "createdAt">
-  ) => {
-    const newEval: TechnicalEvaluation = {
-      ...data,
-      id: `te-${Date.now()}`,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    setTechnicalEvaluations((prev) => [newEval, ...prev]);
-    recordTechnicalEvaluationAction(newEval).catch((err) => console.warn("Sync DB error (recordTechnicalEvaluationAction):", err));
-
-    // Automatically synchronize USPK status according to evaluation recommendation
-    setUspks((prev) =>
-      prev.map((u) => {
-        if (u.id !== data.uspkId) return u;
-        const newStatus: USPKStatus = data.result === "RECOMMENDED" ? "APPROVED" : "REJECTED";
-        return {
-          ...u,
-          status: newStatus,
-          decidedAt: data.evaluationDate || new Date().toISOString().split("T")[0],
-        };
-      })
-    );
+  ): Promise<boolean> => {
+    try {
+      const res = await recordTechnicalEvaluationAction(data);
+      if (!res.success) {
+        toast.error(res.error || "Gagal mencatat evaluasi teknis.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mencatat evaluasi teknis."));
+      return false;
+    }
   };
 
-  const createSpkContract = (data: Omit<SPKContract, "id" | "createdAt">) => {
-    const newSpk: SPKContract = {
-      ...data,
-      id: `spk-${Date.now()}`,
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    setSpkContracts((prev) => [newSpk, ...prev]);
-    createSpkAction(newSpk).catch((err) => console.warn("Sync DB error (createSpkAction):", err));
+  const createSpkContract = async (
+    data: Omit<SPKContract, "id" | "createdAt">
+  ): Promise<boolean> => {
+    try {
+      const res = await createSpkAction(data);
+      if (!res.success) {
+        toast.error(res.error || "Gagal menerbitkan kontrak SPK.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal menerbitkan kontrak SPK."));
+      return false;
+    }
   };
 
-  const updateSpkStatus = (id: string, status: SPKStatus) => {
-    setSpkContracts((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, status } : s))
-    );
-    updateSpkStatusAction(id, status).catch((err) => console.warn("Sync DB error (updateSpkStatusAction):", err));
+  const updateSpkStatus = async (id: string, status: SPKStatus): Promise<boolean> => {
+    const previousSpks = spkContracts;
+    setSpkContracts((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)));
+
+    try {
+      const res = await updateSpkStatusAction(id, status);
+      if (!res.success) {
+        setSpkContracts(previousSpks);
+        toast.error(res.error || "Gagal memperbarui status SPK.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      setSpkContracts(previousSpks);
+      toast.error(formatErrorMessage(err, "Gagal memperbarui status SPK."));
+      return false;
+    }
   };
+
+  const softDeleteSpk = async (spkId: string): Promise<boolean> => {
+    try {
+      const res = await softDeleteSpkAction(spkId);
+      if (!res.success) {
+        toast.error(res.error || "Gagal mengarsipkan SPK.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Surat Perintah Kerja berhasil diarsipkan.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mengarsipkan SPK."));
+      return false;
+    }
+  };
+
+  const restoreSpk = async (spkId: string): Promise<boolean> => {
+    try {
+      const res = await restoreSpkAction(spkId);
+      if (!res.success) {
+        toast.error(res.error || "Gagal memulihkan SPK.");
+        return false;
+      }
+      await refreshFromDatabase();
+      toast.success("Surat Perintah Kerja berhasil dipulihkan.");
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal memulihkan SPK."));
+      return false;
+    }
+  };
+
+  // =========================================================================
+  // Progres Fisik
+  // =========================================================================
 
   const getSpkProgressSummary = (spkId: string) => {
     const spk = spkContracts.find((s) => s.id === spkId);
@@ -1581,1481 +1886,893 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
-  const addDailyProgress = (record: Omit<DailyProgressRecord, "id" | "recordedAt">) => {
-    const newRec: DailyProgressRecord = {
-      ...record,
-      id: `dp-${Date.now()}`,
-      recordedAt: new Date().toLocaleString("id-ID"),
-    };
-    setDailyProgress((prev) => [newRec, ...prev]);
-    addDailyProgressAction(record).catch((err) => console.warn("Sync DB error (addDailyProgressAction):", err));
-
-    // Update work item progress & recalculate project overall progress
-    setProjects((prev) =>
-      prev.map((p) => {
-        if (p.id !== record.projectId) return p;
-
-        const updatedWorkItems = p.workItems.map((wi) => {
-          if (wi.id !== record.workItemId) return wi;
-          return {
-            ...wi,
-            progress: record.progressPercent,
-            status: (record.progressPercent >= 100
-              ? "Completed"
-              : record.progressPercent > 0
-              ? "In Progress"
-              : "Planned") as any,
-          };
-        });
-
-        // Recalculate project progress: sum(progress * weight / 100)
-        const newOverallProgress = Math.min(
-          100,
-          Math.round(
-            updatedWorkItems.reduce(
-              (sum, wi) => sum + (wi.progress * (wi.weight || 0)) / 100,
-              0
-            )
-          )
-        );
-
-        return {
-          ...p,
-          workItems: updatedWorkItems,
-          progress: newOverallProgress,
-          status: newOverallProgress >= 100 ? "Completed" : "In Progress",
-          lastUpdated: new Date().toISOString().split("T")[0],
-        };
-      })
-    );
+  const addDailyProgress = async (
+    record: Omit<DailyProgressRecord, "id" | "recordedAt">
+  ): Promise<boolean> => {
+    try {
+      const res = await addDailyProgressAction(record);
+      if (!res.success) {
+        toast.error(res.error || "Gagal mencatat log progres harian.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mencatat log progres harian."));
+      return false;
+    }
   };
 
-  const addWeeklyProgress = (record: Omit<WeeklyProgressRecord, "id" | "recordedAt">) => {
-    const newRec: WeeklyProgressRecord = {
-      ...record,
-      id: `wp-${Date.now()}`,
-      recordedAt: new Date().toLocaleString("id-ID"),
-    };
-    setWeeklyProgress((prev) => [newRec, ...prev]);
-    addWeeklyProgressAction(record).catch((err) => console.warn("Sync DB error (addWeeklyProgressAction):", err));
-
-    setProjects((prev) =>
-      prev.map((p) => {
-        if (p.id !== record.projectId) return p;
-
-        const updatedWorkItems = p.workItems.map((wi) => {
-          if (wi.id !== record.workItemId) return wi;
-          return {
-            ...wi,
-            progress: record.actualProgress,
-            status: (record.actualProgress >= 100
-              ? "Completed"
-              : record.actualProgress > 0
-              ? "In Progress"
-              : "Planned") as any,
-          };
-        });
-
-        const newOverallProgress = Math.min(
-          100,
-          Math.round(
-            updatedWorkItems.reduce(
-              (sum, wi) => sum + (wi.progress * (wi.weight || 0)) / 100,
-              0
-            )
-          )
-        );
-
-        return {
-          ...p,
-          workItems: updatedWorkItems,
-          progress: newOverallProgress,
-          status: newOverallProgress >= 100 ? "Completed" : "In Progress",
-          lastUpdated: new Date().toISOString().split("T")[0],
-        };
-      })
-    );
+  const addWeeklyProgress = async (
+    record: Omit<WeeklyProgressRecord, "id" | "recordedAt">
+  ): Promise<boolean> => {
+    try {
+      const res = await addWeeklyProgressAction(record);
+      if (!res.success) {
+        toast.error(res.error || "Gagal mencatat evaluasi kurva-S mingguan.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mencatat evaluasi kurva-S mingguan."));
+      return false;
+    }
   };
 
-  // Comments & Attachments Handlers
-  const addComment = (
+  // =========================================================================
+  // Diskusi & Lampiran
+  // =========================================================================
+
+  const addComment = async (
     projectId: string,
     content: string,
     mentionedUserIds: string[],
     newAttachments?: ProjectAttachment[]
-  ) => {
-    const commentId = `cmt-${Date.now()}`;
-    const nowIso = new Date().toISOString();
+  ): Promise<ProjectComment | null> => {
+    try {
+      const attachmentsPayload = (newAttachments || []).map((att) => ({
+        source: att.source || ("UPLOAD" as const),
+        fileName: att.fileName,
+        fileUrl: att.fileUrl,
+        fileSize: att.fileSize || "",
+        mimeType: att.mimeType,
+        category: att.category || "Lampiran Diskusi",
+        docNumber: att.docNumber,
+        googleDriveFileId: att.googleDriveFileId,
+      }));
 
-    const createdComment: ProjectComment = {
-      id: commentId,
-      projectId,
-      userId: userProfile.username || "usr-1",
-      userName: userProfile.fullName,
-      userRole: userProfile.role,
-      content,
-      mentionedUserIds,
-      attachments: newAttachments || [],
-      createdAt: nowIso,
-    };
-
-    setComments((prev) => [createdComment, ...prev]);
-
-    // If there are attachments attached to this comment, register them in attachments state
-    if (newAttachments && newAttachments.length > 0) {
-      setAttachments((prev) => [...newAttachments, ...prev]);
-    }
-
-    addCommentAction({
-      projectId,
-      content,
-      mentionedUserIds,
-    }).catch((err) => console.warn("Sync DB error (addCommentAction):", err));
-
-    // Trigger toast & in-app notification if user was mentioned
-    if (mentionedUserIds.length > 0) {
-      const proj = projects.find((p) => p.id === projectId);
-      mentionedUserIds.forEach((uId) => {
-        const targetUser = users.find((u) => u.id === uId);
-        if (targetUser) {
-          addNotification({
-            userId: targetUser.id,
-            type: "NEW_TASK",
-            title: `Mention: Diskusi Proyek ${proj ? proj.code : ""}`,
-            message: `${userProfile.fullName} menyebut Anda: "${content.slice(0, 75)}${content.length > 75 ? "..." : ""}"`,
-            isRead: false,
-            linkUrl: `/workspace/${projectId}/comments`,
-            projectId: projectId,
-            projectCode: proj?.code,
-            projectName: proj?.name,
-            priority: "info",
-          });
-        }
+      const res = await addCommentAction({
+        projectId,
+        content,
+        mentionedUserIds,
+        attachments: attachmentsPayload.length > 0 ? attachmentsPayload : undefined,
       });
 
-      const mentionedNames = users
-        .filter((u) => mentionedUserIds.includes(u.id))
-        .map((u) => u.name)
-        .join(", ");
-      if (mentionedNames) {
-        toast.info(`Notifikasi mention terkirim ke: ${mentionedNames}`);
+      if (!res.success || !res.comment) {
+        toast.error(res.error || "Gagal mengirim komentar diskusi.");
+        return null;
       }
-    }
 
-    return createdComment;
+      if (mentionedUserIds.length > 0) {
+        const proj = projects.find((p) => p.id === projectId);
+        if (isAdmin) {
+          for (const uId of mentionedUserIds) {
+            const targetUser = users.find((u) => u.id === uId);
+            if (targetUser) {
+              await createNotificationAction({
+                userId: targetUser.id,
+                type: "NEW_TASK",
+                title: `Mention: Diskusi Proyek ${proj ? proj.code : ""}`,
+                message: `${userProfile.fullName} menyebut Anda: "${content.slice(0, 75)}${
+                  content.length > 75 ? "..." : ""
+                }"`,
+                linkUrl: `/workspace/${projectId}/comments`,
+                projectId,
+                projectCode: proj?.code,
+                projectName: proj?.name,
+                priority: "info",
+              });
+            }
+          }
+        }
+
+        const mentionedNames = users
+          .filter((u) => mentionedUserIds.includes(u.id))
+          .map((u) => u.name)
+          .join(", ");
+        if (mentionedNames) {
+          toast.info(`Mention tercatat untuk: ${mentionedNames}`);
+        }
+      }
+
+      await refreshFromDatabase();
+      return {
+        id: res.comment.id,
+        projectId: res.comment.projectId,
+        userId: res.comment.userId,
+        userName: res.comment.userName,
+        userRole: res.comment.userRole ?? undefined,
+        content: res.comment.content,
+        mentionedUserIds: Array.isArray(res.comment.mentionedUserIds)
+          ? (res.comment.mentionedUserIds as string[])
+          : mentionedUserIds,
+        attachments: newAttachments || [],
+        createdAt: new Date(res.comment.createdAt).toISOString(),
+      };
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal mengirim komentar diskusi."));
+      return null;
+    }
   };
 
-  const deleteComment = (commentId: string) => {
+  const deleteComment = async (commentId: string): Promise<boolean> => {
+    const previousComments = comments;
+    const previousAttachments = attachments;
     setComments((prev) => prev.filter((c) => c.id !== commentId));
     setAttachments((prev) => prev.filter((a) => a.commentId !== commentId));
-    deleteCommentAction(commentId).catch((err) => console.warn("Sync DB error (deleteCommentAction):", err));
+
+    try {
+      const res = await deleteCommentAction(commentId);
+      if (!res.success) {
+        setComments(previousComments);
+        setAttachments(previousAttachments);
+        toast.error(res.error || "Gagal menghapus komentar.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      setComments(previousComments);
+      setAttachments(previousAttachments);
+      toast.error(formatErrorMessage(err, "Gagal menghapus komentar."));
+      return false;
+    }
   };
 
-  const addAttachment = (
+  const addAttachment = async (
     attachmentData: Omit<ProjectAttachment, "id" | "uploadedAt">
-  ) => {
-    const newAtt: ProjectAttachment = {
-      ...attachmentData,
-      id: `att-${Date.now()}`,
-      uploadedAt: new Date().toISOString(),
-    };
-    setAttachments((prev) => [newAtt, ...prev]);
-    addAttachmentAction({
-      projectId: attachmentData.projectId,
-      commentId: attachmentData.commentId || undefined,
-      source: attachmentData.source || "UPLOAD",
-      fileName: attachmentData.fileName,
-      fileUrl: attachmentData.fileUrl,
-      fileSize: attachmentData.fileSize || undefined,
-      mimeType: attachmentData.mimeType || undefined,
-      category: attachmentData.category,
-      docNumber: attachmentData.docNumber,
-      googleDriveFileId: (attachmentData as any).googleDriveFileId || undefined,
-    }).catch((err) => console.warn("Sync DB error (addAttachmentAction):", err));
-    return newAtt;
+  ): Promise<ProjectAttachment | null> => {
+    try {
+      const res = await addAttachmentAction({
+        projectId: attachmentData.projectId,
+        commentId: attachmentData.commentId || undefined,
+        source: attachmentData.source || "UPLOAD",
+        fileName: attachmentData.fileName,
+        fileUrl: attachmentData.fileUrl,
+        fileSize: attachmentData.fileSize || "",
+        mimeType: attachmentData.mimeType || undefined,
+        category: attachmentData.category,
+        docNumber: attachmentData.docNumber,
+        googleDriveFileId: attachmentData.googleDriveFileId || undefined,
+      });
+
+      if (!res.success || !res.attachment) {
+        toast.error(res.error || "Gagal menyimpan lampiran.");
+        return null;
+      }
+
+      await refreshFromDatabase();
+      return {
+        ...attachmentData,
+        id: res.attachment.id,
+        uploadedAt: new Date(res.attachment.uploadedAt).toISOString(),
+      };
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal menyimpan lampiran."));
+      return null;
+    }
   };
 
-  const deleteAttachment = (attachmentId: string) => {
+  const deleteAttachment = async (attachmentId: string): Promise<boolean> => {
+    const previousAttachments = attachments;
     setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
-    deleteAttachmentAction(attachmentId).catch((err) => console.warn("Sync DB error (deleteAttachmentAction):", err));
+
+    try {
+      const res = await deleteAttachmentAction(attachmentId);
+      if (!res.success) {
+        setAttachments(previousAttachments);
+        toast.error(res.error || "Gagal menghapus lampiran.");
+        return false;
+      }
+      await refreshFromDatabase();
+      return true;
+    } catch (err) {
+      setAttachments(previousAttachments);
+      toast.error(formatErrorMessage(err, "Gagal menghapus lampiran."));
+      return false;
+    }
   };
 
-  // Notifications & Reminders Handlers (Gap #6 / F7)
+  // =========================================================================
+  // Notifikasi & Pengingat
+  // =========================================================================
+
   const unreadNotificationCount = notifications.filter((n) => !n.isRead).length;
 
-  const markNotificationAsRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-    );
-    markNotificationAsReadAction(id).catch((err) =>
-      console.warn("Sync DB error (markNotificationAsReadAction):", err)
-    );
+  const markNotificationAsRead = async (id: string) => {
+    const previous = notifications;
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    try {
+      const res = await markNotificationAsReadAction(id);
+      if (!res.success) {
+        setNotifications(previous);
+        toast.error(res.error || "Gagal memperbarui status notifikasi.");
+      }
+    } catch (err) {
+      setNotifications(previous);
+      toast.error(formatErrorMessage(err, "Gagal memperbarui status notifikasi."));
+    }
   };
 
-  const markAllNotificationsAsRead = () => {
+  const markAllNotificationsAsRead = async () => {
+    const previous = notifications;
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    toast.success("Semua notifikasi telah ditandai sebagai dibaca");
-    markAllNotificationsAsReadAction().catch((err) =>
-      console.warn("Sync DB error (markAllNotificationsAsReadAction):", err)
-    );
+    try {
+      const res = await markAllNotificationsAsReadAction();
+      if (!res.success) {
+        setNotifications(previous);
+        toast.error(res.error || "Gagal menandai semua notifikasi.");
+        return;
+      }
+      toast.success("Semua notifikasi telah ditandai sebagai dibaca.");
+    } catch (err) {
+      setNotifications(previous);
+      toast.error(formatErrorMessage(err, "Gagal menandai semua notifikasi."));
+    }
   };
 
-  const deleteNotification = (id: string) => {
+  const deleteNotification = async (id: string) => {
+    const previous = notifications;
     setNotifications((prev) => prev.filter((n) => n.id !== id));
-    toast.info("Notifikasi telah dihapus");
-    deleteNotificationAction(id).catch((err) =>
-      console.warn("Sync DB error (deleteNotificationAction):", err)
-    );
+    try {
+      const res = await deleteNotificationAction(id);
+      if (!res.success) {
+        setNotifications(previous);
+        toast.error(res.error || "Gagal menghapus notifikasi.");
+        return;
+      }
+      toast.info("Notifikasi telah dihapus.");
+    } catch (err) {
+      setNotifications(previous);
+      toast.error(formatErrorMessage(err, "Gagal menghapus notifikasi."));
+    }
   };
 
-  const clearAllNotifications = () => {
+  const clearAllNotifications = async () => {
+    const previous = notifications;
     setNotifications([]);
-    toast.info("Semua notifikasi telah dibersihkan");
-    clearAllNotificationsAction().catch((err) =>
-      console.warn("Sync DB error (clearAllNotificationsAction):", err)
-    );
+    try {
+      const res = await clearAllNotificationsAction();
+      if (!res.success) {
+        setNotifications(previous);
+        toast.error(res.error || "Gagal membersihkan notifikasi.");
+        return;
+      }
+      toast.info("Semua notifikasi telah dibersihkan.");
+    } catch (err) {
+      setNotifications(previous);
+      toast.error(formatErrorMessage(err, "Gagal membersihkan notifikasi."));
+    }
   };
 
-  const addNotification = (
+  const addNotification = async (
     item: Omit<NotificationItem, "id" | "createdAt">
-  ): NotificationItem => {
-    const newNotif: NotificationItem = {
-      ...item,
-      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      createdAt: new Date().toISOString(),
-    };
-    setNotifications((prev) => [newNotif, ...prev]);
-    createNotificationAction(newNotif).catch((err) =>
-      console.warn("Sync DB error (createNotificationAction):", err)
-    );
-    return newNotif;
+  ): Promise<NotificationItem | null> => {
+    try {
+      const res = await createNotificationAction(item);
+      if (!res.success || !res.notification) {
+        return null;
+      }
+      await refreshFromDatabase();
+      return {
+        ...item,
+        id: res.notification.id,
+        createdAt: new Date(res.notification.createdAt).toISOString(),
+      };
+    } catch {
+      return null;
+    }
   };
 
-  const updateNotificationSetting = (
+  const updateNotificationSetting = async (
     type: NotificationType,
     isEnabled: boolean
   ) => {
-    setNotificationSettings((prev) =>
-      prev.map((s) => (s.notificationType === type ? { ...s, isEnabled } : s))
+    const previous = notificationSettings;
+    setNotificationSettings((prev) => {
+      const exists = prev.some((s) => s.notificationType === type);
+      if (exists) {
+        return prev.map((s) =>
+          s.notificationType === type ? { ...s, isEnabled } : s
+        );
+      }
+      return [
+        ...prev,
+        {
+          id: `ns-temp-${type}`,
+          userId: activeUserId || "",
+          notificationType: type,
+          isEnabled,
+        },
+      ];
+    });
+
+    try {
+      const res = await updateNotificationSettingAction(type, isEnabled);
+      if (!res.success) {
+        setNotificationSettings(previous);
+        toast.error(res.error || "Gagal memperbarui pengaturan notifikasi.");
+        return;
+      }
+      toast.success("Pengaturan notifikasi berhasil diperbarui.");
+    } catch (err) {
+      setNotificationSettings(previous);
+      toast.error(formatErrorMessage(err, "Gagal memperbarui pengaturan notifikasi."));
+    }
+  };
+
+  const runCronDeadlineCheck = async () => {
+    try {
+      const response = await fetch("/api/cron/check-deadlines", { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        const errorMsg = payload?.error || "Gagal menjalankan pemeriksaan pengingat.";
+        toast.error(errorMsg);
+        return { success: false, generatedCount: 0, message: errorMsg };
+      }
+
+      const generatedCount = Number(payload.summary?.newNotificationsCreated || 0);
+      await refreshFromDatabase();
+
+      const msg =
+        generatedCount > 0
+          ? `Pemeriksaan selesai: ${generatedCount} pengingat baru dibuat.`
+          : "Pemeriksaan selesai: seluruh proyek & persetujuan sudah terpantau.";
+      if (generatedCount > 0) {
+        toast.success(msg);
+      } else {
+        toast.info(msg);
+      }
+      return { success: true, generatedCount, message: msg };
+    } catch (err) {
+      const errorMsg = formatErrorMessage(err, "Gagal menghubungi layanan pengingat server.");
+      toast.error(errorMsg);
+      return { success: false, generatedCount: 0, message: errorMsg };
+    }
+  };
+
+  // =========================================================================
+  // Master Data Helper Generik (bebas side-effect di dalam setState)
+  // =========================================================================
+
+  async function runAddMasterData<T extends { id: string; updatedAt: string }, R extends { success: boolean; error?: string }>(
+    listSetter: React.Dispatch<React.SetStateAction<T[]>>,
+    tempPrefix: string,
+    payload: Omit<T, "id" | "updatedAt">,
+    actionFn: (input: T) => Promise<R>,
+    extractRecord: (res: R) => { id: string; updatedAt?: string | Date } | undefined,
+    errorFallback: string
+  ): Promise<boolean> {
+    const tempId = `${tempPrefix}-${Date.now()}`;
+    const newItem = {
+      ...payload,
+      id: tempId,
+      updatedAt: getTodayDateString(),
+    } as T;
+
+    listSetter((prev) => [...prev, newItem]);
+    try {
+      const res = await actionFn(newItem);
+      const saved = res.success ? extractRecord(res) : undefined;
+      if (res.success && saved) {
+        listSetter((prev) =>
+          prev.map((item) =>
+            item.id === tempId
+              ? {
+                  ...item,
+                  id: saved.id,
+                  updatedAt: saved.updatedAt
+                    ? new Date(saved.updatedAt).toISOString().split("T")[0]
+                    : item.updatedAt,
+                }
+              : item
+          )
+        );
+        return true;
+      }
+      listSetter((prev) => prev.filter((item) => item.id !== tempId));
+      toast.error(res.error || errorFallback);
+      return false;
+    } catch (err) {
+      listSetter((prev) => prev.filter((item) => item.id !== tempId));
+      toast.error(formatErrorMessage(err, errorFallback));
+      return false;
+    }
+  }
+
+  async function runUpdateMasterData<T extends { id: string; updatedAt: string }, R extends { success: boolean; error?: string }>(
+    currentList: T[],
+    listSetter: React.Dispatch<React.SetStateAction<T[]>>,
+    id: string,
+    patch: Partial<T>,
+    actionFn: (id: string, patch: Partial<T>) => Promise<R>,
+    errorFallback: string
+  ): Promise<boolean> {
+    const original = currentList.find((item) => item.id === id);
+    listSetter((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, ...patch, updatedAt: getTodayDateString() } : item
+      )
     );
-    toast.success("Pengaturan notifikasi berhasil diperbarui");
-    updateNotificationSettingAction(type, isEnabled).catch((err) =>
-      console.warn("Sync DB error (updateNotificationSettingAction):", err)
+    try {
+      const res = await actionFn(id, patch);
+      if (!res.success) {
+        if (original) {
+          listSetter((prev) => prev.map((item) => (item.id === id ? original : item)));
+        }
+        toast.error(res.error || errorFallback);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      if (original) {
+        listSetter((prev) => prev.map((item) => (item.id === id ? original : item)));
+      }
+      toast.error(formatErrorMessage(err, errorFallback));
+      return false;
+    }
+  }
+
+  async function runDeleteMasterData<T extends { id: string }, R extends { success: boolean; error?: string }>(
+    currentList: T[],
+    listSetter: React.Dispatch<React.SetStateAction<T[]>>,
+    id: string,
+    actionFn: (id: string) => Promise<R>,
+    errorFallback: string
+  ): Promise<boolean> {
+    const original = currentList.find((item) => item.id === id);
+    listSetter((prev) => prev.filter((item) => item.id !== id));
+    try {
+      const res = await actionFn(id);
+      if (!res.success) {
+        if (original) {
+          listSetter((prev) => [...prev, original]);
+        }
+        toast.error(res.error || errorFallback);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      if (original) {
+        listSetter((prev) => [...prev, original]);
+      }
+      toast.error(formatErrorMessage(err, errorFallback));
+      return false;
+    }
+  }
+
+  const addMasterDataRegion = (reg: Omit<Region, "id" | "updatedAt">) =>
+    runAddMasterData(
+      setRegions,
+      "reg",
+      reg,
+      addMasterDataRegionAction,
+      (res) => res.region,
+      "Gagal menyimpan wilayah ke server"
     );
-  };
+  const updateMasterDataRegion = (id: string, reg: Partial<Region>) =>
+    runUpdateMasterData(
+      regions,
+      setRegions,
+      id,
+      reg,
+      updateMasterDataRegionAction,
+      "Gagal memperbarui data wilayah"
+    );
+  const deleteMasterDataRegion = (id: string) =>
+    runDeleteMasterData(
+      regions,
+      setRegions,
+      id,
+      deleteMasterDataRegionAction,
+      "Gagal menghapus wilayah"
+    );
 
-  const simulateCronReminderCheck = () => {
-    const newNotifs: NotificationItem[] = [];
-    const nowIso = new Date().toISOString();
+  const addMasterDataCompany = (cmp: Omit<Company, "id" | "updatedAt">) =>
+    runAddMasterData(
+      setCompanies,
+      "cmp",
+      cmp,
+      addMasterDataCompanyAction,
+      (res) => res.company,
+      "Gagal menyimpan perusahaan ke server"
+    );
+  const updateMasterDataCompany = (id: string, cmp: Partial<Company>) =>
+    runUpdateMasterData(
+      companies,
+      setCompanies,
+      id,
+      cmp,
+      updateMasterDataCompanyAction,
+      "Gagal memperbarui data perusahaan"
+    );
+  const deleteMasterDataCompany = (id: string) =>
+    runDeleteMasterData(
+      companies,
+      setCompanies,
+      id,
+      deleteMasterDataCompanyAction,
+      "Gagal menghapus perusahaan"
+    );
 
-    // 1. Check late projects (variance > 7 days or Critical)
-    const delayed = projects.filter((p) => p.scheduleVarianceDays > 7);
-    delayed.forEach((p) => {
-      const exists = notifications.some(
-        (n) => n.type === "LATE_PROJECT" && n.projectId === p.id && !n.isRead
-      );
-      if (!exists) {
-        newNotifs.push({
-          id: `notif-${Date.now()}-${p.id}`,
-          userId: "usr-1",
-          type: "LATE_PROJECT",
-          title: `Peringatan Keterlambatan: ${p.name}`,
-          message: `Proyek mengalami deviasi +${p.scheduleVarianceDays} hari dari baseline jadwal. Segera lakukan evaluasi adendum waktu.`,
-          isRead: false,
-          createdAt: nowIso,
-          linkUrl: `/workspace/${p.id}/schedule`,
-          projectId: p.id,
-          projectCode: p.code,
-          projectName: p.name,
-          priority: "critical",
-        });
-      }
-    });
+  const addMasterDataLocation = (loc: Omit<EstateLocation, "id" | "updatedAt">) =>
+    runAddMasterData(
+      setLocations,
+      "loc",
+      loc,
+      addMasterDataLocationAction,
+      (res) => res.location,
+      "Gagal menyimpan kebun ke server"
+    );
+  const updateMasterDataLocation = (id: string, loc: Partial<EstateLocation>) =>
+    runUpdateMasterData(
+      locations,
+      setLocations,
+      id,
+      loc,
+      updateMasterDataLocationAction,
+      "Gagal memperbarui data kebun"
+    );
+  const deleteMasterDataLocation = (id: string) =>
+    runDeleteMasterData(
+      locations,
+      setLocations,
+      id,
+      deleteMasterDataLocationAction,
+      "Gagal menghapus kebun"
+    );
 
-    // 2. Check pending AFCE approvals
-    const pendingAfceList = afces.filter((a) => a.status === "Pending Approval");
-    pendingAfceList.forEach((a) => {
-      const exists = notifications.some(
-        (n) => n.type === "PENDING_APPROVAL" && n.projectId === a.projectId && !n.isRead
-      );
-      if (!exists) {
-        newNotifs.push({
-          id: `notif-${Date.now()}-${a.id}`,
-          userId: "usr-1",
-          type: "PENDING_APPROVAL",
-          title: `Approval AFCE Tertunda: ${a.afceNumber}`,
-          message: `Dokumen AFCE untuk ${a.projectName} menunggu persetujuan pada tingkat ${a.currentApproverRole}.`,
-          isRead: false,
-          createdAt: nowIso,
-          linkUrl: `/workspace/${a.projectId}/afce`,
-          projectId: a.projectId,
-          projectCode: a.afceNumber,
-          projectName: a.projectName,
-          priority: "warning",
-        });
-      }
-    });
+  const addMasterDataBlock = (blk: Omit<EstateBlock, "id" | "updatedAt">) =>
+    runAddMasterData(
+      setBlocks,
+      "blk",
+      blk,
+      addMasterDataBlockAction,
+      (res) => res.block,
+      "Gagal menyimpan blok kebun ke server"
+    );
+  const updateMasterDataBlock = (id: string, blk: Partial<EstateBlock>) =>
+    runUpdateMasterData(
+      blocks,
+      setBlocks,
+      id,
+      blk,
+      updateMasterDataBlockAction,
+      "Gagal memperbarui data blok kebun"
+    );
+  const deleteMasterDataBlock = (id: string) =>
+    runDeleteMasterData(
+      blocks,
+      setBlocks,
+      id,
+      deleteMasterDataBlockAction,
+      "Gagal menghapus blok kebun"
+    );
 
-    if (newNotifs.length > 0) {
-      setNotifications((prev) => [...newNotifs, ...prev]);
-      toast.success(`Simulasi Cron: Ditemukan ${newNotifs.length} reminder & peringatan baru!`);
-    } else {
-      toast.info("Simulasi Cron: Semua jadwal & persetujuan sudah terpantau, tidak ada reminder baru.");
-    }
+  const addMasterDataMaterial = (mat: Omit<MaterialCatalogItem, "id" | "updatedAt">) =>
+    runAddMasterData(
+      setMaterials,
+      "mat",
+      mat,
+      addMasterDataMaterialAction,
+      (res) => res.material,
+      "Gagal menyimpan katalog material ke server"
+    );
+  const updateMasterDataMaterial = (id: string, mat: Partial<MaterialCatalogItem>) =>
+    runUpdateMasterData(
+      materials,
+      setMaterials,
+      id,
+      mat,
+      updateMasterDataMaterialAction,
+      "Gagal memperbarui katalog material"
+    );
+  const deleteMasterDataMaterial = (id: string) =>
+    runDeleteMasterData(
+      materials,
+      setMaterials,
+      id,
+      deleteMasterDataMaterialAction,
+      "Gagal menghapus item material"
+    );
 
-    return { generatedCount: newNotifs.length };
-  };
+  const addMasterDataSupplier = (sup: Omit<Supplier, "id" | "updatedAt">) =>
+    runAddMasterData(
+      setSuppliers,
+      "sup",
+      sup,
+      addMasterDataSupplierAction,
+      (res) => res.supplier,
+      "Gagal menyimpan rekanan/vendor ke server"
+    );
+  const updateMasterDataSupplier = (id: string, sup: Partial<Supplier>) =>
+    runUpdateMasterData(
+      suppliers,
+      setSuppliers,
+      id,
+      sup,
+      updateMasterDataSupplierAction,
+      "Gagal memperbarui data rekanan/vendor"
+    );
+  const deleteMasterDataSupplier = (id: string) =>
+    runDeleteMasterData(
+      suppliers,
+      setSuppliers,
+      id,
+      deleteMasterDataSupplierAction,
+      "Gagal menghapus rekanan/vendor"
+    );
 
-  // Add immutable Audit Log entry (Gap #7 / docs/DATA-MODEL.md & docs/PRD.md F10)
-  const addAuditLog = (
-    logData: Omit<AuditLog, "id" | "createdAt" | "userId" | "userName" | "ipAddress"> & {
-      id?: string;
-      createdAt?: string;
-      userId?: string;
-      userName?: string;
-      ipAddress?: string;
-    }
-  ): AuditLog => {
-    const newLog: AuditLog = {
-      id: logData.id || `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
-      userId: logData.userId || "usr-1",
-      userName: logData.userName || userProfile.fullName || "Budi Santoso, S.T.",
-      userRole: logData.userRole || userProfile.role || "PIC",
-      userJabatan: logData.userJabatan || "Manager Estate",
-      action: logData.action,
-      entityType: logData.entityType,
-      entityId: logData.entityId,
-      entityTitle: logData.entityTitle || `${logData.entityType} ${logData.entityId}`,
-      projectId: logData.projectId,
-      projectName: logData.projectName,
-      beforeData: logData.beforeData || null,
-      afterData: logData.afterData || null,
-      ipAddress: logData.ipAddress || "10.20.4.15",
-      userAgent: typeof window !== "undefined" ? window.navigator.userAgent : "Mozilla/5.0",
-      createdAt: logData.createdAt || new Date().toISOString(),
-      notes: logData.notes || "",
-    };
-    setAuditLogs((prev) => [newLog, ...prev]);
-    return newLog;
-  };
-
-  // Master Data Mutators
-  const addMasterDataRegion = async (reg: Omit<Region, "id" | "updatedAt">): Promise<boolean> => {
-    const tempId = `reg-${Date.now()}`;
-    const newReg: Region = {
-      ...reg,
-      id: tempId,
-      updatedAt: new Date().toISOString().split("T")[0],
-    };
-    setRegions((prev) => [...prev, newReg]);
-
-    try {
-      const res = await addMasterDataRegionAction(newReg);
-      if (res.success && res.region) {
-        setRegions((prev) =>
-          prev.map((r) =>
-            r.id === tempId
-              ? {
-                  ...r,
-                  id: res.region.id,
-                  updatedAt: res.region.updatedAt
-                    ? new Date(res.region.updatedAt).toISOString().split("T")[0]
-                    : r.updatedAt,
-                }
-              : r
-          )
-        );
-        return true;
-      } else {
-        setRegions((prev) => prev.filter((r) => r.id !== tempId));
-        toast.error(res.error || "Gagal menyimpan wilayah ke server");
-        return false;
-      }
-    } catch (err: any) {
-      setRegions((prev) => prev.filter((r) => r.id !== tempId));
-      toast.error(err.message || "Gagal menyimpan wilayah ke server");
-      return false;
-    }
-  };
-
-  const updateMasterDataRegion = async (id: string, reg: Partial<Region>): Promise<boolean> => {
-    let original: Region | undefined;
-    setRegions((prev) => {
-      original = prev.find((r) => r.id === id);
-      return prev.map((r) =>
-        r.id === id
-          ? { ...r, ...reg, updatedAt: new Date().toISOString().split("T")[0] }
-          : r
-      );
-    });
-
-    try {
-      const res = await updateMasterDataRegionAction(id, reg);
-      if (!res.success) {
-        if (original) {
-          setRegions((prev) => prev.map((r) => (r.id === id ? original! : r)));
-        }
-        toast.error(res.error || "Gagal memperbarui data wilayah");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setRegions((prev) => prev.map((r) => (r.id === id ? original! : r)));
-      }
-      toast.error(err.message || "Gagal memperbarui data wilayah");
-      return false;
-    }
-  };
-
-  const deleteMasterDataRegion = async (id: string): Promise<boolean> => {
-    let original: Region | undefined;
-    setRegions((prev) => {
-      original = prev.find((r) => r.id === id);
-      return prev.filter((r) => r.id !== id);
-    });
-
-    try {
-      const res = await deleteMasterDataRegionAction(id);
-      if (!res.success) {
-        if (original) {
-          setRegions((prev) => [...prev, original!]);
-        }
-        toast.error(res.error || "Gagal menghapus wilayah");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setRegions((prev) => [...prev, original!]);
-      }
-      toast.error(err.message || "Gagal menghapus wilayah");
-      return false;
-    }
-  };
-
-  const addMasterDataCompany = async (cmp: Omit<Company, "id" | "updatedAt">): Promise<boolean> => {
-    const tempId = `cmp-${Date.now()}`;
-    const newCmp: Company = {
-      ...cmp,
-      id: tempId,
-      updatedAt: new Date().toISOString().split("T")[0],
-    };
-    setCompanies((prev) => [...prev, newCmp]);
-
-    try {
-      const res = await addMasterDataCompanyAction(newCmp);
-      if (res.success && res.company) {
-        setCompanies((prev) =>
-          prev.map((c) =>
-            c.id === tempId
-              ? {
-                  ...c,
-                  id: res.company.id,
-                  updatedAt: res.company.updatedAt
-                    ? new Date(res.company.updatedAt).toISOString().split("T")[0]
-                    : c.updatedAt,
-                }
-              : c
-          )
-        );
-        return true;
-      } else {
-        setCompanies((prev) => prev.filter((c) => c.id !== tempId));
-        toast.error(res.error || "Gagal menyimpan perusahaan ke server");
-        return false;
-      }
-    } catch (err: any) {
-      setCompanies((prev) => prev.filter((c) => c.id !== tempId));
-      toast.error(err.message || "Gagal menyimpan perusahaan ke server");
-      return false;
-    }
-  };
-
-  const updateMasterDataCompany = async (id: string, cmp: Partial<Company>): Promise<boolean> => {
-    let original: Company | undefined;
-    setCompanies((prev) => {
-      original = prev.find((c) => c.id === id);
-      return prev.map((c) =>
-        c.id === id
-          ? { ...c, ...cmp, updatedAt: new Date().toISOString().split("T")[0] }
-          : c
-      );
-    });
-
-    try {
-      const res = await updateMasterDataCompanyAction(id, cmp);
-      if (!res.success) {
-        if (original) {
-          setCompanies((prev) => prev.map((c) => (c.id === id ? original! : c)));
-        }
-        toast.error(res.error || "Gagal memperbarui data perusahaan");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setCompanies((prev) => prev.map((c) => (c.id === id ? original! : c)));
-      }
-      toast.error(err.message || "Gagal memperbarui data perusahaan");
-      return false;
-    }
-  };
-
-  const deleteMasterDataCompany = async (id: string): Promise<boolean> => {
-    let original: Company | undefined;
-    setCompanies((prev) => {
-      original = prev.find((c) => c.id === id);
-      return prev.filter((c) => c.id !== id);
-    });
-
-    try {
-      const res = await deleteMasterDataCompanyAction(id);
-      if (!res.success) {
-        if (original) {
-          setCompanies((prev) => [...prev, original!]);
-        }
-        toast.error(res.error || "Gagal menghapus perusahaan");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setCompanies((prev) => [...prev, original!]);
-      }
-      toast.error(err.message || "Gagal menghapus perusahaan");
-      return false;
-    }
-  };
-
-  const addMasterDataLocation = async (loc: Omit<EstateLocation, "id" | "updatedAt">): Promise<boolean> => {
-    const tempId = `loc-${Date.now()}`;
-    const newLoc: EstateLocation = {
-      ...loc,
-      id: tempId,
-      updatedAt: new Date().toISOString().split("T")[0],
-    };
-    setLocations((prev) => [...prev, newLoc]);
-
-    try {
-      const res = await addMasterDataLocationAction(newLoc);
-      if (res.success && res.location) {
-        setLocations((prev) =>
-          prev.map((l) =>
-            l.id === tempId
-              ? {
-                  ...l,
-                  id: res.location.id,
-                  updatedAt: res.location.updatedAt
-                    ? new Date(res.location.updatedAt).toISOString().split("T")[0]
-                    : l.updatedAt,
-                }
-              : l
-          )
-        );
-        return true;
-      } else {
-        setLocations((prev) => prev.filter((l) => l.id !== tempId));
-        toast.error(res.error || "Gagal menyimpan kebun ke server");
-        return false;
-      }
-    } catch (err: any) {
-      setLocations((prev) => prev.filter((l) => l.id !== tempId));
-      toast.error(err.message || "Gagal menyimpan kebun ke server");
-      return false;
-    }
-  };
-
-  const updateMasterDataLocation = async (id: string, loc: Partial<EstateLocation>): Promise<boolean> => {
-    let original: EstateLocation | undefined;
-    setLocations((prev) => {
-      original = prev.find((l) => l.id === id);
-      return prev.map((l) =>
-        l.id === id
-          ? { ...l, ...loc, updatedAt: new Date().toISOString().split("T")[0] }
-          : l
-      );
-    });
-
-    try {
-      const res = await updateMasterDataLocationAction(id, loc);
-      if (!res.success) {
-        if (original) {
-          setLocations((prev) => prev.map((l) => (l.id === id ? original! : l)));
-        }
-        toast.error(res.error || "Gagal memperbarui data kebun");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setLocations((prev) => prev.map((l) => (l.id === id ? original! : l)));
-      }
-      toast.error(err.message || "Gagal memperbarui data kebun");
-      return false;
-    }
-  };
-
-  const deleteMasterDataLocation = async (id: string): Promise<boolean> => {
-    let original: EstateLocation | undefined;
-    setLocations((prev) => {
-      original = prev.find((l) => l.id === id);
-      return prev.filter((l) => l.id !== id);
-    });
-
-    try {
-      const res = await deleteMasterDataLocationAction(id);
-      if (!res.success) {
-        if (original) {
-          setLocations((prev) => [...prev, original!]);
-        }
-        toast.error(res.error || "Gagal menghapus kebun");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setLocations((prev) => [...prev, original!]);
-      }
-      toast.error(err.message || "Gagal menghapus kebun");
-      return false;
-    }
-  };
-
-  const addMasterDataBlock = async (blk: Omit<EstateBlock, "id" | "updatedAt">): Promise<boolean> => {
-    const tempId = `blk-${Date.now()}`;
-    const newBlk: EstateBlock = {
-      ...blk,
-      id: tempId,
-      updatedAt: new Date().toISOString().split("T")[0],
-    };
-    setBlocks((prev) => [...prev, newBlk]);
-
-    try {
-      const res = await addMasterDataBlockAction(newBlk);
-      if (res.success && res.block) {
-        setBlocks((prev) =>
-          prev.map((b) =>
-            b.id === tempId
-              ? {
-                  ...b,
-                  id: res.block.id,
-                  updatedAt: res.block.updatedAt
-                    ? new Date(res.block.updatedAt).toISOString().split("T")[0]
-                    : b.updatedAt,
-                }
-              : b
-          )
-        );
-        return true;
-      } else {
-        setBlocks((prev) => prev.filter((b) => b.id !== tempId));
-        toast.error(res.error || "Gagal menyimpan blok ke server");
-        return false;
-      }
-    } catch (err: any) {
-      setBlocks((prev) => prev.filter((b) => b.id !== tempId));
-      toast.error(err.message || "Gagal menyimpan blok ke server");
-      return false;
-    }
-  };
-
-  const updateMasterDataBlock = async (id: string, blk: Partial<EstateBlock>): Promise<boolean> => {
-    let original: EstateBlock | undefined;
-    setBlocks((prev) => {
-      original = prev.find((b) => b.id === id);
-      return prev.map((b) =>
-        b.id === id
-          ? { ...b, ...blk, updatedAt: new Date().toISOString().split("T")[0] }
-          : b
-      );
-    });
-
-    try {
-      const res = await updateMasterDataBlockAction(id, blk);
-      if (!res.success) {
-        if (original) {
-          setBlocks((prev) => prev.map((b) => (b.id === id ? original! : b)));
-        }
-        toast.error(res.error || "Gagal memperbarui data blok");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setBlocks((prev) => prev.map((b) => (b.id === id ? original! : b)));
-      }
-      toast.error(err.message || "Gagal memperbarui data blok");
-      return false;
-    }
-  };
-
-  const deleteMasterDataBlock = async (id: string): Promise<boolean> => {
-    let original: EstateBlock | undefined;
-    setBlocks((prev) => {
-      original = prev.find((b) => b.id === id);
-      return prev.filter((b) => b.id !== id);
-    });
-
-    try {
-      const res = await deleteMasterDataBlockAction(id);
-      if (!res.success) {
-        if (original) {
-          setBlocks((prev) => [...prev, original!]);
-        }
-        toast.error(res.error || "Gagal menghapus blok");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setBlocks((prev) => [...prev, original!]);
-      }
-      toast.error(err.message || "Gagal menghapus blok");
-      return false;
-    }
-  };
-
-  const addMasterDataMaterial = async (mat: Omit<MaterialCatalogItem, "id" | "updatedAt">): Promise<boolean> => {
-    const tempId = `mat-${Date.now()}`;
-    const newMat: MaterialCatalogItem = {
-      ...mat,
-      id: tempId,
-      updatedAt: new Date().toISOString().split("T")[0],
-    };
-    setMaterials((prev) => [...prev, newMat]);
-
-    try {
-      const res = await addMasterDataMaterialAction(newMat);
-      if (res.success && res.material) {
-        setMaterials((prev) =>
-          prev.map((m) =>
-            m.id === tempId
-              ? {
-                  ...m,
-                  id: res.material.id,
-                  updatedAt: res.material.updatedAt
-                    ? new Date(res.material.updatedAt).toISOString().split("T")[0]
-                    : m.updatedAt,
-                }
-              : m
-          )
-        );
-        return true;
-      } else {
-        setMaterials((prev) => prev.filter((m) => m.id !== tempId));
-        toast.error(res.error || "Gagal menyimpan material ke server");
-        return false;
-      }
-    } catch (err: any) {
-      setMaterials((prev) => prev.filter((m) => m.id !== tempId));
-      toast.error(err.message || "Gagal menyimpan material ke server");
-      return false;
-    }
-  };
-
-  const updateMasterDataMaterial = async (id: string, mat: Partial<MaterialCatalogItem>): Promise<boolean> => {
-    let original: MaterialCatalogItem | undefined;
-    setMaterials((prev) => {
-      original = prev.find((m) => m.id === id);
-      return prev.map((m) =>
-        m.id === id
-          ? { ...m, ...mat, updatedAt: new Date().toISOString().split("T")[0] }
-          : m
-      );
-    });
-
-    try {
-      const res = await updateMasterDataMaterialAction(id, mat);
-      if (!res.success) {
-        if (original) {
-          setMaterials((prev) => prev.map((m) => (m.id === id ? original! : m)));
-        }
-        toast.error(res.error || "Gagal memperbarui data material");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setMaterials((prev) => prev.map((m) => (m.id === id ? original! : m)));
-      }
-      toast.error(err.message || "Gagal memperbarui data material");
-      return false;
-    }
-  };
-
-  const deleteMasterDataMaterial = async (id: string): Promise<boolean> => {
-    let original: MaterialCatalogItem | undefined;
-    setMaterials((prev) => {
-      original = prev.find((m) => m.id === id);
-      return prev.filter((m) => m.id !== id);
-    });
-
-    try {
-      const res = await deleteMasterDataMaterialAction(id);
-      if (!res.success) {
-        if (original) {
-          setMaterials((prev) => [...prev, original!]);
-        }
-        toast.error(res.error || "Gagal menghapus material");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setMaterials((prev) => [...prev, original!]);
-      }
-      toast.error(err.message || "Gagal menghapus material");
-      return false;
-    }
-  };
-
-  const addMasterDataSupplier = async (sup: Omit<Supplier, "id" | "updatedAt">): Promise<boolean> => {
-    const tempId = `sup-${Date.now()}`;
-    const newSup: Supplier = {
-      ...sup,
-      id: tempId,
-      updatedAt: new Date().toISOString().split("T")[0],
-    };
-    setSuppliers((prev) => [...prev, newSup]);
-
-    try {
-      const res = await addMasterDataSupplierAction(newSup);
-      if (res.success && res.supplier) {
-        setSuppliers((prev) =>
-          prev.map((s) =>
-            s.id === tempId
-              ? {
-                  ...s,
-                  id: res.supplier.id,
-                  updatedAt: res.supplier.updatedAt
-                    ? new Date(res.supplier.updatedAt).toISOString().split("T")[0]
-                    : s.updatedAt,
-                }
-              : s
-          )
-        );
-        return true;
-      } else {
-        setSuppliers((prev) => prev.filter((s) => s.id !== tempId));
-        toast.error(res.error || "Gagal menyimpan rekanan ke server");
-        return false;
-      }
-    } catch (err: any) {
-      setSuppliers((prev) => prev.filter((s) => s.id !== tempId));
-      toast.error(err.message || "Gagal menyimpan rekanan ke server");
-      return false;
-    }
-  };
-
-  const updateMasterDataSupplier = async (id: string, sup: Partial<Supplier>): Promise<boolean> => {
-    let original: Supplier | undefined;
-    setSuppliers((prev) => {
-      original = prev.find((s) => s.id === id);
-      return prev.map((s) =>
-        s.id === id
-          ? { ...s, ...sup, updatedAt: new Date().toISOString().split("T")[0] }
-          : s
-      );
-    });
-
-    try {
-      const res = await updateMasterDataSupplierAction(id, sup);
-      if (!res.success) {
-        if (original) {
-          setSuppliers((prev) => prev.map((s) => (s.id === id ? original! : s)));
-        }
-        toast.error(res.error || "Gagal memperbarui data rekanan");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setSuppliers((prev) => prev.map((s) => (s.id === id ? original! : s)));
-      }
-      toast.error(err.message || "Gagal memperbarui data rekanan");
-      return false;
-    }
-  };
-
-  const deleteMasterDataSupplier = async (id: string): Promise<boolean> => {
-    let original: Supplier | undefined;
-    setSuppliers((prev) => {
-      original = prev.find((s) => s.id === id);
-      return prev.filter((s) => s.id !== id);
-    });
-
-    try {
-      const res = await deleteMasterDataSupplierAction(id);
-      if (!res.success) {
-        if (original) {
-          setSuppliers((prev) => [...prev, original!]);
-        }
-        toast.error(res.error || "Gagal menghapus rekanan");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setSuppliers((prev) => [...prev, original!]);
-      }
-      toast.error(err.message || "Gagal menghapus rekanan");
-      return false;
-    }
-  };
-
-  const addMasterDataUser = async (user: Omit<AppUser, "id" | "updatedAt">): Promise<boolean> => {
-    const tempId = `usr-${Date.now()}`;
-    const newUser: AppUser = {
-      ...user,
-      id: tempId,
-      updatedAt: new Date().toISOString().split("T")[0],
-    };
-    setUsers((prev) => [...prev, newUser]);
-
-    try {
-      const res = await addMasterDataUserAction(newUser);
-      if (res.success && res.user) {
-        setUsers((prev) =>
-          prev.map((u) =>
-            u.id === tempId
-              ? {
-                  ...u,
-                  id: res.user.id,
-                  updatedAt: res.user.updatedAt
-                    ? new Date(res.user.updatedAt).toISOString().split("T")[0]
-                    : u.updatedAt,
-                }
-              : u
-          )
-        );
-        return true;
-      } else {
-        setUsers((prev) => prev.filter((u) => u.id !== tempId));
-        toast.error(res.error || "Gagal menyimpan pengguna ke server");
-        return false;
-      }
-    } catch (err: any) {
-      setUsers((prev) => prev.filter((u) => u.id !== tempId));
-      toast.error(err.message || "Gagal menyimpan pengguna ke server");
-      return false;
-    }
-  };
-
-  const updateMasterDataUser = async (id: string, user: Partial<AppUser>): Promise<boolean> => {
-    let original: AppUser | undefined;
-    setUsers((prev) => {
-      original = prev.find((u) => u.id === id);
-      return prev.map((u) =>
-        u.id === id
-          ? { ...u, ...user, updatedAt: new Date().toISOString().split("T")[0] }
-          : u
-      );
-    });
-
-    try {
-      const res = await updateMasterDataUserAction(id, user);
-      if (!res.success) {
-        if (original) {
-          setUsers((prev) => prev.map((u) => (u.id === id ? original! : u)));
-        }
-        toast.error(res.error || "Gagal memperbarui data pengguna");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setUsers((prev) => prev.map((u) => (u.id === id ? original! : u)));
-      }
-      toast.error(err.message || "Gagal memperbarui data pengguna");
-      return false;
-    }
-  };
+  const addMasterDataUser = (user: Omit<AppUser, "id" | "updatedAt">) =>
+    runAddMasterData(
+      setUsers,
+      "usr",
+      user,
+      addMasterDataUserAction,
+      (res) => res.user,
+      "Gagal menyimpan pengguna ke server"
+    );
+  const updateMasterDataUser = (id: string, user: Partial<AppUser>) =>
+    runUpdateMasterData(
+      users,
+      setUsers,
+      id,
+      user,
+      updateMasterDataUserAction,
+      "Gagal memperbarui data pengguna"
+    );
 
   const deleteMasterDataUser = async (id: string): Promise<boolean> => {
-    let original: AppUser | undefined;
-    setUsers((prev) => {
-      original = prev.find((u) => u.id === id);
-      return prev.filter((u) => u.id !== id);
-    });
+    const original = users.find((u) => u.id === id);
+    setUsers((prev) => prev.filter((u) => u.id !== id));
 
     try {
       const res = await deleteMasterDataUserAction(id);
       if (!res.success) {
         if (original) {
-          setUsers((prev) => [...prev, original!]);
+          setUsers((prev) => [...prev, original]);
         }
         toast.error(res.error || "Gagal menghapus pengguna");
         return false;
       }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setUsers((prev) => [...prev, original!]);
-      }
-      toast.error(err.message || "Gagal menghapus pengguna");
-      return false;
-    }
-  };
 
-  const addApprovalMatrixRule = async (rule: Omit<ApprovalMatrixRule, "id" | "updatedAt">): Promise<boolean> => {
-    const tempId = `rule-${Date.now()}`;
-    const newRule: ApprovalMatrixRule = {
-      ...rule,
-      id: tempId,
-      updatedAt: new Date().toISOString().split("T")[0],
-    };
-    setApprovalMatrix((prev) => [...prev, newRule]);
-
-    try {
-      const res = await addApprovalMatrixRuleAction(newRule);
-      if (res.success && res.rule) {
-        setApprovalMatrix((prev) =>
-          prev.map((r) =>
-            r.id === tempId
-              ? {
-                  ...r,
-                  id: res.rule.id,
-                  updatedAt: res.rule.updatedAt
-                    ? new Date(res.rule.updatedAt).toISOString().split("T")[0]
-                    : r.updatedAt,
-                }
-              : r
-          )
+      if (res.deactivated && original) {
+        setUsers((prev) => [
+          ...prev,
+          { ...original, status: "Inactive", updatedAt: getTodayDateString() },
+        ]);
+        toast.info(
+          ("message" in res && typeof res.message === "string" && res.message) ||
+            "Pengguna memiliki riwayat transaksi sehingga statusnya dinonaktifkan, bukan dihapus permanen."
         );
-        return true;
-      } else {
-        setApprovalMatrix((prev) => prev.filter((r) => r.id !== tempId));
-        toast.error(res.error || "Gagal menyimpan tingkatan approval ke server");
-        return false;
-      }
-    } catch (err: any) {
-      setApprovalMatrix((prev) => prev.filter((r) => r.id !== tempId));
-      toast.error(err.message || "Gagal menyimpan tingkatan approval ke server");
-      return false;
-    }
-  };
-
-  const updateApprovalMatrixRule = async (id: string, rule: Partial<ApprovalMatrixRule>): Promise<boolean> => {
-    let original: ApprovalMatrixRule | undefined;
-    setApprovalMatrix((prev) => {
-      original = prev.find((r) => r.id === id);
-      return prev.map((r) =>
-        r.id === id
-          ? { ...r, ...rule, updatedAt: new Date().toISOString().split("T")[0] }
-          : r
-      );
-    });
-
-    try {
-      const res = await updateApprovalMatrixRuleAction(id, rule);
-      if (!res.success) {
-        if (original) {
-          setApprovalMatrix((prev) => prev.map((r) => (r.id === id ? original! : r)));
-        }
-        toast.error(res.error || "Gagal memperbarui tingkatan approval");
-        return false;
       }
       return true;
-    } catch (err: any) {
+    } catch (err) {
       if (original) {
-        setApprovalMatrix((prev) => prev.map((r) => (r.id === id ? original! : r)));
+        setUsers((prev) => [...prev, original]);
       }
-      toast.error(err.message || "Gagal memperbarui tingkatan approval");
+      toast.error(formatErrorMessage(err, "Gagal menghapus pengguna"));
       return false;
     }
   };
 
-  const deleteApprovalMatrixRule = async (id: string): Promise<boolean> => {
-    let original: ApprovalMatrixRule | undefined;
-    setApprovalMatrix((prev) => {
-      original = prev.find((r) => r.id === id);
-      return prev.filter((r) => r.id !== id);
-    });
-
-    try {
-      const res = await deleteApprovalMatrixRuleAction(id);
-      if (!res.success) {
-        if (original) {
-          setApprovalMatrix((prev) => [...prev, original!]);
-        }
-        toast.error(res.error || "Gagal menghapus tingkatan approval");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setApprovalMatrix((prev) => [...prev, original!]);
-      }
-      toast.error(err.message || "Gagal menghapus tingkatan approval");
-      return false;
-    }
-  };
-
-  const toggleApprovalLevel = (tierId: string, levelIndex: number) => {
-    setApprovalMatrix((prev) =>
-      prev.map((rule) => {
-        if (rule.id !== tierId) return rule;
-        const newLevels = [...rule.levels] as (ApprovalLevel | null)[];
-        if (newLevels[levelIndex] !== null) {
-          newLevels[levelIndex] = null;
-        } else {
-          newLevels[levelIndex] = APPROVAL_LEVEL_ORDER[levelIndex];
-        }
-        updateApprovalMatrixAction(tierId, newLevels).catch((err) =>
-          console.warn("Sync DB error (updateApprovalMatrixAction):", err)
-        );
-        return { ...rule, levels: newLevels, updatedAt: new Date().toISOString().split("T")[0] };
-      })
+  const addApprovalMatrixRule = (rule: Omit<ApprovalMatrixRule, "id" | "updatedAt">) =>
+    runAddMasterData(
+      setApprovalMatrix,
+      "rule",
+      rule,
+      addApprovalMatrixRuleAction,
+      (res) => res.rule,
+      "Gagal menyimpan tingkatan approval ke server"
     );
-  };
+  const updateApprovalMatrixRule = (id: string, rule: Partial<ApprovalMatrixRule>) =>
+    runUpdateMasterData(
+      approvalMatrix,
+      setApprovalMatrix,
+      id,
+      rule,
+      updateApprovalMatrixRuleAction,
+      "Gagal memperbarui tingkatan approval"
+    );
+  const deleteApprovalMatrixRule = (id: string) =>
+    runDeleteMasterData(
+      approvalMatrix,
+      setApprovalMatrix,
+      id,
+      deleteApprovalMatrixRuleAction,
+      "Gagal menghapus tingkatan approval"
+    );
 
-  const addMasterDataProjectCategory = async (item: Omit<ProjectCategoryItem, "id" | "updatedAt">): Promise<boolean> => {
-    const tempId = `cat-${Date.now()}`;
-    const newItem: ProjectCategoryItem = {
-      ...item,
-      id: tempId,
-      updatedAt: new Date().toISOString().split("T")[0],
-    };
-    setProjectCategories((prev) => [...prev, newItem]);
+  const toggleApprovalLevel = async (tierId: string, levelIndex: number): Promise<boolean> => {
+    const originalRule = approvalMatrix.find((r) => r.id === tierId);
+    if (!originalRule) return false;
+
+    const newLevels = [...originalRule.levels] as (ApprovalLevel | null)[];
+    newLevels[levelIndex] =
+      newLevels[levelIndex] !== null ? null : APPROVAL_LEVEL_ORDER[levelIndex];
+
+    setApprovalMatrix((prev) =>
+      prev.map((rule) =>
+        rule.id === tierId
+          ? { ...rule, levels: newLevels, updatedAt: getTodayDateString() }
+          : rule
+      )
+    );
 
     try {
-      const res = await addMasterDataProjectCategoryAction(newItem);
-      if (res.success && res.category) {
-        setProjectCategories((prev) =>
-          prev.map((c) =>
-            c.id === tempId
-              ? {
-                  ...c,
-                  id: res.category.id,
-                  updatedAt: res.category.updatedAt
-                    ? new Date(res.category.updatedAt).toISOString().split("T")[0]
-                    : c.updatedAt,
-                }
-              : c
-          )
+      const res = await updateApprovalMatrixAction(tierId, newLevels);
+      if (!res.success) {
+        setApprovalMatrix((prev) =>
+          prev.map((rule) => (rule.id === tierId ? originalRule : rule))
         );
-        return true;
-      } else {
-        setProjectCategories((prev) => prev.filter((c) => c.id !== tempId));
-        toast.error(res.error || "Gagal menyimpan kategori proyek ke server");
+        toast.error(res.error || "Gagal memperbarui level matriks persetujuan.");
         return false;
       }
-    } catch (err: any) {
-      setProjectCategories((prev) => prev.filter((c) => c.id !== tempId));
-      toast.error(err.message || "Gagal menyimpan kategori proyek ke server");
-      return false;
-    }
-  };
-
-  const updateMasterDataProjectCategory = async (id: string, item: Partial<ProjectCategoryItem>): Promise<boolean> => {
-    let original: ProjectCategoryItem | undefined;
-    setProjectCategories((prev) => {
-      original = prev.find((c) => c.id === id);
-      return prev.map((c) =>
-        c.id === id
-          ? { ...c, ...item, updatedAt: new Date().toISOString().split("T")[0] }
-          : c
+      return true;
+    } catch (err) {
+      setApprovalMatrix((prev) =>
+        prev.map((rule) => (rule.id === tierId ? originalRule : rule))
       );
-    });
+      toast.error(formatErrorMessage(err, "Gagal memperbarui level matriks persetujuan."));
+      return false;
+    }
+  };
 
+  const addMasterDataProjectCategory = (item: Omit<ProjectCategoryItem, "id" | "updatedAt">) =>
+    runAddMasterData(
+      setProjectCategories,
+      "cat",
+      item,
+      addMasterDataProjectCategoryAction,
+      (res) => res.category,
+      "Gagal menyimpan kategori proyek ke server"
+    );
+  const updateMasterDataProjectCategory = (
+    id: string,
+    item: Partial<ProjectCategoryItem>
+  ) =>
+    runUpdateMasterData(
+      projectCategories,
+      setProjectCategories,
+      id,
+      item,
+      updateMasterDataProjectCategoryAction,
+      "Gagal memperbarui kategori proyek"
+    );
+  const deleteMasterDataProjectCategory = (id: string) =>
+    runDeleteMasterData(
+      projectCategories,
+      setProjectCategories,
+      id,
+      deleteMasterDataProjectCategoryAction,
+      "Gagal menghapus kategori proyek"
+    );
+
+  const addMasterDataProjectType = (item: Omit<ProjectTypeItem, "id" | "updatedAt">) =>
+    runAddMasterData(
+      setProjectTypes,
+      "pt",
+      item,
+      addMasterDataProjectTypeAction,
+      (res) => res.projectType,
+      "Gagal menyimpan tipe proyek ke server"
+    );
+  const updateMasterDataProjectType = (id: string, item: Partial<ProjectTypeItem>) =>
+    runUpdateMasterData(
+      projectTypes,
+      setProjectTypes,
+      id,
+      item,
+      updateMasterDataProjectTypeAction,
+      "Gagal memperbarui tipe proyek"
+    );
+  const deleteMasterDataProjectType = (id: string) =>
+    runDeleteMasterData(
+      projectTypes,
+      setProjectTypes,
+      id,
+      deleteMasterDataProjectTypeAction,
+      "Gagal menghapus tipe proyek"
+    );
+
+  const addMasterDataProcurementType = (item: Omit<ProcurementTypeItem, "id" | "updatedAt">) =>
+    runAddMasterData(
+      setProcurementTypes,
+      "proc",
+      item,
+      addMasterDataProcurementTypeAction,
+      (res) => res.procurementType,
+      "Gagal menyimpan metode pengadaan ke server"
+    );
+  const updateMasterDataProcurementType = (
+    id: string,
+    item: Partial<ProcurementTypeItem>
+  ) =>
+    runUpdateMasterData(
+      procurementTypes,
+      setProcurementTypes,
+      id,
+      item,
+      updateMasterDataProcurementTypeAction,
+      "Gagal memperbarui metode pengadaan"
+    );
+  const deleteMasterDataProcurementType = (id: string) =>
+    runDeleteMasterData(
+      procurementTypes,
+      setProcurementTypes,
+      id,
+      deleteMasterDataProcurementTypeAction,
+      "Gagal menghapus metode pengadaan"
+    );
+
+  // =========================================================================
+  // Pemeliharaan Sistem (Clear Demo Data & Reset Produksi)
+  // =========================================================================
+
+  const clearDemoData = async (): Promise<boolean> => {
     try {
-      const res = await updateMasterDataProjectCategoryAction(id, item);
+      const res = await clearDemoDataAction();
       if (!res.success) {
-        if (original) {
-          setProjectCategories((prev) => prev.map((c) => (c.id === id ? original! : c)));
-        }
-        toast.error(res.error || "Gagal memperbarui kategori proyek");
+        toast.error(res.message || "Gagal membersihkan data transaksi.");
         return false;
       }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setProjectCategories((prev) => prev.map((c) => (c.id === id ? original! : c)));
-      }
-      toast.error(err.message || "Gagal memperbarui kategori proyek");
-      return false;
-    }
-  };
-
-  const deleteMasterDataProjectCategory = async (id: string): Promise<boolean> => {
-    let original: ProjectCategoryItem | undefined;
-    setProjectCategories((prev) => {
-      original = prev.find((c) => c.id === id);
-      return prev.filter((c) => c.id !== id);
-    });
-
-    try {
-      const res = await deleteMasterDataProjectCategoryAction(id);
-      if (!res.success) {
-        if (original) {
-          setProjectCategories((prev) => [...prev, original!]);
-        }
-        toast.error(res.error || "Gagal menghapus kategori proyek");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setProjectCategories((prev) => [...prev, original!]);
-      }
-      toast.error(err.message || "Gagal menghapus kategori proyek");
-      return false;
-    }
-  };
-
-  const addMasterDataProjectType = async (item: Omit<ProjectTypeItem, "id" | "updatedAt">): Promise<boolean> => {
-    const tempId = `pt-${Date.now()}`;
-    const newItem: ProjectTypeItem = {
-      ...item,
-      id: tempId,
-      updatedAt: new Date().toISOString().split("T")[0],
-    };
-    setProjectTypes((prev) => [...prev, newItem]);
-
-    try {
-      const res = await addMasterDataProjectTypeAction(newItem);
-      if (res.success && res.projectType) {
-        setProjectTypes((prev) =>
-          prev.map((t) =>
-            t.id === tempId
-              ? {
-                  ...t,
-                  id: res.projectType.id,
-                  updatedAt: res.projectType.updatedAt
-                    ? new Date(res.projectType.updatedAt).toISOString().split("T")[0]
-                    : t.updatedAt,
-                }
-              : t
-          )
-        );
-        return true;
-      } else {
-        setProjectTypes((prev) => prev.filter((t) => t.id !== tempId));
-        toast.error(res.error || "Gagal menyimpan tipe proyek ke server");
-        return false;
-      }
-    } catch (err: any) {
-      setProjectTypes((prev) => prev.filter((t) => t.id !== tempId));
-      toast.error(err.message || "Gagal menyimpan tipe proyek ke server");
-      return false;
-    }
-  };
-
-  const updateMasterDataProjectType = async (id: string, item: Partial<ProjectTypeItem>): Promise<boolean> => {
-    let original: ProjectTypeItem | undefined;
-    setProjectTypes((prev) => {
-      original = prev.find((t) => t.id === id);
-      return prev.map((t) =>
-        t.id === id
-          ? { ...t, ...item, updatedAt: new Date().toISOString().split("T")[0] }
-          : t
-      );
-    });
-
-    try {
-      const res = await updateMasterDataProjectTypeAction(id, item);
-      if (!res.success) {
-        if (original) {
-          setProjectTypes((prev) => prev.map((t) => (t.id === id ? original! : t)));
-        }
-        toast.error(res.error || "Gagal memperbarui tipe proyek");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setProjectTypes((prev) => prev.map((t) => (t.id === id ? original! : t)));
-      }
-      toast.error(err.message || "Gagal memperbarui tipe proyek");
-      return false;
-    }
-  };
-
-  const deleteMasterDataProjectType = async (id: string): Promise<boolean> => {
-    let original: ProjectTypeItem | undefined;
-    setProjectTypes((prev) => {
-      original = prev.find((t) => t.id === id);
-      return prev.filter((t) => t.id !== id);
-    });
-
-    try {
-      const res = await deleteMasterDataProjectTypeAction(id);
-      if (!res.success) {
-        if (original) {
-          setProjectTypes((prev) => [...prev, original!]);
-        }
-        toast.error(res.error || "Gagal menghapus tipe proyek");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setProjectTypes((prev) => [...prev, original!]);
-      }
-      toast.error(err.message || "Gagal menghapus tipe proyek");
-      return false;
-    }
-  };
-
-  const addMasterDataProcurementType = async (item: Omit<ProcurementTypeItem, "id" | "updatedAt">): Promise<boolean> => {
-    const tempId = `pct-${Date.now()}`;
-    const newItem: ProcurementTypeItem = {
-      ...item,
-      id: tempId,
-      updatedAt: new Date().toISOString().split("T")[0],
-    };
-    setProcurementTypes((prev) => [...prev, newItem]);
-
-    try {
-      const res = await addMasterDataProcurementTypeAction(newItem);
-      if (res.success && res.procurementType) {
-        setProcurementTypes((prev) =>
-          prev.map((t) =>
-            t.id === tempId
-              ? {
-                  ...t,
-                  id: res.procurementType.id,
-                  updatedAt: res.procurementType.updatedAt
-                    ? new Date(res.procurementType.updatedAt).toISOString().split("T")[0]
-                    : t.updatedAt,
-                }
-              : t
-          )
-        );
-        return true;
-      } else {
-        setProcurementTypes((prev) => prev.filter((t) => t.id !== tempId));
-        toast.error(res.error || "Gagal menyimpan metode pengadaan ke server");
-        return false;
-      }
-    } catch (err: any) {
-      setProcurementTypes((prev) => prev.filter((t) => t.id !== tempId));
-      toast.error(err.message || "Gagal menyimpan metode pengadaan ke server");
-      return false;
-    }
-  };
-
-  const updateMasterDataProcurementType = async (id: string, item: Partial<ProcurementTypeItem>): Promise<boolean> => {
-    let original: ProcurementTypeItem | undefined;
-    setProcurementTypes((prev) => {
-      original = prev.find((t) => t.id === id);
-      return prev.map((t) =>
-        t.id === id
-          ? { ...t, ...item, updatedAt: new Date().toISOString().split("T")[0] }
-          : t
-      );
-    });
-
-    try {
-      const res = await updateMasterDataProcurementTypeAction(id, item);
-      if (!res.success) {
-        if (original) {
-          setProcurementTypes((prev) => prev.map((t) => (t.id === id ? original! : t)));
-        }
-        toast.error(res.error || "Gagal memperbarui metode pengadaan");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setProcurementTypes((prev) => prev.map((t) => (t.id === id ? original! : t)));
-      }
-      toast.error(err.message || "Gagal memperbarui metode pengadaan");
-      return false;
-    }
-  };
-
-  const deleteMasterDataProcurementType = async (id: string): Promise<boolean> => {
-    let original: ProcurementTypeItem | undefined;
-    setProcurementTypes((prev) => {
-      original = prev.find((t) => t.id === id);
-      return prev.filter((t) => t.id !== id);
-    });
-
-    try {
-      const res = await deleteMasterDataProcurementTypeAction(id);
-      if (!res.success) {
-        if (original) {
-          setProcurementTypes((prev) => [...prev, original!]);
-        }
-        toast.error(res.error || "Gagal menghapus metode pengadaan");
-        return false;
-      }
-      return true;
-    } catch (err: any) {
-      if (original) {
-        setProcurementTypes((prev) => [...prev, original!]);
-      }
-      toast.error(err.message || "Gagal menghapus metode pengadaan");
-      return false;
-    }
-  };
-
-  const clearDemoData = async () => {
-    const res = await clearDemoDataAction();
-    if (res.success) {
-      setProjects([]);
-      setAfces([]);
-      setPrs([]);
-      setPos([]);
-      setGrs([]);
-      setVendorEvaluations([]);
-      setGoodsHandovers([]);
-      setUspks([]);
-      setTechnicalEvaluations([]);
-      setSpkContracts([]);
-      setDailyProgress([]);
-      setWeeklyProgress([]);
-      setComments([]);
-      setAttachments([]);
-      setNotifications([]);
       try {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem("wm_toolkit_state_v1");
         localStorage.removeItem("wm_toolkit_state");
-      } catch {}
+      } catch {
+        // Abaikan error penyimpanan
+      }
       await refreshFromDatabase();
       toast.success(res.message);
-    } else {
-      toast.error(res.message);
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal membersihkan data transaksi."));
+      return false;
     }
   };
 
-  const resetToEmptyProduction = async () => {
-    const res = await resetToEmptyProductionAction();
-    if (res.success) {
-      setProjects([]);
-      setAfces([]);
-      setPrs([]);
-      setPos([]);
-      setGrs([]);
-      setVendorEvaluations([]);
-      setGoodsHandovers([]);
-      setUspks([]);
-      setTechnicalEvaluations([]);
-      setSpkContracts([]);
-      setDailyProgress([]);
-      setWeeklyProgress([]);
-      setComments([]);
-      setAttachments([]);
-      setAuditLogs([]);
-      setNotifications([]);
+  const resetToEmptyProduction = async (confirmationText?: string): Promise<boolean> => {
+    try {
+      const res = await resetToEmptyProductionAction(confirmationText);
+      if (!res.success) {
+        toast.error(res.message || "Gagal melakukan reset produksi.");
+        return false;
+      }
       try {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem("wm_toolkit_state_v1");
         localStorage.removeItem("wm_toolkit_state");
-      } catch {}
+      } catch {
+        // Abaikan error penyimpanan
+      }
       await refreshFromDatabase();
       toast.success(res.message);
-    } else {
-      toast.error(res.message);
+      return true;
+    } catch (err) {
+      toast.error(formatErrorMessage(err, "Gagal melakukan reset produksi."));
+      return false;
     }
   };
 
   return (
     <AppStateContext.Provider
       value={{
+        isLoading,
+        loadError,
+        activeUserId,
+
         projects,
         afces,
         prs,
@@ -3070,6 +2787,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         attachments,
         notifications,
         notificationSettings,
+        unreadNotificationCount,
         auditLogs,
         dailyProgress,
         weeklyProgress,
@@ -3089,13 +2807,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
         userProfile,
         updateUserProfile,
-        systemSettings,
-        updateSystemSettings,
-        restoreBackupFromJson,
 
         activeRole,
-        setActiveRole,
-        switchDemoUser,
         isAdmin,
         isPic,
         isApprover,
@@ -3112,20 +2825,39 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         hardDeleteProject,
         emptyRecycleBin,
         reviseProjectSchedule,
+        addWorkItem,
+        updateWorkItem,
+        deleteWorkItem,
+        addBoqItem,
+        deleteBoqItem,
+
         updateAfceDocument,
         syncAfceWithMatrix,
         submitAfceApproval,
         processAfceAction,
+        softDeleteAfce,
+        restoreAfce,
+
         createPr,
+        softDeletePr,
+        restorePr,
         recordVendorEvaluation,
         createPo,
+        softDeletePo,
+        restorePo,
         recordGoodsReceipt,
         recordGoodsHandover,
+
         createUspk,
         updateUspkStatus,
+        softDeleteUspk,
+        restoreUspk,
         recordTechnicalEvaluation,
         createSpkContract,
         updateSpkStatus,
+        softDeleteSpk,
+        restoreSpk,
+
         getSpkProgressSummary,
         addDailyProgress,
         addWeeklyProgress,
@@ -3135,15 +2867,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         addAttachment,
         deleteAttachment,
 
-        unreadNotificationCount,
         markNotificationAsRead,
         markAllNotificationsAsRead,
         deleteNotification,
         clearAllNotifications,
         addNotification,
         updateNotificationSetting,
-        simulateCronReminderCheck,
-        addAuditLog,
+        runCronDeadlineCheck,
 
         addMasterDataRegion,
         updateMasterDataRegion,
@@ -3180,7 +2910,6 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         updateMasterDataProcurementType,
         deleteMasterDataProcurementType,
 
-        resetToMockData,
         refreshFromDatabase,
         clearDemoData,
         resetToEmptyProduction,
@@ -3194,7 +2923,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 export function useAppState() {
   const context = useContext(AppStateContext);
   if (!context) {
-    throw new Error("useAppState must be used within an AppStateProvider");
+    throw new Error("useAppState harus digunakan di dalam AppStateProvider.");
   }
   return context;
 }

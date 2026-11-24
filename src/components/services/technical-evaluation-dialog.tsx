@@ -32,6 +32,7 @@ import {
   X,
   UserCheck,
   Calendar,
+  Loader2,
 } from "lucide-react";
 import { formatIDR, formatIDDate } from "@/lib/utils";
 
@@ -50,35 +51,80 @@ export function TechnicalEvaluationDialog({
 }: TechnicalEvaluationDialogProps) {
   const { recordTechnicalEvaluation, userProfile } = useAppState();
 
-  const [evaluationDate, setEvaluationDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [evaluationDate, setEvaluationDate] = useState("");
   const [result, setResult] = useState<TechnicalEvaluationResult>("RECOMMENDED");
   const [rekomendasi, setRekomendasi] = useState("Disetujui untuk Penerbitan Kontrak SPK");
   const [score, setScore] = useState<number>(90);
-  const [evaluatorName, setEvaluatorName] = useState(userProfile.fullName || "Dedi Setiawan, S.T.");
-  const [evaluatorJabatan, setEvaluatorJabatan] = useState(userProfile.role || "Manager Estate");
+  const [evaluatorName, setEvaluatorName] = useState(userProfile?.fullName || "");
+  const [evaluatorJabatan, setEvaluatorJabatan] = useState(userProfile?.role || "");
   const [notes, setNotes] = useState("");
   const [attachmentName, setAttachmentName] = useState("");
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
       setEvaluationDate(new Date().toISOString().split("T")[0]);
-      setEvaluatorName(userProfile.fullName || "Dedi Setiawan, S.T.");
-      setEvaluatorJabatan(userProfile.role || "Manager Estate");
+      setEvaluatorName(userProfile?.fullName || "");
+      setEvaluatorJabatan(userProfile?.role || "");
       setResult("RECOMMENDED");
       setRekomendasi("Disetujui untuk Penerbitan Kontrak SPK");
       setScore(90);
       setNotes("");
       setAttachmentName("");
     }
-  }, [open, userProfile]);
+  }, [open, userProfile?.fullName, userProfile?.role]);
 
   if (!uspk) return null;
 
-  const handleSubmit = () => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAttachment(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", project.id);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        toast.error(json.error || "Gagal mengunggah berita acara ke Google Drive.");
+        return;
+      }
+
+      setAttachmentName(
+        json.data.webViewLink ||
+          (json.data.fileId ? `/api/files/${json.data.fileId}/download` : json.data.fileName)
+      );
+      toast.success(`Berkas "${json.data.fileName}" berhasil diunggah ke Google Drive.`);
+    } catch {
+      toast.error("Gagal terhubung ke server saat mengunggah berkas.");
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!evaluationDate) {
+      toast.error("Tanggal evaluasi teknis wajib diisi");
+      return;
+    }
+    const parsedScore = Number(score);
+    if (Number.isNaN(parsedScore) || parsedScore < 0 || parsedScore > 100) {
+      toast.error("Skor evaluasi teknis harus bernilai 0 sampai 100");
+      return;
+    }
     if (!evaluatorName.trim()) {
       toast.error("Nama penilai / evaluator teknis wajib diisi");
+      return;
+    }
+    if (!rekomendasi.trim()) {
+      toast.error("Rekomendasi formal wajib diisi");
       return;
     }
     if (!notes.trim()) {
@@ -86,29 +132,34 @@ export function TechnicalEvaluationDialog({
       return;
     }
 
-    const defaultFilename = `BA_EvaluasiTeknis_${uspk.uspkNumber.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+    setIsSubmitting(true);
+    try {
+      const ok = await recordTechnicalEvaluation({
+        uspkId: uspk.id,
+        uspkNumber: uspk.uspkNumber,
+        projectId: project.id,
+        evaluatorName: evaluatorName.trim(),
+        evaluatorJabatan: evaluatorJabatan.trim(),
+        evaluationDate,
+        result,
+        rekomendasi: rekomendasi.trim(),
+        score: parsedScore,
+        notes: notes.trim(),
+        attachmentName: attachmentName.trim() || undefined,
+      });
 
-    recordTechnicalEvaluation({
-      uspkId: uspk.id,
-      uspkNumber: uspk.uspkNumber,
-      projectId: project.id,
-      evaluatorName: evaluatorName.trim(),
-      evaluatorJabatan: evaluatorJabatan.trim(),
-      evaluationDate,
-      result,
-      rekomendasi: rekomendasi.trim(),
-      score: Number(score) || undefined,
-      notes: notes.trim(),
-      attachmentName: attachmentName.trim() || defaultFilename,
-    });
+      if (!ok) return;
 
-    toast.success(
-      `Evaluasi teknis untuk ${uspk.uspkNumber} (${uspk.vendorName}) berhasil dicatat: ${
-        result === "RECOMMENDED" ? "DIREKOMENDASIKAN (Status USPK: Approved)" : "TIDAK DIREKOMENDASIKAN"
-      }`
-    );
+      toast.success(
+        `Evaluasi teknis untuk ${uspk.uspkNumber} (${uspk.vendorName}) berhasil dicatat: ${
+          result === "RECOMMENDED" ? "DIREKOMENDASIKAN (Status USPK: Approved)" : "TIDAK DIREKOMENDASIKAN"
+        }`
+      );
 
-    onOpenChange(false);
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -272,14 +323,31 @@ export function TechnicalEvaluationDialog({
           {/* Row 5: Berita Acara Evaluasi */}
           <div className="space-y-1.5">
             <label className="font-semibold text-foreground flex items-center gap-1">
-              <UploadCloud className="w-3.5 h-3.5 text-muted-foreground" /> Lampiran Berita Acara Evaluasi Teknis
+              <UploadCloud className="w-3.5 h-3.5 text-muted-foreground" /> Lampiran Berita Acara Evaluasi Teknis (Opsional)
             </label>
-            <Input
-              value={attachmentName}
-              onChange={(e) => setAttachmentName(e.target.value)}
-              placeholder="BA_EvaluasiTeknis_USPK.pdf (opsional)"
-              className="text-xs"
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                value={attachmentName}
+                onChange={(e) => setAttachmentName(e.target.value)}
+                placeholder="Tautan Google Drive atau nama berkas berita acara"
+                className="text-xs"
+              />
+              <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1">
+                {uploadingAttachment ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                )}
+                <span>Unggah</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                  onChange={handleFileUpload}
+                  disabled={uploadingAttachment}
+                />
+              </label>
+            </div>
           </div>
         </div>
 
@@ -289,6 +357,7 @@ export function TechnicalEvaluationDialog({
             variant="outline"
             size="sm"
             onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
           >
             Batal
           </Button>
@@ -296,19 +365,22 @@ export function TechnicalEvaluationDialog({
             type="button"
             size="sm"
             onClick={handleSubmit}
+            disabled={isSubmitting || uploadingAttachment}
             className={`gap-1 text-white ${
               result === "RECOMMENDED"
-                ? "bg-emerald-600 hover:bg-emerald-700"
-                : "bg-rose-600 hover:bg-rose-700"
+                ? "bg-emerald-700 hover:bg-emerald-800"
+                : "bg-rose-700 hover:bg-rose-800"
             }`}
           >
             {result === "RECOMMENDED" ? (
               <>
-                <CheckCircle2 className="w-3.5 h-3.5" /> Simpan & Rekomendasikan
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {isSubmitting ? "Menyimpan..." : "Simpan & Rekomendasikan"}
               </>
             ) : (
               <>
-                <XCircle className="w-3.5 h-3.5" /> Simpan Penolakan
+                <XCircle className="w-3.5 h-3.5" />
+                {isSubmitting ? "Menyimpan..." : "Simpan Penolakan"}
               </>
             )}
           </Button>

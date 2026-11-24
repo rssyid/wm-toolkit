@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -53,9 +53,12 @@ export function DailyProgressDialog({
   project,
   preselectedWorkItemId,
 }: DailyProgressDialogProps) {
-  const { addDailyProgress, spkContracts, dailyProgress } = useAppState();
+  const { addDailyProgress, spkContracts, dailyProgress, userProfile } = useAppState();
 
-  const projectSpks = spkContracts.filter((s) => s.projectId === project.id);
+  const projectSpks = useMemo(
+    () => spkContracts.filter((s) => s.projectId === project.id && !s.deletedAt),
+    [spkContracts, project.id]
+  );
 
   const [workItemId, setWorkItemId] = useState(
     preselectedWorkItemId || project.workItems[0]?.id || ""
@@ -72,7 +75,8 @@ export function DailyProgressDialog({
   const [photoName, setPhotoName] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [createdBy, setCreatedBy] = useState("Budi Santoso, S.T. (Site Supervisor)");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createdBy, setCreatedBy] = useState(userProfile?.fullName || "");
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -95,10 +99,13 @@ export function DailyProgressDialog({
       }
 
       setPhotoName(json.data.fileName);
-      setPhotoUrl(json.data.webViewLink);
+      setPhotoUrl(
+        json.data.webViewLink ||
+          (json.data.fileId ? `/api/files/${json.data.fileId}/download` : "")
+      );
       toast.success(`Foto "${json.data.fileName}" berhasil diunggah ke Google Drive!`);
-    } catch (err: any) {
-      toast.error(err.message || "Gagal mengunggah foto");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal mengunggah foto");
     } finally {
       setUploadingPhoto(false);
     }
@@ -112,13 +119,14 @@ export function DailyProgressDialog({
       setDate(new Date().toISOString().split("T")[0]);
       setActivity("");
       setActualVolume("");
+      setSwakelolaPlannedVolume("");
+      setCustomContractor("");
       setNotes("");
       setPhotoName("");
+      setPhotoUrl("");
+      setCreatedBy(userProfile?.fullName || "");
 
-      // Find if there is an SPK chained to this Work Item
-      const matchingSpks = projectSpks.filter(
-        (s) => s.workItemId === initialWiId
-      );
+      const matchingSpks = projectSpks.filter((s) => s.workItemId === initialWiId);
       if (matchingSpks.length > 0) {
         setSelectedSpkId(matchingSpks[0].id);
         if (matchingSpks[0].unit) setUnit(matchingSpks[0].unit);
@@ -126,12 +134,11 @@ export function DailyProgressDialog({
         setSelectedSpkId("none");
       }
     }
-  }, [open, preselectedWorkItemId, project.workItems]);
+  }, [open, preselectedWorkItemId, project.workItems, projectSpks, userProfile?.fullName]);
 
   const selectedWi = project.workItems.find((w) => w.id === workItemId);
   const activeSpk = projectSpks.find((s) => s.id === selectedSpkId);
 
-  // 1. Chaining: When Work Item changes, filter / auto-select corresponding SPK
   const handleWorkItemChange = (newWiId: string) => {
     setWorkItemId(newWiId);
     const matchingSpks = projectSpks.filter((s) => s.workItemId === newWiId);
@@ -143,7 +150,6 @@ export function DailyProgressDialog({
     }
   };
 
-  // 2. Chaining: When SPK changes, auto-select corresponding Work Item
   const handleSpkChange = (newSpkId: string) => {
     setSelectedSpkId(newSpkId);
     if (newSpkId !== "none") {
@@ -157,13 +163,20 @@ export function DailyProgressDialog({
     }
   };
 
-  // 3. Burn-down & Calculation from SPK or Swakelola
   const priorRealizedVolume =
     selectedSpkId !== "none"
       ? dailyProgress
           .filter((dp) => dp.spkId === selectedSpkId && dp.projectId === project.id)
           .reduce((sum, d) => sum + (d.actualVolume || 0), 0)
-      : 0;
+      : dailyProgress
+          .filter(
+            (dp) =>
+              dp.projectId === project.id &&
+              dp.workItemId === workItemId &&
+              !dp.spkId &&
+              dp.periodType === "DAILY"
+          )
+          .reduce((sum, d) => sum + (d.actualVolume || 0), 0);
 
   const spkTargetVolume = activeSpk?.targetVolume || 0;
   const effectiveTarget =
@@ -174,15 +187,12 @@ export function DailyProgressDialog({
       : 0;
 
   const priorRemainingVolume =
-    activeSpk && spkTargetVolume > 0
-      ? Math.max(0, spkTargetVolume - priorRealizedVolume)
-      : effectiveTarget;
+    effectiveTarget > 0 ? Math.max(0, effectiveTarget - priorRealizedVolume) : 0;
 
   const actVolNum = typeof actualVolume === "number" ? actualVolume : 0;
   const newCumulativeVolume = priorRealizedVolume + actVolNum;
   const newRemainingVolume = Math.max(0, priorRemainingVolume - actVolNum);
 
-  // Auto-calculated progress percentage (NO MANUAL % INPUT)
   const autoCalculatedPercent =
     effectiveTarget > 0
       ? Math.min(100, Math.round((newCumulativeVolume / effectiveTarget) * 100))
@@ -190,7 +200,11 @@ export function DailyProgressDialog({
 
   const isOverTarget = activeSpk && spkTargetVolume > 0 && actVolNum > priorRemainingVolume;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!date) {
+      toast.error("Tanggal kegiatan wajib diisi");
+      return;
+    }
     if (!activity.trim()) {
       toast.error("Deskripsi aktivitas fisik harian wajib diisi");
       return;
@@ -207,36 +221,43 @@ export function DailyProgressDialog({
     const contractorName =
       activeSpk
         ? activeSpk.vendorName
-        : customContractor.trim() || "Swakelola Kebun Afdeling";
+        : customContractor.trim() || "Tim Swakelola Kebun";
 
-    addDailyProgress({
-      projectId: project.id,
-      workItemId,
-      workItemName: selectedWi?.name || "Item Pekerjaan",
-      periodType: "DAILY",
-      spkId: activeSpk ? activeSpk.id : undefined,
-      spkNumber: activeSpk ? activeSpk.spkNumber : undefined,
-      contractorName,
-      date,
-      activity: activity.trim(),
-      targetVolume: effectiveTarget > 0 ? effectiveTarget : undefined,
-      plannedVolume: effectiveTarget > 0 ? effectiveTarget : undefined,
-      actualVolume: actVolNum,
-      cumulativeVolume: newCumulativeVolume,
-      remainingVolume: newRemainingVolume,
-      unit,
-      progressPercent: autoCalculatedPercent,
-      weather,
-      notes: notes.trim(),
-      photoName: photoName || `Dokumentasi_Lapangan_${date}.jpg`,
-      photoUrl: photoUrl || `/attachments/${photoName || `Dokumentasi_Lapangan_${date}.jpg`}`,
-      createdBy: createdBy.trim() || "Site Supervisor",
-    });
+    setIsSubmitting(true);
+    try {
+      const ok = await addDailyProgress({
+        projectId: project.id,
+        workItemId,
+        workItemName: selectedWi?.name || "Item Pekerjaan",
+        periodType: "DAILY",
+        spkId: activeSpk ? activeSpk.id : undefined,
+        spkNumber: activeSpk ? activeSpk.spkNumber : undefined,
+        contractorName,
+        date,
+        activity: activity.trim(),
+        targetVolume: effectiveTarget > 0 ? effectiveTarget : undefined,
+        plannedVolume: effectiveTarget > 0 ? effectiveTarget : undefined,
+        actualVolume: actVolNum,
+        cumulativeVolume: newCumulativeVolume,
+        remainingVolume: newRemainingVolume,
+        unit,
+        progressPercent: autoCalculatedPercent,
+        weather,
+        notes: notes.trim(),
+        photoName: photoName.trim() || undefined,
+        photoUrl: photoUrl.trim() || undefined,
+        createdBy: createdBy.trim() || userProfile?.fullName || "",
+      });
 
-    toast.success(
-      `Log harian berhasil disimpan! Target terpotong ${actVolNum} ${unit}, capaian otomatis menjadi ${autoCalculatedPercent}%.`
-    );
-    onOpenChange(false);
+      if (!ok) return;
+
+      toast.success(
+        `Log harian berhasil disimpan! Target terpotong ${actVolNum} ${unit}, capaian otomatis menjadi ${autoCalculatedPercent}%.`
+      );
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -538,9 +559,9 @@ export function DailyProgressDialog({
           {/* Row 9: Foto Dokumentasi */}
           <div>
             <label className="font-semibold text-foreground flex items-center justify-between mb-1">
-              <span>Foto Lapangan / Dokumentasi Fisik</span>
+              <span>Foto Lapangan / Dokumentasi Fisik (Opsional)</span>
               {uploadingPhoto && (
-                <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-normal">
+                <span className="text-[10px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-normal">
                   <Loader2 className="w-3 h-3 animate-spin" /> Mengunggah ke Drive...
                 </span>
               )}
@@ -549,45 +570,36 @@ export function DailyProgressDialog({
               <Input
                 value={photoName}
                 onChange={(e) => setPhotoName(e.target.value)}
-                placeholder="Foto_Dokumentasi_Progress.jpg"
+                placeholder="Nama berkas atau unggah foto ke Google Drive"
                 className="text-xs"
               />
-              <label className="h-9 px-2.5 rounded-md border border-input hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 text-foreground transition-colors gap-1.5">
-                <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="hidden sm:inline">Pilih Foto</span>
+              <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 text-foreground transition-colors gap-1.5">
+                <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                <span>Unggah Foto</span>
                 <input
                   type="file"
                   className="hidden"
                   accept="image/*"
                   onChange={handlePhotoUpload}
+                  disabled={uploadingPhoto}
                 />
               </label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0 text-xs"
-                onClick={() => {
-                  setPhotoName(`SitePhoto_${project.code}_${date}.jpg`);
-                  toast.info("Foto dokumentasi terlampir");
-                }}
-              >
-                <Camera className="w-3.5 h-3.5 mr-1" /> Mock
-              </Button>
             </div>
           </div>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Batal
           </Button>
           <Button
             size="sm"
             onClick={handleSubmit}
-            className="bg-amber-600 hover:bg-amber-700 text-white font-semibold gap-1.5"
+            disabled={isSubmitting || uploadingPhoto}
+            className="bg-amber-700 hover:bg-amber-800 text-white font-semibold gap-1.5"
           >
-            <HardHat className="w-3.5 h-3.5" /> Simpan Progress Harian
+            <HardHat className="w-3.5 h-3.5" />
+            {isSubmitting ? "Menyimpan..." : "Simpan Progress Harian"}
           </Button>
         </DialogFooter>
       </DialogContent>

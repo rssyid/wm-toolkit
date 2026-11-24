@@ -256,7 +256,7 @@ async function runTest() {
 
 runTest()
   .catch((err) => {
-    console.error("\n❌ TEST GAGAL:", err);
+    console.error("\n[FAIL] TEST GAGAL:", err);
     process.exit(1);
   })
   .finally(async () => {
