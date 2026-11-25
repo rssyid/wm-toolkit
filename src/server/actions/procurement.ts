@@ -13,6 +13,7 @@ import {
   CreateGoodsHandoverSchema,
 } from "@/server/schemas";
 import { safeRevalidatePath as revalidatePath } from "@/server/revalidate";
+import { syncMaterialWorkItemFromPosTx } from "@/server/work-item-progress";
 
 function toPrStatusEnum(status?: string): "DRAFT" | "RELEASED" | "CLOSED" | "CANCELLED" {
   switch (status?.toUpperCase()) {
@@ -234,38 +235,46 @@ export async function createPoAction(rawInput: unknown) {
       };
     }
 
-    const po = await db.purchaseOrder.create({
-      data: {
-        poNumber: parsed.poNumber,
-        prId: parsed.relatedPrId,
-        projectId: parsed.projectId,
-        workItemId: parsed.workItemId || undefined,
-        supplierId: parsed.supplierId || undefined,
-        supplierName: parsed.supplierName,
-        poDate: new Date(parsed.poDate),
-        releaseDate: parsed.releaseDate ? new Date(parsed.releaseDate) : null,
-        poValue: parsed.poValue,
-        status: toPoStatusEnum(parsed.status),
-        attachmentName: parsed.attachmentName,
-        createdById: user.id,
-        items: {
-          create: parsed.items.map((item) => ({
-            materialName: item.materialName,
-            sapMaterialCode: item.sapMaterialCode,
-            volume: Number(item.volume),
-            unit: item.unit,
-            unitPrice: Number(item.unitPrice),
-            totalPrice: Number(item.totalPrice),
-            receivedVolume: Number(item.receivedVolume) || 0,
-            remainingVolume:
-              item.remainingVolume !== undefined
-                ? Number(item.remainingVolume)
-                : Number(item.volume),
-            status: item.status || "Ordered",
-          })),
+    const po = await db.$transaction(async (tx) => {
+      const createdPo = await tx.purchaseOrder.create({
+        data: {
+          poNumber: parsed.poNumber,
+          prId: parsed.relatedPrId,
+          projectId: parsed.projectId,
+          workItemId: parsed.workItemId || undefined,
+          supplierId: parsed.supplierId || undefined,
+          supplierName: parsed.supplierName,
+          poDate: new Date(parsed.poDate),
+          releaseDate: parsed.releaseDate ? new Date(parsed.releaseDate) : null,
+          poValue: parsed.poValue,
+          status: toPoStatusEnum(parsed.status),
+          attachmentName: parsed.attachmentName,
+          createdById: user.id,
+          items: {
+            create: parsed.items.map((item) => ({
+              materialName: item.materialName,
+              sapMaterialCode: item.sapMaterialCode,
+              volume: Number(item.volume),
+              unit: item.unit,
+              unitPrice: Number(item.unitPrice),
+              totalPrice: Number(item.totalPrice),
+              receivedVolume: Number(item.receivedVolume) || 0,
+              remainingVolume:
+                item.remainingVolume !== undefined
+                  ? Number(item.remainingVolume)
+                  : Number(item.volume),
+              status: item.status || "Ordered",
+            })),
+          },
         },
-      },
-      include: { project: true, items: true },
+        include: { project: true, items: true },
+      });
+
+      if (createdPo.workItemId && createdPo.status !== "DRAFT" && createdPo.status !== "CANCELLED") {
+        await syncMaterialWorkItemFromPosTx(tx, createdPo.projectId, createdPo.workItemId);
+      }
+
+      return createdPo;
     });
 
     await recordServerAuditLog({
@@ -280,6 +289,7 @@ export async function createPoAction(rawInput: unknown) {
     });
 
     revalidatePath(`/workspace/${po.projectId}/procurement`);
+    revalidatePath(`/workspace/${po.projectId}/execution`);
     return { success: true, po: toPlainObject(po) };
   } catch (err: unknown) {
     console.error("Gagal menerbitkan PO:", err);
@@ -416,6 +426,10 @@ export async function recordGoodsReceiptAction(rawInput: unknown) {
         data: { receiptProgressPercent },
       });
 
+      if (po.workItemId) {
+        await syncMaterialWorkItemFromPosTx(tx, po.projectId, po.workItemId);
+      }
+
       return { gr, receiptProgressPercent };
     });
 
@@ -434,6 +448,8 @@ export async function recordGoodsReceiptAction(rawInput: unknown) {
     });
 
     revalidatePath(`/workspace/${txResult.gr.po.projectId}/procurement`);
+    revalidatePath(`/workspace/${txResult.gr.po.projectId}/execution`);
+    revalidatePath("/dashboard");
     return {
       success: true,
       gr: toPlainObject(txResult.gr),
@@ -471,10 +487,14 @@ export async function recordGoodsHandoverAction(rawInput: unknown) {
       });
 
       if (parsed.status === "COMPLETED") {
-        await tx.purchaseOrder.update({
+        const updatedPo = await tx.purchaseOrder.update({
           where: { id: parsed.poId },
-          data: { status: "CLOSED" },
+          data: { status: "CLOSED", receiptProgressPercent: 100 },
+          select: { projectId: true, workItemId: true },
         });
+        if (updatedPo.workItemId) {
+          await syncMaterialWorkItemFromPosTx(tx, updatedPo.projectId, updatedPo.workItemId);
+        }
       }
 
       return created;
@@ -491,6 +511,8 @@ export async function recordGoodsHandoverAction(rawInput: unknown) {
     });
 
     revalidatePath(`/workspace/${handover.projectId}/procurement`);
+    revalidatePath(`/workspace/${handover.projectId}/execution`);
+    revalidatePath("/dashboard");
     return { success: true, handover: toPlainObject(handover) };
   } catch (err: unknown) {
     console.error("Gagal mencatat BAST:", err);

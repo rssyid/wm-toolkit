@@ -28,7 +28,6 @@ import {
   UploadCloud,
   FileSignature,
   UserCheck,
-  CheckCircle2,
   Layers,
   Loader2,
 } from "lucide-react";
@@ -75,7 +74,7 @@ export function WeeklyProgressDialog({
   project,
   preselectedWorkItemId,
 }: WeeklyProgressDialogProps) {
-  const { addWeeklyProgress, spkContracts, userProfile } = useAppState();
+  const { addWeeklyProgress, spkContracts, dailyProgress, userProfile } = useAppState();
 
   const projectSpks = useMemo(
     () => spkContracts.filter((s) => s.projectId === project.id && !s.deletedAt),
@@ -91,6 +90,10 @@ export function WeeklyProgressDialog({
   const [startDate, setStartDate] = useState(() => getCurrentWeekWindow().startDate);
   const [endDate, setEndDate] = useState(() => getCurrentWeekWindow().endDate);
   const [plannedProgress, setPlannedProgress] = useState<number>(85);
+  const [actualProgress, setActualProgress] = useState<number>(
+    project.workItems.find((w) => w.id === (preselectedWorkItemId || project.workItems[0]?.id))
+      ?.progress ?? 0
+  );
   const [notes, setNotes] = useState("");
   const [reportName, setReportName] = useState("");
   const [reportUrl, setReportUrl] = useState("");
@@ -135,7 +138,9 @@ export function WeeklyProgressDialog({
     if (open) {
       const win = getCurrentWeekWindow();
       const initialWiId = preselectedWorkItemId || project.workItems[0]?.id || "";
+      const initialWi = project.workItems.find((w) => w.id === initialWiId);
       setWorkItemId(initialWiId);
+      setActualProgress(initialWi?.progress ?? 0);
       setPeriod(win.period);
       setStartDate(win.startDate);
       setEndDate(win.endDate);
@@ -156,9 +161,14 @@ export function WeeklyProgressDialog({
 
   const selectedWi = project.workItems.find((w) => w.id === workItemId);
   const activeSpk = projectSpks.find((s) => s.id === selectedSpkId);
+  const hasDailyLogsForItem = dailyProgress.some(
+    (dp) => dp.projectId === project.id && dp.workItemId === workItemId
+  );
 
   const handleWorkItemChange = (newWiId: string) => {
     setWorkItemId(newWiId);
+    const nextWi = project.workItems.find((w) => w.id === newWiId);
+    setActualProgress(nextWi?.progress ?? 0);
     const matchingSpks = projectSpks.filter((s) => s.workItemId === newWiId);
     if (matchingSpks.length > 0) {
       setSelectedSpkId(matchingSpks[0].id);
@@ -173,11 +183,13 @@ export function WeeklyProgressDialog({
       const targetSpk = projectSpks.find((s) => s.id === newSpkId);
       if (targetSpk?.workItemId) {
         setWorkItemId(targetSpk.workItemId);
+        const nextWi = project.workItems.find((w) => w.id === targetSpk.workItemId);
+        setActualProgress(nextWi?.progress ?? 0);
       }
     }
   };
 
-  const currentActualProgress = selectedWi?.progress || 0;
+  const currentActualProgress = Number.isFinite(actualProgress) ? actualProgress : 0;
   const variance = currentActualProgress - plannedProgress;
   const achievement =
     plannedProgress > 0
@@ -203,6 +215,10 @@ export function WeeklyProgressDialog({
     }
     if (Number.isNaN(Number(plannedProgress)) || plannedProgress < 0 || plannedProgress > 100) {
       toast.error("Rencana baseline harus bernilai 0 sampai 100%");
+      return;
+    }
+    if (Number.isNaN(Number(actualProgress)) || actualProgress < 0 || actualProgress > 100) {
+      toast.error("Realisasi aktual harus bernilai 0 sampai 100%");
       return;
     }
 
@@ -349,13 +365,14 @@ export function WeeklyProgressDialog({
             </div>
           </div>
 
-          {/* Progress Comparation: Plan Input & Auto Realized Badge */}
+          {/* Progress Comparation: Plan Input & Actual Input */}
           <div className="grid grid-cols-2 gap-2 items-end">
             <div>
-              <label className="font-semibold text-foreground block mb-1">
+              <label htmlFor="weekly-planned-progress" className="font-semibold text-foreground block mb-1">
                 Rencana Baseline (%) <span className="text-rose-500">*</span>
               </label>
               <Input
+                id="weekly-planned-progress"
                 type="number"
                 min="0"
                 max="100"
@@ -365,22 +382,31 @@ export function WeeklyProgressDialog({
               />
             </div>
 
-            {/* Read-only Auto-Calculated Actual Progress Badge */}
             <div>
-              <label className="font-semibold text-foreground block mb-1">
-                Realisasi Aktual Kumulatif
+              <label htmlFor="weekly-actual-progress" className="font-semibold text-foreground block mb-1">
+                Realisasi Aktual (%) <span className="text-rose-500">*</span>
               </label>
-              <div className="h-9 px-3 rounded-md border bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 flex items-center justify-between">
-                <div className="flex items-center gap-1 text-[11px] text-emerald-800 dark:text-emerald-300 font-medium">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>Otomatis:</span>
-                </div>
-                <span className="font-mono text-sm font-extrabold text-emerald-700 dark:text-emerald-400">
-                  {currentActualProgress}%
-                </span>
-              </div>
+              <Input
+                id="weekly-actual-progress"
+                type="number"
+                min="0"
+                max="100"
+                value={actualProgress}
+                onChange={(e) => setActualProgress(Number(e.target.value))}
+                className="font-mono font-bold text-xs border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300"
+              />
             </div>
           </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            {selectedWi?.progressMode === "Daily" && hasDailyLogsForItem
+              ? `Nilai awal diambil dari akumulasi log harian (${selectedWi.progress}%), dan dapat disesuaikan untuk evaluasi mingguan.`
+              : currentActualProgress >= 100
+              ? "Capaian 100% akan menandai item selesai dan menampilkan tanda centang pada Gantt Chart."
+              : currentActualProgress > 0
+              ? "Capaian di atas 0% akan menampilkan simbol # pada minggu periode laporan di Gantt Chart."
+              : "Isi realisasi aktual di atas 0% agar progres tercatat pada Kurva S dan Gantt Chart."}
+          </p>
 
           {/* Auto calculated Variance & Achievement Indicator */}
           <div className="p-2.5 rounded-lg bg-muted/40 border grid grid-cols-2 gap-2 text-xs">

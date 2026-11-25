@@ -7,41 +7,7 @@ import { formatActionError } from "@/server/errors";
 import { toPlainObject } from "@/server/serialize";
 import { CreateDailyProgressSchema, CreateWeeklyProgressSchema } from "@/server/schemas";
 import { safeRevalidatePath as revalidatePath } from "@/server/revalidate";
-
-async function recalculateProjectProgressTx(
-  tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
-  projectId: string,
-  workItemId: string,
-  nextWorkItemProgress: number
-) {
-  await tx.workItem.update({
-    where: { id: workItemId },
-    data: {
-      progress: nextWorkItemProgress,
-      status: nextWorkItemProgress >= 100 ? "COMPLETED" : "IN_PROGRESS",
-    },
-  });
-
-  const allWorkItems = await tx.workItem.findMany({
-    where: { projectId },
-  });
-  const totalWeight = allWorkItems.reduce((acc, w) => acc + (w.weight || 0), 0) || 100;
-  const weightedProgress = allWorkItems.reduce(
-    (acc, w) => acc + (w.progress * (w.weight || 0)) / totalWeight,
-    0
-  );
-  const overallProgress = Math.min(100, Math.round(weightedProgress));
-
-  await tx.project.update({
-    where: { id: projectId },
-    data: {
-      progressPercent: overallProgress,
-      status: overallProgress >= 100 ? "COMPLETED" : "IN_PROGRESS",
-    },
-  });
-
-  return overallProgress;
-}
+import { syncWorkItemAndProjectProgressTx } from "@/server/work-item-progress";
 
 export async function addDailyProgressAction(rawInput: unknown) {
   try {
@@ -74,7 +40,7 @@ export async function addDailyProgressAction(rawInput: unknown) {
         include: { project: true, workItem: true },
       });
 
-      const newOverallProgress = await recalculateProjectProgressTx(
+      const newOverallProgress = await syncWorkItemAndProjectProgressTx(
         tx,
         parsed.projectId,
         parsed.workItemId,
@@ -139,7 +105,7 @@ export async function addWeeklyProgressAction(rawInput: unknown) {
         include: { project: true, workItem: true },
       });
 
-      const newOverallProgress = await recalculateProjectProgressTx(
+      const newOverallProgress = await syncWorkItemAndProjectProgressTx(
         tx,
         parsed.projectId,
         parsed.workItemId,

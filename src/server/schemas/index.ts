@@ -57,15 +57,19 @@ export const ScheduleMatrixCellSchema = z.object({
   type: z.enum(["plan", "revised", "extended-revised", "this-week-revised", "empty"]),
   symbol: z.enum(["#", "DONE", "\u2713"]).nullable().optional(),
   note: z.string().optional(),
+  manual: z.boolean().optional(),
 });
 
 export const ScheduleMatrixTaskSchema = z.object({
   id: z.string(),
+  workItemId: z.string().optional(),
   code: z.string(),
   name: z.string(),
   planStartDate: z.string(),
   planEndDate: z.string(),
   status: z.enum(["Planned", "In Progress", "On Hold", "Completed", "Cancelled"]).optional(),
+  progress: z.number().min(0).max(100).optional(),
+  sourceHint: z.string().optional(),
   cells: z.record(z.string(), ScheduleMatrixCellSchema),
 });
 

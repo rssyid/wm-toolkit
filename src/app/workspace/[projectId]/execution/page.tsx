@@ -92,6 +92,8 @@ function UnifiedExecutionHubContent() {
     updateProject,
     dailyProgress,
     weeklyProgress,
+    pos,
+    goodsHandovers,
     spkContracts,
     addDailyProgress,
     addWorkItem,
@@ -414,8 +416,8 @@ function UnifiedExecutionHubContent() {
     }
   };
 
-  const handleUpdateSchedule = (updatedGroups: ScheduleGanttGroup[]) => {
-    void updateProject(projectId, {
+  const handleUpdateSchedule = async (updatedGroups: ScheduleGanttGroup[]) => {
+    return updateProject(projectId, {
       scheduleMatrix: updatedGroups,
     });
   };
@@ -1148,7 +1150,17 @@ function UnifiedExecutionHubContent() {
             </Card>
           </div>
 
-          <ScheduleGanttMatrix project={project} onUpdateSchedule={handleUpdateSchedule} />
+          <ScheduleGanttMatrix
+            project={project}
+            dailyProgress={projectDaily}
+            weeklyProgress={projectWeekly}
+            pos={pos}
+            goodsHandovers={goodsHandovers}
+            spkContracts={spkContracts}
+            canEdit={canEditProjects}
+            onGoToWorkItems={() => handleTabChange("work-items")}
+            onUpdateSchedule={handleUpdateSchedule}
+          />
 
           <Card className="shadow-sm">
             <CardHeader className="p-4 border-b flex flex-row items-center justify-between">

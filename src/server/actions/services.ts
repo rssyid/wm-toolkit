@@ -13,6 +13,7 @@ import {
   UpdateSpkStatusSchema,
 } from "@/server/schemas";
 import { safeRevalidatePath as revalidatePath } from "@/server/revalidate";
+import { syncWorkItemAndProjectProgressTx } from "@/server/work-item-progress";
 
 export async function createUspkAction(rawInput: unknown) {
   try {
@@ -343,6 +344,8 @@ export async function createSpkAction(rawInput: unknown) {
     });
 
     revalidatePath(`/workspace/${spk.projectId}/procurement`);
+    revalidatePath(`/workspace/${spk.projectId}/execution`);
+    revalidatePath("/dashboard");
     return { success: true, spk: toPlainObject(spk) };
   } catch (err: unknown) {
     console.error("Gagal menerbitkan SPK:", err);
@@ -363,9 +366,31 @@ export async function updateSpkStatusAction(spkId: string, status: string) {
       return { success: false, error: "Dokumen SPK tidak ditemukan." };
     }
 
-    const updated = await db.spk.update({
-      where: { id: parsed.spkId },
-      data: { status: parsed.status as never },
+    const updated = await db.$transaction(async (tx) => {
+      const spkUpdated = await tx.spk.update({
+        where: { id: parsed.spkId },
+        data: { status: parsed.status as never },
+      });
+
+      if (spkUpdated.workItemId) {
+        const [wi, logCount] = await Promise.all([
+          tx.workItem.findUnique({
+            where: { id: spkUpdated.workItemId },
+            select: { progress: true },
+          }),
+          tx.progressLog.count({ where: { workItemId: spkUpdated.workItemId } }),
+        ]);
+        if (wi && parsed.status === "CLOSED" && wi.progress === 0 && logCount === 0) {
+          await syncWorkItemAndProjectProgressTx(
+            tx,
+            spkUpdated.projectId,
+            spkUpdated.workItemId,
+            100
+          );
+        }
+      }
+
+      return spkUpdated;
     });
 
     await recordServerAuditLog({
@@ -381,6 +406,8 @@ export async function updateSpkStatusAction(spkId: string, status: string) {
     });
 
     revalidatePath(`/workspace/${updated.projectId}/procurement`);
+    revalidatePath(`/workspace/${updated.projectId}/execution`);
+    revalidatePath("/dashboard");
     return { success: true, spk: toPlainObject(updated) };
   } catch (err: unknown) {
     console.error("Gagal memperbarui status SPK:", err);

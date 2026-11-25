@@ -69,16 +69,20 @@ export interface ScheduleGanttCell {
   type: "plan" | "revised" | "extended-revised" | "this-week-revised" | "empty";
   symbol?: "#" | "DONE" | null;
   note?: string;
+  manual?: boolean;
 }
 
 export interface ScheduleGanttTask {
   id: string;
+  workItemId?: string;
   code: string; // e.g. "a", "b", "c"
   name: string;
   planStartDate: string; // "2026-08-01" or display formatted
   planEndDate: string; // "2026-08-07"
   status?: ProjectStatus;
-  cells: Record<string, ScheduleGanttCell>; // key is week identifier e.g. "W1", "W2", or week index
+  progress?: number;
+  sourceHint?: string;
+  cells: Record<string, ScheduleGanttCell>; // key is week identifier e.g. "W1", "W2"
 }
 
 export interface ScheduleGanttGroup {
