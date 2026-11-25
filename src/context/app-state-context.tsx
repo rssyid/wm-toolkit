@@ -61,6 +61,7 @@ import {
   getInitialApprovalStatus,
 } from "@/lib/approval-matrix-utils";
 import { getInitialAppStateAction } from "@/server/actions/initial-state";
+import type { InitialAppStateData, InitialAppStateResult } from "@/server/initial-state";
 import {
   createProjectAction,
   updateProjectAction,
@@ -397,47 +398,94 @@ function getTodayDateString(): string {
   return new Date().toISOString().split("T")[0];
 }
 
-export function AppStateProvider({ children }: { children: React.ReactNode }) {
+export type InitialAppStatePayload = Extract<InitialAppStateResult, { success: true }>;
+
+export function AppStateProvider({
+  children,
+  initialState,
+}: {
+  children: React.ReactNode;
+  initialState?: InitialAppStatePayload | null;
+}) {
   const { data: session, status: sessionStatus, update: updateSession } = useSession();
 
+  const initialData: Partial<InitialAppStateData> = initialState?.data ?? {};
+  const hasInitialData = Boolean(initialState?.success && initialState.data);
+
   const [mounted, setMounted] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(
+    !hasInitialData && sessionStatus !== "unauthenticated"
+  );
   const [loadError, setLoadError] = useState<string | null>(null);
-  const hasBootstrappedRef = useRef(false);
+  const hasBootstrappedRef = useRef(hasInitialData);
+  const hydratedUserIdRef = useRef<string | null>(
+    hasInitialData ? (initialState?.activeUserProfile?.username ?? null) : null
+  );
+  const inFlightFetchRef = useRef(false);
 
   const [tableDensity, setTableDensity] = useState<"comfortable" | "compact">("comfortable");
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [afces, setAfces] = useState<AFCEDocument[]>([]);
-  const [prs, setPrs] = useState<PurchaseRequisition[]>([]);
-  const [pos, setPos] = useState<PurchaseOrder[]>([]);
-  const [grs, setGrs] = useState<GoodsReceipt[]>([]);
-  const [vendorEvaluations, setVendorEvaluations] = useState<VendorEvaluation[]>([]);
-  const [goodsHandovers, setGoodsHandovers] = useState<GoodsHandover[]>([]);
-  const [uspks, setUspks] = useState<USPKItem[]>([]);
-  const [technicalEvaluations, setTechnicalEvaluations] = useState<TechnicalEvaluation[]>([]);
-  const [spkContracts, setSpkContracts] = useState<SPKContract[]>([]);
-  const [comments, setComments] = useState<ProjectComment[]>([]);
-  const [attachments, setAttachments] = useState<ProjectAttachment[]>([]);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSetting[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [dailyProgress, setDailyProgress] = useState<DailyProgressRecord[]>([]);
-  const [weeklyProgress, setWeeklyProgress] = useState<WeeklyProgressRecord[]>([]);
+  const [projects, setProjects] = useState<Project[]>(() => initialData.projects ?? []);
+  const [afces, setAfces] = useState<AFCEDocument[]>(() => initialData.afces ?? []);
+  const [prs, setPrs] = useState<PurchaseRequisition[]>(() => initialData.prs ?? []);
+  const [pos, setPos] = useState<PurchaseOrder[]>(() => initialData.pos ?? []);
+  const [grs, setGrs] = useState<GoodsReceipt[]>(() => initialData.grs ?? []);
+  const [vendorEvaluations, setVendorEvaluations] = useState<VendorEvaluation[]>(
+    () => initialData.vendorEvaluations ?? []
+  );
+  const [goodsHandovers, setGoodsHandovers] = useState<GoodsHandover[]>(
+    () => initialData.goodsHandovers ?? []
+  );
+  const [uspks, setUspks] = useState<USPKItem[]>(() => initialData.uspks ?? []);
+  const [technicalEvaluations, setTechnicalEvaluations] = useState<TechnicalEvaluation[]>(
+    () => initialData.technicalEvaluations ?? []
+  );
+  const [spkContracts, setSpkContracts] = useState<SPKContract[]>(
+    () => initialData.spkContracts ?? []
+  );
+  const [comments, setComments] = useState<ProjectComment[]>(() => initialData.comments ?? []);
+  const [attachments, setAttachments] = useState<ProjectAttachment[]>(
+    () => initialData.attachments ?? []
+  );
+  const [notifications, setNotifications] = useState<NotificationItem[]>(
+    () => initialData.notifications ?? []
+  );
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSetting[]>(
+    () => initialData.notificationSettings ?? []
+  );
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => initialData.auditLogs ?? []);
+  const [dailyProgress, setDailyProgress] = useState<DailyProgressRecord[]>(
+    () => initialData.dailyProgress ?? []
+  );
+  const [weeklyProgress, setWeeklyProgress] = useState<WeeklyProgressRecord[]>(
+    () => initialData.weeklyProgress ?? []
+  );
 
-  const [regions, setRegions] = useState<Region[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [locations, setLocations] = useState<EstateLocation[]>([]);
-  const [blocks, setBlocks] = useState<EstateBlock[]>([]);
-  const [materials, setMaterials] = useState<MaterialCatalogItem[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [users, setUsers] = useState<AppUser[]>([]);
-  const [approvalMatrix, setApprovalMatrix] = useState<ApprovalMatrixRule[]>([]);
-  const [projectCategories, setProjectCategories] = useState<ProjectCategoryItem[]>([]);
-  const [projectTypes, setProjectTypes] = useState<ProjectTypeItem[]>([]);
-  const [procurementTypes, setProcurementTypes] = useState<ProcurementTypeItem[]>([]);
+  const [regions, setRegions] = useState<Region[]>(() => initialData.regions ?? []);
+  const [companies, setCompanies] = useState<Company[]>(() => initialData.companies ?? []);
+  const [locations, setLocations] = useState<EstateLocation[]>(() => initialData.locations ?? []);
+  const [blocks, setBlocks] = useState<EstateBlock[]>(() => initialData.blocks ?? []);
+  const [materials, setMaterials] = useState<MaterialCatalogItem[]>(
+    () => initialData.materials ?? []
+  );
+  const [suppliers, setSuppliers] = useState<Supplier[]>(() => initialData.suppliers ?? []);
+  const [users, setUsers] = useState<AppUser[]>(() => initialData.users ?? []);
+  const [approvalMatrix, setApprovalMatrix] = useState<ApprovalMatrixRule[]>(
+    () => initialData.approvalMatrix ?? []
+  );
+  const [projectCategories, setProjectCategories] = useState<ProjectCategoryItem[]>(
+    () => initialData.projectCategories ?? []
+  );
+  const [projectTypes, setProjectTypes] = useState<ProjectTypeItem[]>(
+    () => initialData.projectTypes ?? []
+  );
+  const [procurementTypes, setProcurementTypes] = useState<ProcurementTypeItem[]>(
+    () => initialData.procurementTypes ?? []
+  );
 
-  const [userProfile, setUserProfile] = useState<UserProfile>(DEFAULT_USER_PROFILE);
+  const [userProfile, setUserProfile] = useState<UserProfile>(
+    () => initialState?.activeUserProfile ?? DEFAULT_USER_PROFILE
+  );
 
   const sessionUser = session?.user as
     | {
@@ -568,49 +616,68 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     }
   }, [mounted, tableDensity]);
 
-  // Hidrasi state dari PostgreSQL hanya setelah sesi terautentikasi
+  // Terapkan initialState dari Server Component saat berubah (misal setelah login router.refresh)
+  useEffect(() => {
+    if (initialState?.success && initialState.data && !hasBootstrappedRef.current) {
+      applyDbData(
+        initialState.data as unknown as Record<string, unknown>,
+        initialState.activeUserProfile as UserProfile | undefined
+      );
+      setLoadError(null);
+      hasBootstrappedRef.current = true;
+      hydratedUserIdRef.current = initialState.activeUserProfile?.username ?? activeUserId;
+      setIsLoading(false);
+    }
+  }, [initialState, activeUserId, applyDbData]);
+
+  // Hidrasi fallback dari PostgreSQL jika belum dihidrasi oleh Server Component
   useEffect(() => {
     if (sessionStatus === "loading") {
       return;
     }
 
     if (sessionStatus === "unauthenticated") {
-      hasBootstrappedRef.current = false;
-      clearAllClientState();
+      if (hasBootstrappedRef.current || hydratedUserIdRef.current !== null) {
+        hasBootstrappedRef.current = false;
+        hydratedUserIdRef.current = null;
+        clearAllClientState();
+      }
+      inFlightFetchRef.current = false;
       setLoadError(null);
       setIsLoading(false);
       return;
     }
 
-    if (sessionUser) {
-      setUserProfile((prev) => ({
-        ...prev,
-        fullName: sessionUser.name || prev.fullName,
-        email: sessionUser.email || prev.email,
-        username: sessionUser.id || prev.username,
-        role: sessionUser.jabatan || prev.role,
-        systemRole: sessionUser.role || prev.systemRole,
-        selectedLocation: sessionUser.estateName || prev.selectedLocation,
-        avatarUrl: sessionUser.image || prev.avatarUrl,
-      }));
+    if (
+      hasBootstrappedRef.current &&
+      (!activeUserId || hydratedUserIdRef.current === activeUserId)
+    ) {
+      setIsLoading(false);
+      return;
+    }
+
+    if (inFlightFetchRef.current) {
+      return;
     }
 
     let cancelled = false;
-    const isInitialLoad = !hasBootstrappedRef.current;
-    if (isInitialLoad) {
+    inFlightFetchRef.current = true;
+    if (!hasBootstrappedRef.current) {
       setIsLoading(true);
     }
 
     getInitialAppStateAction()
       .then((res) => {
         if (cancelled) return;
-        if (res.success && res.data) {
+        if (res.success) {
           applyDbData(
             res.data as unknown as Record<string, unknown>,
             res.activeUserProfile as UserProfile | undefined
           );
           setLoadError(null);
           hasBootstrappedRef.current = true;
+          hydratedUserIdRef.current =
+            res.activeUserProfile?.username ?? activeUserId;
         } else {
           setLoadError(res.error || "Gagal memuat data awal dari server.");
         }
@@ -620,6 +687,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         setLoadError(formatErrorMessage(err, "Gagal terhubung ke server database."));
       })
       .finally(() => {
+        inFlightFetchRef.current = false;
         if (!cancelled) {
           setIsLoading(false);
         }
@@ -627,8 +695,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       cancelled = true;
+      inFlightFetchRef.current = false;
     };
-  }, [sessionStatus, sessionUser, applyDbData, clearAllClientState]);
+  }, [sessionStatus, activeUserId, applyDbData, clearAllClientState]);
 
   const activeRole: SystemRole = sessionUser?.role || userProfile.systemRole || "VIEWER";
   const isAdmin = activeRole === "ADMIN";
