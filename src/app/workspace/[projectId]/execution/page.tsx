@@ -19,6 +19,9 @@ import {
   Trash2,
   History,
   MapPin,
+  Search,
+  RotateCcw,
+  X,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -65,6 +68,10 @@ import { EmptyState } from "@/components/shared/empty-state";
 
 import { DailyProgressDialog } from "@/components/progress/daily-progress-dialog";
 import { WeeklyProgressDialog } from "@/components/progress/weekly-progress-dialog";
+import {
+  ProgressLogTables,
+  ProgressPeriodTab,
+} from "@/components/progress/progress-log-tables";
 import { ScheduleGanttMatrix } from "@/components/workspace/schedule-gantt-matrix";
 import { ScheduleRevisionDialog } from "@/components/workspace/schedule-revision-dialog";
 
@@ -88,6 +95,9 @@ function UnifiedExecutionHubContent() {
   const tabParam = normalizeExecutionTab(searchParams?.get("tab") ?? null);
 
   const {
+    isLoading,
+    loadError,
+    refreshFromDatabase,
     projects,
     updateProject,
     dailyProgress,
@@ -95,6 +105,7 @@ function UnifiedExecutionHubContent() {
     pos,
     goodsHandovers,
     spkContracts,
+    tableDensity,
     addDailyProgress,
     addWorkItem,
     updateWorkItem,
@@ -110,6 +121,12 @@ function UnifiedExecutionHubContent() {
   const [activeTab, setActiveTab] = useState(tabParam);
   const [dailyDialogOpen, setDailyDialogOpen] = useState(false);
   const [weeklyDialogOpen, setWeeklyDialogOpen] = useState(false);
+  const [dialogPreselectedWorkItemId, setDialogPreselectedWorkItemId] = useState<string | undefined>(
+    undefined
+  );
+  const [wbsPeriodTab, setWbsPeriodTab] = useState<ProgressPeriodTab>("DAILY");
+  const [wbsLogWorkItemFilter, setWbsLogWorkItemFilter] = useState<string>("ALL");
+  const [wbsLogSearch, setWbsLogSearch] = useState<string>("");
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
 
   // Quick Progress Form State
@@ -169,8 +186,75 @@ function UnifiedExecutionHubContent() {
     }
   }, [quickWorkItemId, workItems]);
 
-  const projectDaily = dailyProgress.filter((d) => d.projectId === projectId);
-  const projectWeekly = weeklyProgress.filter((w) => w.projectId === projectId);
+  const projectDaily = useMemo(
+    () => dailyProgress.filter((d) => d.projectId === projectId),
+    [dailyProgress, projectId]
+  );
+  const projectWeekly = useMemo(
+    () => weeklyProgress.filter((w) => w.projectId === projectId),
+    [weeklyProgress, projectId]
+  );
+
+  const projectByIdMap = useMemo(() => {
+    const map = new Map<string, typeof project>();
+    if (project) map.set(project.id, project);
+    return map as Map<string, NonNullable<typeof project>>;
+  }, [project]);
+
+  const wbsLogCounts = useMemo(() => {
+    const map = new Map<string, { daily: number; weekly: number }>();
+    for (const d of projectDaily) {
+      const curr = map.get(d.workItemId) || { daily: 0, weekly: 0 };
+      curr.daily += 1;
+      map.set(d.workItemId, curr);
+    }
+    for (const w of projectWeekly) {
+      const curr = map.get(w.workItemId) || { daily: 0, weekly: 0 };
+      curr.weekly += 1;
+      map.set(w.workItemId, curr);
+    }
+    return map;
+  }, [projectDaily, projectWeekly]);
+
+  const filteredWbsDaily = useMemo(() => {
+    const q = wbsLogSearch.trim().toLowerCase();
+    return projectDaily.filter((d) => {
+      if (wbsLogWorkItemFilter !== "ALL" && d.workItemId !== wbsLogWorkItemFilter) return false;
+      if (q) {
+        const hay = [d.workItemName, d.activity, d.notes, d.createdBy, d.spkNumber]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [projectDaily, wbsLogWorkItemFilter, wbsLogSearch]);
+
+  const filteredWbsWeekly = useMemo(() => {
+    const q = wbsLogSearch.trim().toLowerCase();
+    return projectWeekly.filter((w) => {
+      if (wbsLogWorkItemFilter !== "ALL" && w.workItemId !== wbsLogWorkItemFilter) return false;
+      if (q) {
+        const hay = [w.workItemName, w.period, w.notes, w.createdBy, w.spkNumber]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [projectWeekly, wbsLogWorkItemFilter, wbsLogSearch]);
+
+  const handleOpenDailyDialog = (workItemId?: string) => {
+    setDialogPreselectedWorkItemId(workItemId);
+    setDailyDialogOpen(true);
+  };
+
+  const handleOpenWeeklyDialog = (workItemId?: string) => {
+    setDialogPreselectedWorkItemId(workItemId);
+    setWeeklyDialogOpen(true);
+  };
 
   const chartData = useMemo(() => {
     if (projectWeekly.length === 0) return [];
@@ -956,135 +1040,326 @@ function UnifiedExecutionHubContent() {
         </div>
       )}
 
-      {/* TAB 2: ITEM PEKERJAAN (WBS CRUD) */}
+      {/* TAB 2: ITEM PEKERJAAN (WBS CRUD) & LIST HASIL INPUT PROGRES */}
       {activeTab === "work-items" && (
-        <Card className="shadow-sm">
-          <CardHeader className="p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-sm font-semibold">
-                Daftar Item Pekerjaan (Work Breakdown Structure)
-              </CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Kelola tugas fisik/material, jadwal rencana, serta bobot kontribusi terhadap progres proyek (target total 100%).
-              </p>
+        <div className="space-y-4">
+          <Card className="shadow-sm">
+            <CardHeader className="p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-sm font-semibold">
+                  Daftar Item Pekerjaan (Work Breakdown Structure)
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Kelola tugas fisik/material, jadwal rencana, serta bobot kontribusi terhadap progres proyek (target total 100%).
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-mono font-medium px-2.5 py-1.5 rounded bg-muted border">
+                  Total Bobot:{" "}
+                  <b
+                    className={
+                      totalWeight === 100
+                        ? "text-emerald-700 dark:text-emerald-400"
+                        : "text-amber-700 dark:text-amber-400"
+                    }
+                  >
+                    {totalWeight}%
+                  </b>
+                </span>
+                {canEditProjects && (
+                  <Button
+                    size="sm"
+                    onClick={handleOpenAddWbs}
+                    className="h-9 gap-1.5 text-xs bg-emerald-700 hover:bg-emerald-800 text-white"
+                  >
+                    <Plus className="w-3.5 h-3.5" aria-hidden="true" /> Tambah Item WBS
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              {workItems.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState
+                    icon={<Layers className="w-8 h-8 opacity-60" />}
+                    title="Belum ada item pekerjaan WBS"
+                    description="Tambahkan item pekerjaan untuk mengukur progres fisik proyek secara terstruktur."
+                    actionLabel={canEditProjects ? "Tambah Item WBS" : undefined}
+                    onAction={canEditProjects ? handleOpenAddWbs : undefined}
+                  />
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nama Item Pekerjaan</TableHead>
+                      <TableHead>Tipe</TableHead>
+                      <TableHead>Pengadaan</TableHead>
+                      <TableHead>Bobot</TableHead>
+                      <TableHead>Jadwal Rencana</TableHead>
+                      <TableHead>Progres</TableHead>
+                      <TableHead>Log Tercatat</TableHead>
+                      <TableHead>Status</TableHead>
+                      {canEditProjects && <TableHead className="text-right">Aksi</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {workItems.map((wi) => {
+                      const counts = wbsLogCounts.get(wi.id) || { daily: 0, weekly: 0 };
+                      const isSelectedFilter = wbsLogWorkItemFilter === wi.id;
+                      return (
+                        <TableRow
+                          key={wi.id}
+                          className={cn(
+                            "text-xs hover:bg-muted/30",
+                            isSelectedFilter && "bg-emerald-50/40 dark:bg-emerald-950/20"
+                          )}
+                        >
+                          <TableCell>
+                            <div className="font-semibold text-foreground">{wi.name}</div>
+                            <div className="text-[11px] text-muted-foreground">
+                              Fase: {wi.phase} &bull; Mode: {wi.progressMode}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-[11px]">
+                              {wi.type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{wi.procurementType}</TableCell>
+                          <TableCell className="font-mono font-bold">{wi.weight}%</TableCell>
+                          <TableCell className="font-mono text-muted-foreground whitespace-nowrap">
+                            {formatIDDate(wi.startDate)} s/d {formatIDDate(wi.endDate)}
+                          </TableCell>
+                          <TableCell className="min-w-[120px]">
+                            <div className="flex items-center gap-2">
+                              <Progress value={wi.progress} className="h-2 flex-1" />
+                              <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                                {wi.progress}%
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setWbsLogWorkItemFilter(isSelectedFilter ? "ALL" : wi.id);
+                                  setWbsPeriodTab("DAILY");
+                                }}
+                                className={cn(
+                                  "px-2 py-0.5 rounded border text-[11px] font-mono transition-colors",
+                                  isSelectedFilter && wbsPeriodTab === "DAILY"
+                                    ? "bg-emerald-700 text-white border-emerald-700"
+                                    : "bg-muted/50 hover:bg-muted text-foreground border-border"
+                                )}
+                                title="Filter list ke progres harian item ini"
+                              >
+                                {counts.daily} Harian
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setWbsLogWorkItemFilter(isSelectedFilter ? "ALL" : wi.id);
+                                  setWbsPeriodTab("WEEKLY");
+                                }}
+                                className={cn(
+                                  "px-2 py-0.5 rounded border text-[11px] font-mono transition-colors",
+                                  isSelectedFilter && wbsPeriodTab === "WEEKLY"
+                                    ? "bg-emerald-700 text-white border-emerald-700"
+                                    : "bg-muted/50 hover:bg-muted text-foreground border-border"
+                                )}
+                                title="Filter list ke progres mingguan item ini"
+                              >
+                                {counts.weekly} Mingguan
+                              </button>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <StatusBadge status={wi.status} showDot={false} />
+                          </TableCell>
+                          {canEditProjects && (
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                {canRecordProgress && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      wi.progressMode === "Weekly"
+                                        ? handleOpenWeeklyDialog(wi.id)
+                                        : handleOpenDailyDialog(wi.id)
+                                    }
+                                    className="h-8 px-2 text-[11px] gap-1"
+                                    title={`Catat progres ${wi.progressMode === "Weekly" ? "mingguan" : "harian"} untuk ${wi.name}`}
+                                  >
+                                    <Plus className="w-3 h-3" aria-hidden="true" />
+                                    <span>Input</span>
+                                  </Button>
+                                )}
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  aria-label={`Ubah item pekerjaan ${wi.name}`}
+                                  onClick={() => handleOpenEditWbs(wi)}
+                                  className="h-8 w-8"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" aria-hidden="true" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  aria-label={`Hapus item pekerjaan ${wi.name}`}
+                                  onClick={() =>
+                                    setDeleteTarget({
+                                      kind: "workItem",
+                                      id: wi.id,
+                                      label: `Item WBS "${wi.name}"`,
+                                    })
+                                  }
+                                  className="h-8 w-8 text-muted-foreground hover:text-rose-700"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* List Hasil Input Progres Harian & Mingguan per Proyek / Item WBS */}
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-card p-4 rounded-lg border shadow-sm">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Daftar Hasil Input Progres Harian &amp; Mingguan
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Pantau seluruh catatan realisasi harian dan evaluasi mingguan pada item pekerjaan proyek ini.
+                </p>
+              </div>
+
+              {canRecordProgress && workItems.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      handleOpenDailyDialog(
+                        wbsLogWorkItemFilter !== "ALL" ? wbsLogWorkItemFilter : undefined
+                      )
+                    }
+                    className="h-9 text-xs gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" aria-hidden="true" /> Log Harian
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() =>
+                      handleOpenWeeklyDialog(
+                        wbsLogWorkItemFilter !== "ALL" ? wbsLogWorkItemFilter : undefined
+                      )
+                    }
+                    className="h-9 text-xs gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" aria-hidden="true" /> Log Mingguan
+                  </Button>
+                </div>
+              )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-mono font-medium px-2.5 py-1.5 rounded bg-muted border">
-                Total Bobot:{" "}
-                <b
-                  className={
-                    totalWeight === 100
-                      ? "text-emerald-700 dark:text-emerald-400"
-                      : "text-amber-700 dark:text-amber-400"
-                  }
-                >
-                  {totalWeight}%
-                </b>
-              </span>
-              {canEditProjects && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2.5 bg-card p-3 rounded-lg border shadow-sm">
+              <div className="relative flex-1">
+                <label htmlFor="wbs-log-search" className="text-[11px] font-medium text-muted-foreground block mb-1">
+                  Cari Catatan Progres
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  <Input
+                    id="wbs-log-search"
+                    type="text"
+                    placeholder="Cari aktivitas, periode, catatan, atau pencatat..."
+                    value={wbsLogSearch}
+                    onChange={(e) => setWbsLogSearch(e.target.value)}
+                    className="pl-9 pr-8 text-xs h-9 bg-background"
+                  />
+                  {wbsLogSearch && (
+                    <button
+                      type="button"
+                      aria-label="Hapus pencarian log progres"
+                      onClick={() => setWbsLogSearch("")}
+                      className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="w-full sm:w-[260px]">
+                <label htmlFor="wbs-log-item-filter" className="text-[11px] font-medium text-muted-foreground block mb-1">
+                  Filter Item Pekerjaan WBS
+                </label>
+                <Select value={wbsLogWorkItemFilter} onValueChange={setWbsLogWorkItemFilter}>
+                  <SelectTrigger id="wbs-log-item-filter" className="h-9 text-xs bg-background">
+                    <SelectValue placeholder="Semua Item WBS" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Semua Item WBS ({workItems.length})</SelectItem>
+                    {workItems.map((wi) => (
+                      <SelectItem key={wi.id} value={wi.id}>
+                        {wi.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {(wbsLogWorkItemFilter !== "ALL" || Boolean(wbsLogSearch.trim())) && (
                 <Button
+                  type="button"
+                  variant="ghost"
                   size="sm"
-                  onClick={handleOpenAddWbs}
-                  className="h-9 gap-1.5 text-xs bg-emerald-700 hover:bg-emerald-800 text-white"
+                  onClick={() => {
+                    setWbsLogWorkItemFilter("ALL");
+                    setWbsLogSearch("");
+                  }}
+                  className="h-9 text-xs text-muted-foreground hover:text-foreground gap-1.5 shrink-0"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Tambah Item WBS
+                  <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Reset</span>
                 </Button>
               )}
             </div>
-          </CardHeader>
-          <CardContent className="p-0 overflow-x-auto">
-            {workItems.length === 0 ? (
-              <div className="p-6">
-                <EmptyState
-                  icon={<Layers className="w-8 h-8 opacity-60" />}
-                  title="Belum ada item pekerjaan WBS"
-                  description="Tambahkan item pekerjaan untuk mengukur progres fisik proyek secara terstruktur."
-                  actionLabel={canEditProjects ? "Tambah Item WBS" : undefined}
-                  onAction={canEditProjects ? handleOpenAddWbs : undefined}
-                />
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nama Item Pekerjaan</TableHead>
-                    <TableHead>Tipe</TableHead>
-                    <TableHead>Pengadaan</TableHead>
-                    <TableHead>Bobot</TableHead>
-                    <TableHead>Jadwal Rencana</TableHead>
-                    <TableHead>Progres</TableHead>
-                    <TableHead>Status</TableHead>
-                    {canEditProjects && <TableHead className="text-right">Aksi</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {workItems.map((wi) => (
-                    <TableRow key={wi.id} className="text-xs hover:bg-muted/30">
-                      <TableCell>
-                        <div className="font-semibold text-foreground">{wi.name}</div>
-                        <div className="text-[11px] text-muted-foreground">
-                          Fase: {wi.phase} &bull; Mode: {wi.progressMode}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-[11px]">
-                          {wi.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{wi.procurementType}</TableCell>
-                      <TableCell className="font-mono font-bold">{wi.weight}%</TableCell>
-                      <TableCell className="font-mono text-muted-foreground whitespace-nowrap">
-                        {formatIDDate(wi.startDate)} s/d {formatIDDate(wi.endDate)}
-                      </TableCell>
-                      <TableCell className="min-w-[120px]">
-                        <div className="flex items-center gap-2">
-                          <Progress value={wi.progress} className="h-2 flex-1" />
-                          <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                            {wi.progress}%
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={wi.status} showDot={false} />
-                      </TableCell>
-                      {canEditProjects && (
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              aria-label={`Ubah item pekerjaan ${wi.name}`}
-                              onClick={() => handleOpenEditWbs(wi)}
-                              className="h-8 w-8"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              aria-label={`Hapus item pekerjaan ${wi.name}`}
-                              onClick={() =>
-                                setDeleteTarget({
-                                  kind: "workItem",
-                                  id: wi.id,
-                                  label: `Item WBS "${wi.name}"`,
-                                })
-                              }
-                              className="h-8 w-8 text-muted-foreground hover:text-rose-700"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+
+            <ProgressLogTables
+              dailyLogs={filteredWbsDaily}
+              weeklyLogs={filteredWbsWeekly}
+              projectById={projectByIdMap}
+              activePeriodTab={wbsPeriodTab}
+              onPeriodTabChange={setWbsPeriodTab}
+              showProjectColumn={false}
+              tableDensity={tableDensity}
+              isLoading={isLoading}
+              loadError={loadError}
+              onRetryLoad={refreshFromDatabase}
+              hasActiveFilters={wbsLogWorkItemFilter !== "ALL" || Boolean(wbsLogSearch.trim())}
+              onResetFilters={() => {
+                setWbsLogWorkItemFilter("ALL");
+                setWbsLogSearch("");
+              }}
+            />
+          </div>
+        </div>
       )}
 
       {/* TAB 3: JADWAL & MATRIKS GANTT */}
@@ -1701,13 +1976,21 @@ function UnifiedExecutionHubContent() {
       {/* Dialog Modals Progres & Revisi */}
       <DailyProgressDialog
         open={dailyDialogOpen}
-        onOpenChange={setDailyDialogOpen}
+        onOpenChange={(open) => {
+          setDailyDialogOpen(open);
+          if (!open) setDialogPreselectedWorkItemId(undefined);
+        }}
         project={project}
+        preselectedWorkItemId={dialogPreselectedWorkItemId}
       />
       <WeeklyProgressDialog
         open={weeklyDialogOpen}
-        onOpenChange={setWeeklyDialogOpen}
+        onOpenChange={(open) => {
+          setWeeklyDialogOpen(open);
+          if (!open) setDialogPreselectedWorkItemId(undefined);
+        }}
         project={project}
+        preselectedWorkItemId={dialogPreselectedWorkItemId}
       />
       <ScheduleRevisionDialog
         open={revisionDialogOpen}

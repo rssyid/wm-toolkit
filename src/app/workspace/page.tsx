@@ -53,6 +53,7 @@ import {
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
+import { WorkspaceProgressTab } from "@/components/workspace/workspace-progress-tab";
 import { useAppState } from "@/context/app-state-context";
 import { formatIDDate, formatIDR, cn } from "@/lib/utils";
 import { Project, WorkItem, AFCEDocument } from "@/types";
@@ -349,6 +350,8 @@ function WorkspaceContent() {
   const {
     projects,
     afces,
+    dailyProgress,
+    weeklyProgress,
     regions,
     companies,
     locations,
@@ -364,8 +367,15 @@ function WorkspaceContent() {
     isViewerOnly,
   } = useAppState();
 
-  // View mode: Active projects vs Recycle Bin
-  const [viewMode, setViewMode] = useState<"ACTIVE" | "RECYCLE_BIN">("ACTIVE");
+  // View mode: Active projects, Progress Harian/Mingguan, vs Recycle Bin
+  const initialTabParam = searchParams?.get("tab");
+  const [viewMode, setViewMode] = useState<"ACTIVE" | "RECYCLE_BIN" | "PROGRESS">(
+    initialTabParam === "progress"
+      ? "PROGRESS"
+      : initialTabParam === "trash"
+      ? "RECYCLE_BIN"
+      : "ACTIVE"
+  );
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [hardDeleteDialogOpen, setHardDeleteDialogOpen] = useState(false);
@@ -418,12 +428,21 @@ function WorkspaceContent() {
 
   // Sync with URL search params from KPI cards or global search
   useEffect(() => {
+    const tabParam = searchParams?.get("tab");
     const statusParam = searchParams?.get("status");
     const afceParam = searchParams?.get("afceStatus");
     const locParam = searchParams?.get("location");
     const procParam = searchParams?.get("procurement");
     const picParam = searchParams?.get("pic");
     const queryParam = searchParams?.get("q");
+
+    if (tabParam === "progress") {
+      setViewMode("PROGRESS");
+    } else if (tabParam === "trash") {
+      setViewMode("RECYCLE_BIN");
+    } else if (tabParam === "active") {
+      setViewMode("ACTIVE");
+    }
 
     if (statusParam) {
       if (statusParam === "delayed") {
@@ -438,6 +457,18 @@ function WorkspaceContent() {
     if (picParam) setPicFilter(picParam);
     if (queryParam) setSearch(queryParam);
   }, [searchParams]);
+
+  const handleViewModeChange = (nextMode: "ACTIVE" | "RECYCLE_BIN" | "PROGRESS") => {
+    setViewMode(nextMode);
+    setPage(1);
+    if (nextMode === "PROGRESS") {
+      router.replace("/workspace?tab=progress", { scroll: false });
+    } else if (nextMode === "RECYCLE_BIN") {
+      router.replace("/workspace?tab=trash", { scroll: false });
+    } else {
+      router.replace("/workspace", { scroll: false });
+    }
+  };
 
   const resetFilters = () => {
     setSearch("");
@@ -471,6 +502,13 @@ function WorkspaceContent() {
   // Counts for active vs deleted and quick status pills
   const activeProjects = useMemo(() => projects.filter((p) => !p.deletedAt), [projects]);
   const deletedProjects = useMemo(() => projects.filter((p) => !!p.deletedAt), [projects]);
+  const activeProgressCount = useMemo(() => {
+    const activeIds = new Set(activeProjects.map((p) => p.id));
+    return (
+      dailyProgress.filter((d) => activeIds.has(d.projectId)).length +
+      weeklyProgress.filter((w) => activeIds.has(w.projectId)).length
+    );
+  }, [activeProjects, dailyProgress, weeklyProgress]);
 
   const statusCounts = useMemo(() => {
     const targetPool = viewMode === "ACTIVE" ? activeProjects : deletedProjects;
@@ -676,17 +714,14 @@ function WorkspaceContent() {
         )}
       </div>
 
-      {/* Top Tabs: Active Projects vs Recycle Bin */}
-      <div className="flex items-center justify-between border-b pb-2">
-        <div className="flex items-center gap-2">
+      {/* Top Tabs: Active Projects vs Progress Harian/Mingguan vs Recycle Bin */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => {
-              setViewMode("ACTIVE");
-              setPage(1);
-            }}
+            onClick={() => handleViewModeChange("ACTIVE")}
             className={cn(
-              "px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-2",
+              "min-h-[36px] px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-2",
               viewMode === "ACTIVE"
                 ? "bg-emerald-700 text-white shadow-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -700,18 +735,32 @@ function WorkspaceContent() {
 
           <button
             type="button"
-            onClick={() => {
-              setViewMode("RECYCLE_BIN");
-              setPage(1);
-            }}
+            onClick={() => handleViewModeChange("PROGRESS")}
             className={cn(
-              "px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-2",
+              "min-h-[36px] px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-2",
+              viewMode === "PROGRESS"
+                ? "bg-emerald-700 text-white shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            )}
+          >
+            <Activity className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Progres Harian &amp; Mingguan</span>
+            <Badge variant="secondary" className={cn("px-1.5 py-0 text-[10px]", viewMode === "PROGRESS" && "bg-white/20 text-white")}>
+              {activeProgressCount}
+            </Badge>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleViewModeChange("RECYCLE_BIN")}
+            className={cn(
+              "min-h-[36px] px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-2",
               viewMode === "RECYCLE_BIN"
                 ? "bg-rose-700 text-white shadow-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
             )}
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Recycle Bin</span>
             <Badge variant="secondary" className={cn("px-1.5 py-0 text-[10px]", viewMode === "RECYCLE_BIN" && "bg-white/20 text-white")}>
               {deletedProjects.length}
@@ -739,6 +788,10 @@ function WorkspaceContent() {
         )}
       </div>
 
+      {viewMode === "PROGRESS" ? (
+        <WorkspaceProgressTab />
+      ) : (
+      <>
       {/* Modern Filter Toolbar */}
       <div className="space-y-2.5">
         {/* Quick Status Segmented Tabs */}
@@ -1734,6 +1787,8 @@ function WorkspaceContent() {
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* Delete Confirmation Dialog */}
       {projectToDelete && (
