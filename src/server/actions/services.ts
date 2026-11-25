@@ -19,13 +19,41 @@ export async function createUspkAction(rawInput: unknown) {
     const user = await requireRole(["ADMIN", "PIC"]);
     const parsed = CreateUspkSchema.parse(rawInput);
 
-    const afce = await db.afce.findFirst({
-      where: { projectId: parsed.projectId, deletedAt: null },
+    const project = await db.project.findFirst({
+      where: { id: parsed.projectId, deletedAt: null },
+      select: { id: true },
     });
+    if (!project) {
+      return { success: false, error: "Proyek referensi tidak ditemukan atau sudah diarsipkan." };
+    }
+
+    const afce = parsed.afceId
+      ? await db.afce.findFirst({
+          where: { id: parsed.afceId, projectId: parsed.projectId, deletedAt: null },
+          select: { id: true },
+        })
+      : await db.afce.findFirst({
+          where: { projectId: parsed.projectId, deletedAt: null },
+          select: { id: true },
+        });
+
+    if (parsed.afceId && !afce) {
+      return { success: false, error: "Dokumen AFCE referensi tidak ditemukan atau tidak valid." };
+    }
+
+    if (parsed.workItemId) {
+      const workItem = await db.workItem.findFirst({
+        where: { id: parsed.workItemId, projectId: parsed.projectId },
+        select: { id: true },
+      });
+      if (!workItem) {
+        return { success: false, error: "Item pekerjaan (WBS) referensi tidak ditemukan pada proyek ini." };
+      }
+    }
 
     const uspk = await db.uspk.create({
       data: {
-        afceId: parsed.afceId || afce?.id,
+        afceId: afce?.id,
         projectId: parsed.projectId,
         workItemId: parsed.workItemId || undefined,
         uspkNumber: parsed.uspkNumber,

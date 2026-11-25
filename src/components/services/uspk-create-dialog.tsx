@@ -37,7 +37,7 @@ export function USPKCreateDialog({
   onOpenChange,
   project,
 }: USPKCreateDialogProps) {
-  const { createUspk, uspks, suppliers, userProfile } = useAppState();
+  const { createUspk, uspks, afces, suppliers, userProfile } = useAppState();
 
   const [uspkNumber, setUspkNumber] = useState("");
   const [uspkDate, setUspkDate] = useState("");
@@ -148,10 +148,12 @@ export function USPKCreateDialog({
       return;
     }
 
+    const projectAfce = afces.find((a) => a.projectId === project.id && !a.deletedAt);
+
     setIsSubmitting(true);
     try {
       const ok = await createUspk({
-        afceId: project.afceNumber,
+        afceId: projectAfce?.id,
         projectId: project.id,
         projectCode: project.code,
         workItemId: selectedWorkItem?.id,
