@@ -21,6 +21,7 @@ import {
   ChevronRight,
   FolderGit2,
   Bell,
+  FileBarChart2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppState } from "@/context/app-state-context";
@@ -62,6 +63,12 @@ export function AppSidebar({
       active: pathname.startsWith("/workspace"),
     },
     {
+      label: "Laporan",
+      icon: FileBarChart2,
+      href: "/reports",
+      active: pathname.startsWith("/reports"),
+    },
+    {
       label: "Notifikasi",
       icon: Bell,
       href: "/notifications",
@@ -86,7 +93,7 @@ export function AppSidebar({
   return (
     <aside
       className={cn(
-        "relative flex-col border-r bg-card transition-all duration-300 ease-in-out shrink-0 select-none h-full",
+        "relative flex-col border-r bg-card transition-all duration-300 ease-in-out shrink-0 select-none h-full print:hidden",
         isMobileDrawer ? "flex w-full border-r-0" : "hidden lg:flex",
         !isMobileDrawer && (collapsed ? "w-16" : "w-64")
       )}

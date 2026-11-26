@@ -93,7 +93,7 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between gap-2 border-b bg-card/95 px-3 sm:px-4 backdrop-blur-md">
+    <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between gap-2 border-b bg-card/95 px-3 sm:px-4 backdrop-blur-md print:hidden">
       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         <Button
           variant="ghost"
