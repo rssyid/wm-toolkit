@@ -6,6 +6,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogDescription,
   DialogFooter,
@@ -164,15 +165,15 @@ export function GDriveUploadDialog({
 
   return (
     <Dialog open={open} onOpenChange={(val) => !uploading && onOpenChange(val)}>
-      <DialogContent className="max-w-md">
+      <DialogContent scrollable className="sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center text-emerald-700 dark:text-emerald-300">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center text-emerald-700 dark:text-emerald-300 shrink-0">
               <UploadCloud className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0">
               <DialogTitle className="text-base">Unggah Berkas ke Google Drive</DialogTitle>
-              <DialogDescription className="text-xs">
+              <DialogDescription className="text-xs truncate">
                 Direktori tujuan:{" "}
                 <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">
                   [{project?.code || "PROYEK"}] {project?.name || ""}
@@ -182,105 +183,107 @@ export function GDriveUploadDialog({
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-3.5 py-1 text-xs">
-          <div className="p-4 border-2 border-dashed rounded-lg text-center bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer relative">
-            <input
-              type="file"
-              aria-label="Pilih berkas untuk diunggah"
-              accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv,.docx,.doc,.dwg"
-              onChange={handleFileSelect}
-              className="absolute inset-0 opacity-0 cursor-pointer"
-            />
-            <UploadCloud className="w-7 h-7 text-emerald-700 dark:text-emerald-400 mx-auto mb-1.5" />
-            {selectedFile ? (
-              <div className="space-y-1">
-                <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                  <File className="w-3.5 h-3.5" />
-                  <span className="truncate max-w-[220px]">{selectedFile.name}</span>
-                  <span className="text-[11px] text-muted-foreground">({fileSize})</span>
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+          <DialogBody className="space-y-3 text-xs">
+            <div className="p-3 border-2 border-dashed rounded-lg text-center bg-muted/20 hover:bg-muted/30 transition-colors cursor-pointer relative">
+              <input
+                type="file"
+                aria-label="Pilih berkas untuk diunggah"
+                accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv,.docx,.doc,.dwg"
+                onChange={handleFileSelect}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+              />
+              <UploadCloud className="w-6 h-6 text-emerald-700 dark:text-emerald-400 mx-auto mb-1" />
+              {selectedFile ? (
+                <div className="space-y-0.5">
+                  <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                    <File className="w-3.5 h-3.5" />
+                    <span className="truncate max-w-[240px]">{selectedFile.name}</span>
+                    <span className="text-[11px] text-muted-foreground">({fileSize})</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Klik untuk mengganti berkas</p>
                 </div>
-                <p className="text-[11px] text-muted-foreground">Klik untuk mengganti berkas</p>
-              </div>
-            ) : (
-              <div className="space-y-0.5">
-                <p className="text-xs font-semibold text-foreground">
-                  Pilih berkas dari perangkat Anda
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Mendukung PDF, PNG, JPG, WebP, XLSX, CSV, DOCX, DWG maksimal 15 MB
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="gdrive-upload-name" className="font-semibold text-foreground block mb-1">
-              Nama Tampilan Berkas <span className="text-rose-600">*</span>
-            </label>
-            <Input
-              id="gdrive-upload-name"
-              value={fileName}
-              onChange={(e) => setFileName(e.target.value)}
-              placeholder="Contoh: Berita_Acara_Serah_Terima_BAST.pdf"
-              className="text-xs h-9"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="gdrive-upload-cat" className="font-semibold text-foreground block mb-1">
-                Kategori Dokumen
-              </label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger id="gdrive-upload-cat" className="text-xs h-9">
-                  <SelectValue placeholder="Pilih kategori" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORY_OPTIONS.map((cat) => (
-                    <SelectItem key={cat} value={cat} className="text-xs">
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              ) : (
+                <div className="space-y-0.5">
+                  <p className="text-xs font-semibold text-foreground">
+                    Pilih berkas dari perangkat Anda
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    PDF, PNG, JPG, WebP, XLSX, CSV, DOCX, DWG (maks. 15 MB)
+                  </p>
+                </div>
+              )}
             </div>
 
-            <div>
-              <label htmlFor="gdrive-upload-doc" className="font-semibold text-foreground block mb-1">
-                Nomor Registrasi / SAP
+            <div className="space-y-1">
+              <label htmlFor="gdrive-upload-name" className="font-semibold text-foreground block">
+                Nama Tampilan Berkas <span className="text-rose-600">*</span>
               </label>
               <Input
-                id="gdrive-upload-doc"
-                value={docNumber}
-                onChange={(e) => setDocNumber(e.target.value)}
-                placeholder="Contoh: BAST-01/2026"
-                className="text-xs font-mono h-9"
+                id="gdrive-upload-name"
+                value={fileName}
+                onChange={(e) => setFileName(e.target.value)}
+                placeholder="Contoh: Berita_Acara_Serah_Terima_BAST.pdf"
+                className="text-xs h-9"
+                required
               />
             </div>
-          </div>
 
-          {uploading && (
-            <div className="space-y-1.5 pt-1">
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1.5 font-medium text-foreground">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-700" />
-                  Mengunggah ke Google Drive...
-                </span>
-                <span className="font-mono">{uploadProgress}%</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label htmlFor="gdrive-upload-cat" className="font-semibold text-foreground block">
+                  Kategori Dokumen
+                </label>
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger id="gdrive-upload-cat" className="text-xs h-9">
+                    <SelectValue placeholder="Pilih kategori" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORY_OPTIONS.map((cat) => (
+                      <SelectItem key={cat} value={cat} className="text-xs">
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Progress value={uploadProgress} className="h-1.5" />
-            </div>
-          )}
 
-          <div className="rounded-md border p-3 bg-muted/30 flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
-            <div className="text-[11px] text-muted-foreground leading-relaxed">
-              Unggahan memerlukan konfigurasi kredensial Google Drive server yang aktif. Maksimal ukuran berkas adalah 15 MB.
+              <div className="space-y-1">
+                <label htmlFor="gdrive-upload-doc" className="font-semibold text-foreground block">
+                  Nomor Registrasi / SAP
+                </label>
+                <Input
+                  id="gdrive-upload-doc"
+                  value={docNumber}
+                  onChange={(e) => setDocNumber(e.target.value)}
+                  placeholder="Contoh: BAST-01/2026"
+                  className="text-xs font-mono h-9"
+                />
+              </div>
             </div>
-          </div>
 
-          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            {uploading && (
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1.5 font-medium text-foreground">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-700" />
+                    Mengunggah ke Google Drive...
+                  </span>
+                  <span className="font-mono">{uploadProgress}%</span>
+                </div>
+                <Progress value={uploadProgress} className="h-1.5" />
+              </div>
+            )}
+
+            <div className="rounded-md border px-3 py-2 bg-muted/30 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
+              <div className="text-[11px] text-muted-foreground">
+                Memerlukan konfigurasi kredensial Google Drive server yang aktif (maks. 15 MB).
+              </div>
+            </div>
+          </DialogBody>
+
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"

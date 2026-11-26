@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -244,43 +245,43 @@ export function SPKCreateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent scrollable className="sm:max-w-2xl">
         <DialogHeader>
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-              <FileCheck2 className="w-5 h-5" />
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 shrink-0">
+              <FileCheck2 className="w-4 h-4" />
             </div>
             <div>
               <DialogTitle className="text-base font-bold">
                 Terbitkan Surat Perintah Kerja (SPK) Resmi
               </DialogTitle>
               <DialogDescription className="text-xs">
-                Penerbitan kontrak ikatan kerja definitif rekanan 1:1 berdasarkan usulan USPK yang telah lolos evaluasi teknis.
+                Penerbitan kontrak ikatan kerja definitif rekanan 1:1 berdasarkan USPK yang lolos evaluasi teknis.
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        {eligibleUspks.length === 0 && (
-          <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold">Tidak Ada USPK Tersedia untuk Penerbitan SPK</p>
-              <p className="text-[11px] mt-0.5">
-                Penerbitan SPK membutuhkan USPK dengan evaluasi teknis berstatus <strong>RECOMMENDED</strong> yang belum memiliki SPK aktif (hubungan 1:1).
-              </p>
+        <DialogBody className="space-y-3 text-xs">
+          {eligibleUspks.length === 0 && (
+            <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Tidak Ada USPK Tersedia untuk Penerbitan SPK</p>
+                <p className="text-[11px] mt-0.5">
+                  Penerbitan SPK membutuhkan USPK dengan evaluasi teknis berstatus <strong>RECOMMENDED</strong> yang belum memiliki SPK aktif.
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        <div className="grid gap-4 py-2 text-xs">
           {/* Row 1: Pilih USPK Rujukan */}
-          <div className="space-y-1.5">
-            <label className="font-semibold text-foreground">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Dasar Usulan SPK (USPK) <span className="text-red-600">*</span>
             </label>
             <Select value={selectedUspkId} onValueChange={handleUspkChange} disabled={eligibleUspks.length === 0}>
-              <SelectTrigger className="text-xs">
+              <SelectTrigger className="h-9 text-xs">
                 <SelectValue placeholder="Pilih USPK lolos evaluasi..." />
               </SelectTrigger>
               <SelectContent>
@@ -291,44 +292,38 @@ export function SPKCreateDialog({
                 ))}
               </SelectContent>
             </Select>
+            {activeUspk && (
+              <div className="px-2.5 py-1.5 rounded bg-muted/50 border text-[11px] flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  Kontraktor: <strong className="text-foreground">{activeUspk.vendorName}</strong>
+                </span>
+                <span className="text-muted-foreground truncate max-w-sm">{activeUspk.scope}</span>
+              </div>
+            )}
           </div>
-
-          {/* Active USPK Information Highlight */}
-          {activeUspk && (
-            <div className="p-2.5 rounded-md bg-muted/60 border text-[11px] space-y-1">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Kontraktor:</span>
-                <span className="font-semibold text-foreground">{activeUspk.vendorName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Lingkup:</span>
-                <span className="font-medium text-foreground max-w-sm truncate">{activeUspk.scope}</span>
-              </div>
-            </div>
-          )}
 
           {/* Row 2: Nomor SPK & Status */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="font-semibold text-foreground">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Nomor SPK Resmi <span className="text-red-500">*</span>
               </label>
               <Input
                 value={spkNumber}
                 onChange={(e) => setSpkNumber(e.target.value)}
                 placeholder="SPK-2026-0..."
-                className="font-mono text-xs"
+                className="h-9 font-mono text-xs"
               />
             </div>
-            <div className="space-y-1.5">
-              <label className="font-semibold text-foreground">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Status Kontrak SPK
               </label>
               <Select
                 value={status}
                 onValueChange={(val: SPKStatus) => setStatus(val)}
               >
-                <SelectTrigger className="text-xs font-semibold">
+                <SelectTrigger className="h-9 text-xs font-semibold">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -341,42 +336,25 @@ export function SPKCreateDialog({
             </div>
           </div>
 
-          {/* Row 3: Nilai Kontrak Definitif */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="font-semibold text-foreground">
-                Nilai Kontrak Definitif (Rp) <span className="text-red-500">*</span>
-              </label>
-              <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                {formatIDR(Number(value) || 0)}
-              </span>
-            </div>
-            <Input
-              type="number"
-              value={value || ""}
-              onChange={(e) => setValue(Number(e.target.value))}
-              className="font-mono text-xs"
-            />
-          </div>
-
-          {/* Row 3B: Target Kerja Definitif Kontrak */}
-          <div className="p-3 rounded-lg border bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="font-semibold text-foreground text-xs">
-                Target Kerja Definitif Kontrak SPK <span className="text-red-500">*</span>
-              </label>
-              {targetVolume && unit ? (
-                <span className="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                  Target Kontrak: {targetVolume} {unit}
-                </span>
-              ) : null}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Row 3: Nilai Kontrak & Target Kerja (3 Kolom Ringkas) */}
+          <div className="p-2.5 rounded-lg border bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50 space-y-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <div className="space-y-1">
-                <span className="text-[11px] text-muted-foreground font-medium">
-                  Volume Kontrak Definitif
-                </span>
+                <label className="text-[11px] font-semibold text-foreground block">
+                  Nilai Kontrak (Rp) <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="number"
+                  value={value || ""}
+                  onChange={(e) => setValue(Number(e.target.value))}
+                  className="h-8 font-mono text-xs bg-background"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-foreground block">
+                  Volume Target <span className="text-red-500">*</span>
+                </label>
                 <Input
                   type="number"
                   min="0.1"
@@ -384,83 +362,84 @@ export function SPKCreateDialog({
                   value={targetVolume}
                   onChange={(e) => setTargetVolume(e.target.value === "" ? "" : Number(e.target.value))}
                   placeholder="Misal: 500"
-                  className="font-mono text-xs bg-background"
+                  className="h-8 font-mono text-xs bg-background"
                 />
               </div>
 
               <div className="space-y-1">
-                <span className="text-[11px] text-muted-foreground font-medium">
-                  Satuan Ukuran (uoM)
-                </span>
+                <label className="text-[11px] font-semibold text-foreground block">
+                  Satuan (uoM) <span className="text-red-500">*</span>
+                </label>
                 <Input
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
                   placeholder="M3, M, Ha, Titik..."
-                  className="text-xs font-mono uppercase bg-background"
+                  className="h-8 text-xs font-mono uppercase bg-background"
                 />
               </div>
             </div>
-
-            <p className="text-[10px] text-muted-foreground">
-              * Diwariskan otomatis dari USPK rujukan. Target ini akan dipotong secara *real-time* saat mandor/pengawas menginput laporan progress harian.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <span className="text-muted-foreground">
+                Target diwariskan dari USPK dan dipotong otomatis saat input progress harian.
+              </span>
+              <span className="font-mono font-bold text-indigo-700 dark:text-indigo-300">
+                {formatIDR(Number(value) || 0)}
+              </span>
+            </div>
           </div>
 
-          {/* Row 4: Masa Berlaku Kontrak */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+          {/* Row 4: 3 Tanggal Kontrak dalam 1 Baris */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1">
               <label className="font-semibold text-foreground flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> Tanggal Mulai Kontrak
+                <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> Mulai Kontrak
               </label>
               <Input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="text-xs font-mono"
+                className="h-9 text-xs font-mono"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label className="font-semibold text-foreground flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> Tanggal Akhir Masa Kontrak
+                <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> Akhir Kontrak
               </label>
               <Input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="text-xs font-mono"
+                className="h-9 text-xs font-mono"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> Tanggal Terbit
+              </label>
+              <Input
+                type="date"
+                value={releaseDate}
+                onChange={(e) => setReleaseDate(e.target.value)}
+                className="h-9 text-xs font-mono"
               />
             </div>
           </div>
 
-          {/* Row 5: Tanggal Terbit Kontrak */}
-          <div className="space-y-1.5">
-            <label className="font-semibold text-foreground flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> Tanggal Penerbitan Kontrak Resmi
-            </label>
-            <Input
-              type="date"
-              value={releaseDate}
-              onChange={(e) => setReleaseDate(e.target.value)}
-              className="text-xs font-mono"
-            />
-          </div>
-
-          {/* Row 6: Catatan Ketentuan Kontrak */}
-          <div className="space-y-1.5">
-            <label className="font-semibold text-foreground">
-              Ketentuan Khusus & Pembayaran
+          {/* Row 5: Ketentuan Khusus & Lampiran */}
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
+              Ketentuan Khusus & Pembayaran (Opsional)
             </label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Ketentuan termin, jaminan pelaksanaan, sanksi keterlambatan, retensi..."
-              rows={3}
-              className="text-xs leading-relaxed"
+              rows={2}
+              className="text-xs leading-relaxed resize-none"
             />
           </div>
 
-          {/* Row 7: Lampiran Berkas Kontrak */}
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <label className="font-semibold text-foreground flex items-center gap-1">
               <UploadCloud className="w-3.5 h-3.5 text-muted-foreground" /> Lampiran Dokumen SPK Ditandatangani (Opsional)
             </label>
@@ -469,7 +448,7 @@ export function SPKCreateDialog({
                 value={attachmentName}
                 onChange={(e) => setAttachmentName(e.target.value)}
                 placeholder="Tautan Google Drive atau nama berkas kontrak SPK"
-                className="text-xs"
+                className="h-9 text-xs"
               />
               <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1">
                 {uploadingAttachment ? (
@@ -488,9 +467,9 @@ export function SPKCreateDialog({
               </label>
             </div>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+        <DialogFooter>
           <Button
             type="button"
             variant="outline"

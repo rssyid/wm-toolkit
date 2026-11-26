@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -166,18 +167,18 @@ export function AFCEActionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent scrollable className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <ShieldCheck className="w-5 h-5 text-emerald-600" />
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
             Catat Persetujuan Otorisasi SAP
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {afce.afceNumber} &bull; Proyek: {afce.projectName}
+            {afce.afceNumber} | Proyek: {afce.projectName}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3.5 py-1 text-xs">
+        <DialogBody className="space-y-3 text-xs">
           {error && (
             <div className="p-2.5 rounded-md bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 flex items-center gap-2 text-xs">
               <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -185,8 +186,8 @@ export function AFCEActionDialog({
             </div>
           )}
 
-          {/* Level Info Banner */}
-          <div className="p-2.5 rounded-lg bg-muted/60 border flex items-center justify-between text-xs">
+          {/* Level Info & Action Choice */}
+          <div className="px-3 py-2 rounded-md bg-muted/50 border flex items-center justify-between text-xs">
             <div>
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
                 Tingkat Otorisasi
@@ -200,16 +201,15 @@ export function AFCEActionDialog({
             </span>
           </div>
 
-          {/* Action Choice */}
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Tindakan Keputusan Otorisasi <span className="text-rose-500">*</span>
             </label>
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => setAction("Approve")}
-                className={`py-1.5 px-2 rounded-md font-medium border text-xs text-center transition-colors ${
+                className={`py-2 px-2 rounded-md font-medium border text-xs text-center transition-colors cursor-pointer ${
                   action === "Approve"
                     ? "bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 font-bold shadow-sm"
                     : "border-input hover:bg-muted"
@@ -220,7 +220,7 @@ export function AFCEActionDialog({
               <button
                 type="button"
                 onClick={() => setAction("Revise")}
-                className={`py-1.5 px-2 rounded-md font-medium border text-xs text-center transition-colors ${
+                className={`py-2 px-2 rounded-md font-medium border text-xs text-center transition-colors cursor-pointer ${
                   action === "Revise"
                     ? "bg-amber-50 border-amber-500 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 font-bold shadow-sm"
                     : "border-input hover:bg-muted"
@@ -231,7 +231,7 @@ export function AFCEActionDialog({
               <button
                 type="button"
                 onClick={() => setAction("Reject")}
-                className={`py-1.5 px-2 rounded-md font-medium border text-xs text-center transition-colors ${
+                className={`py-2 px-2 rounded-md font-medium border text-xs text-center transition-colors cursor-pointer ${
                   action === "Reject"
                     ? "bg-rose-50 border-rose-500 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 font-bold shadow-sm"
                     : "border-input hover:bg-muted"
@@ -242,33 +242,42 @@ export function AFCEActionDialog({
             </div>
           </div>
 
-          {/* Approval Date Input */}
-          <div>
-            <label className="font-semibold text-foreground flex items-center justify-between mb-1">
-              <span className="flex items-center gap-1.5">
+          {/* Tanggal & Nomor Referensi SAP */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                Tanggal Otorisasi / Approval SAP <span className="text-rose-500">*</span>
-              </span>
-              <span className="text-[10px] text-muted-foreground font-normal">
-                (Tercatat di Audit Log)
-              </span>
-            </label>
-            <Input
-              type="date"
-              value={approvalDate}
-              onChange={(e) => {
-                setApprovalDate(e.target.value);
-                if (error) setError(null);
-              }}
-              className="h-8 text-xs font-mono"
-              required
-            />
+                Tanggal Approval SAP <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="date"
+                value={approvalDate}
+                onChange={(e) => {
+                  setApprovalDate(e.target.value);
+                  if (error) setError(null);
+                }}
+                className="h-9 text-xs font-mono"
+                required
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
+                Nomor Referensi SAP
+              </label>
+              <Input
+                value={sapDocNumber}
+                onChange={(e) => setSapDocNumber(e.target.value)}
+                placeholder="Contoh: AFCE-SAP-9901428"
+                className="h-9 text-xs font-mono"
+              />
+            </div>
           </div>
 
-          {/* Reviewer Name and Role */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
+          {/* Nama Pejabat & Jabatan */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Nama Pejabat Otorisasi <span className="text-rose-500">*</span>
               </label>
               <Input
@@ -278,70 +287,57 @@ export function AFCEActionDialog({
                   if (error) setError(null);
                 }}
                 placeholder="Nama lengkap pejabat"
-                className="h-8 text-xs"
+                className="h-9 text-xs"
               />
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Jabatan / Tingkat Otoritas
               </label>
               <Input
                 value={approverRole}
                 onChange={(e) => setApproverRole(e.target.value)}
                 placeholder="Jabatan resmi"
-                className="h-8 text-xs font-medium"
+                className="h-9 text-xs font-medium"
               />
             </div>
           </div>
 
-          {/* SAP Reference & Evidence Box */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
-                Nomor Referensi SAP
-              </label>
+          {/* Bukti Otorisasi SAP */}
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground flex items-center justify-between">
+              <span>Bukti Otorisasi SAP (Opsional)</span>
+              {uploadingEvidence && (
+                <span className="text-[10px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-normal">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Mengunggah...
+                </span>
+              )}
+            </label>
+            <div className="flex items-center gap-2">
               <Input
-                value={sapDocNumber}
-                onChange={(e) => setSapDocNumber(e.target.value)}
-                placeholder="Contoh: AFCE-SAP-9901428"
-                className="h-8 text-xs font-mono"
+                value={sapEvidenceUrl}
+                onChange={(e) => setSapEvidenceUrl(e.target.value)}
+                placeholder="Tautan Drive atau nama berkas bukti SAP"
+                className="h-9 text-xs font-mono flex-1"
               />
-            </div>
-            <div>
-              <label className="font-semibold text-foreground flex items-center justify-between mb-1">
-                <span>Bukti Otorisasi SAP</span>
-                {uploadingEvidence && (
-                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-normal">
-                    <Loader2 className="w-3 h-3 animate-spin" /> Mengunggah...
-                  </span>
-                )}
-              </label>
-              <div className="flex items-center gap-1.5">
-                <Input
-                  value={sapEvidenceUrl}
-                  onChange={(e) => setSapEvidenceUrl(e.target.value)}
-                  placeholder="Tautan Drive atau nama berkas bukti SAP"
-                  className="h-8 text-xs font-mono flex-1"
+              <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 text-foreground transition-colors gap-1">
+                <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                <span>Unggah</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                  onChange={handleFileUpload}
+                  disabled={uploadingEvidence}
                 />
-                <label className="h-8 px-2 rounded border border-input hover:bg-muted text-[11px] font-medium flex items-center justify-center cursor-pointer shrink-0 text-foreground transition-colors gap-1">
-                  <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
-                  <span className="hidden sm:inline">Unggah</span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*,application/pdf"
-                    onChange={handleFileUpload}
-                    disabled={uploadingEvidence}
-                  />
-                </label>
-              </div>
+              </label>
             </div>
           </div>
 
           {/* Mandatory Note */}
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Catatan / Justifikasi Evaluasi <span className="text-rose-500">*</span>
             </label>
             <Textarea
@@ -351,12 +347,13 @@ export function AFCEActionDialog({
                 if (error) setError(null);
               }}
               placeholder="Tuliskan catatan teknis hasil verifikasi dokumen SAP atau rekomendasi..."
-              rows={3}
+              rows={2}
+              className="text-xs resize-none"
             />
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="gap-2 sm:gap-1.5 pt-2">
+        <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             Batal
           </Button>

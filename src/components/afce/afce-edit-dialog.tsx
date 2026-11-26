@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -107,10 +108,10 @@ export function AFCEEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent scrollable className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <FileEdit className="w-5 h-5 text-emerald-600" />
+            <FileEdit className="w-4 h-4 text-emerald-600 shrink-0" />
             Ubah Data Dokumen AFCE
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -118,7 +119,7 @@ export function AFCEEditDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3.5 py-1 text-xs">
+        <DialogBody className="space-y-3 text-xs">
           {error && (
             <div className="p-2.5 rounded-md bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 flex items-center gap-2 text-xs">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -126,23 +127,37 @@ export function AFCEEditDialog({
             </div>
           )}
 
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
-              Nomor Dokumen AFCE <span className="text-rose-500">*</span>
-            </label>
-            <Input
-              value={afceNumber}
-              onChange={(e) => {
-                setAfceNumber(e.target.value);
-                if (error) setError(null);
-              }}
-              placeholder="Contoh: AFCE-2026-0125"
-              className="h-8 text-xs font-mono"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
+                Nomor Dokumen AFCE <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                value={afceNumber}
+                onChange={(e) => {
+                  setAfceNumber(e.target.value);
+                  if (error) setError(null);
+                }}
+                placeholder="Contoh: AFCE-2026-0125"
+                className="h-9 text-xs font-mono"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
+                Nomor Referensi SAP ERP
+              </label>
+              <Input
+                value={sapDocNumber}
+                onChange={(e) => setSapDocNumber(e.target.value)}
+                placeholder="Contoh: AFCE-SAP-9901428"
+                className="h-9 text-xs font-mono"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Nilai Anggaran Investasi (IDR) <span className="text-rose-500">*</span>
             </label>
             <Input
@@ -153,10 +168,10 @@ export function AFCEEditDialog({
                 if (error) setError(null);
               }}
               placeholder="Contoh: 420000000"
-              className="h-8 text-xs font-mono"
+              className="h-9 text-xs font-mono"
             />
             {Number(value) > 0 && (
-              <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1 text-[11px]">
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-1 text-[11px]">
                 <span className="text-muted-foreground font-mono">
                   Terbaca: <b>{formatIDR(Number(value))}</b>
                 </span>
@@ -169,36 +184,21 @@ export function AFCEEditDialog({
             )}
           </div>
 
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
-              Nomor Dokumen Referensi SAP ERP
-            </label>
-            <Input
-              value={sapDocNumber}
-              onChange={(e) => setSapDocNumber(e.target.value)}
-              placeholder="Contoh: AFCE-SAP-9901428"
-              className="h-8 text-xs font-mono"
-            />
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              Nomor referensi modul Project Systems (PS) atau WBS di SAP.
-            </p>
-          </div>
-
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Nama Berkas Bukti / Tangkapan Layar SAP
             </label>
             <Input
               value={sapScreenshotPlaceholder}
               onChange={(e) => setSapScreenshotPlaceholder(e.target.value)}
               placeholder="Opsional: tautan atau nama berkas bukti SAP"
-              className="h-8 text-xs font-mono"
+              className="h-9 text-xs font-mono"
             />
           </div>
 
           {afce.status === "Draft" && (
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Catatan Pengajuan (Opsional)
               </label>
               <Textarea
@@ -206,12 +206,13 @@ export function AFCEEditDialog({
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Tuliskan justifikasi singkat pengajuan AFCE..."
                 rows={2}
+                className="text-xs resize-none"
               />
             </div>
           )}
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="gap-2 sm:gap-1.5 pt-2">
+        <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             Batal
           </Button>

@@ -51,6 +51,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogBody,
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -1661,7 +1662,7 @@ function UnifiedExecutionHubContent() {
 
       {/* Dialog Tambah / Edit WBS */}
       <Dialog open={wbsDialogOpen} onOpenChange={setWbsDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent scrollable className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-sm font-semibold">
               {editingWorkItem ? "Ubah Item Pekerjaan (WBS)" : "Tambah Item Pekerjaan (WBS)"}
@@ -1670,7 +1671,8 @@ function UnifiedExecutionHubContent() {
               Tentukan komponen pekerjaan dan bobot kontribusi progres terhadap proyek.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSaveWbs} className="space-y-3 text-xs">
+          <form onSubmit={handleSaveWbs} className="flex flex-col min-h-0 flex-1">
+            <DialogBody className="space-y-3 text-xs">
             <div>
               <label htmlFor="wbs-name" className="font-semibold block mb-1">
                 Nama Item Pekerjaan <span className="text-rose-600">*</span>
@@ -1799,7 +1801,9 @@ function UnifiedExecutionHubContent() {
               </Select>
             </div>
 
-            <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            </DialogBody>
+
+            <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
@@ -1824,14 +1828,15 @@ function UnifiedExecutionHubContent() {
 
       {/* Dialog Tambah BOQ */}
       <Dialog open={boqDialogOpen} onOpenChange={setBoqDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent scrollable className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-sm font-semibold">Tambah Item Survey & BOQ</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Tambahkan rincian item kuantitas dan harga satuan anggaran proyek.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSaveBoq} className="space-y-3 text-xs">
+          <form onSubmit={handleSaveBoq} className="flex flex-col min-h-0 flex-1">
+            <DialogBody className="space-y-3 text-xs">
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label htmlFor="boq-code" className="font-semibold block mb-1">
@@ -1918,7 +1923,9 @@ function UnifiedExecutionHubContent() {
               </p>
             </div>
 
-            <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            </DialogBody>
+
+            <DialogFooter>
               <Button
                 type="button"
                 variant="outline"

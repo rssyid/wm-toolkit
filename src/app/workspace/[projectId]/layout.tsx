@@ -34,6 +34,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogDescription,
   DialogFooter,
@@ -561,7 +562,7 @@ export default function ProjectDetailLayout({
 
       {/* Modal Edit Proyek (F1) */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent scrollable className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-sm font-semibold">Edit Informasi Proyek</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
@@ -570,7 +571,8 @@ export default function ProjectDetailLayout({
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSaveEditProject} className="space-y-3 text-xs">
+          <form onSubmit={handleSaveEditProject} className="flex flex-col min-h-0 flex-1">
+            <DialogBody className="space-y-3 text-xs">
             <div>
               <label htmlFor="edit-proj-name" className="font-semibold block mb-1">
                 Nama Proyek <span className="text-rose-600">*</span>
@@ -704,7 +706,9 @@ export default function ProjectDetailLayout({
               </div>
             </div>
 
-            <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            </DialogBody>
+
+            <DialogFooter>
               <Button
                 type="button"
                 variant="outline"

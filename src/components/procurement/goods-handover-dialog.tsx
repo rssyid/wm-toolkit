@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -160,10 +161,10 @@ export function GoodsHandoverDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent scrollable className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-            <FileCheck className="w-5 h-5 text-emerald-600" />
+            <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
             Catat Berita Acara Serah Terima (BAST Formal)
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -171,150 +172,145 @@ export function GoodsHandoverDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* PO Target Info Card */}
-        <div className="p-3 rounded-lg border bg-emerald-50/60 dark:bg-emerald-950/20 text-xs space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="font-semibold text-emerald-900 dark:text-emerald-300">
-              PO: {po.poNumber} (Ref PR: {po.relatedPrNumber})
-            </span>
+        <DialogBody className="space-y-3 text-xs">
+          {/* PO Target Info Strip */}
+          <div className="px-3 py-2 rounded-md border bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="space-y-0.5">
+              <div className="font-semibold text-emerald-900 dark:text-emerald-300">
+                PO: {po.poNumber} <span className="font-normal text-muted-foreground">(Ref PR: {po.relatedPrNumber})</span>
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {po.supplierName} | {po.items.length} Item | GR Gudang: {po.receiptProgressPercent}%
+              </div>
+            </div>
             <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
               {formatIDR(po.poValue)}
             </span>
           </div>
-          <div className="font-medium text-foreground">
-            Rekanan: {po.supplierName} • {po.items.length} Item Material
-          </div>
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <span>Realisasi GR Gudang: {po.receiptProgressPercent}%</span>
-            <span>•</span>
-            <span>Status PO: {po.status}</span>
-          </div>
-        </div>
 
-        <div className="space-y-4 py-1 text-xs">
-          {/* Grid: Nomor BAST & Tanggal */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
+          {/* Grid 3 Kolom: Nomor BAST, Tanggal & Status */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Nomor Dokumen BAST <span className="text-rose-500">*</span>
               </label>
               <Input
                 value={handoverNumber}
                 onChange={(e) => setHandoverNumber(e.target.value)}
-                className="h-8 text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400"
+                className="h-9 text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400"
               />
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Tanggal Serah Terima <span className="text-rose-500">*</span>
               </label>
               <Input
                 type="date"
                 value={handoverDate}
                 onChange={(e) => setHandoverDate(e.target.value)}
-                className="h-8 text-xs"
+                className="h-9 text-xs font-mono"
               />
             </div>
-          </div>
 
-          {/* Bagian Pihak Penyerah (Vendor / Ekspedisi) */}
-          <div className="p-3 rounded-md border bg-muted/20 space-y-3">
-            <div className="font-semibold text-xs text-foreground flex items-center justify-between">
-              <span>Pihak Penyerah (Penyedia / Vendor Rekanan)</span>
-              <span className="text-[11px] text-muted-foreground font-normal">Pihak Pertama</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-medium text-muted-foreground block mb-1">
-                  Nama Penanggung Jawab <span className="text-rose-500">*</span>
-                </label>
-                <Input
-                  value={giverName}
-                  onChange={(e) => setGiverName(e.target.value)}
-                  placeholder="Nama perwakilan vendor"
-                  className="h-8 text-xs bg-background"
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-medium text-muted-foreground block mb-1">
-                  Perusahaan / Ekspedisi
-                </label>
-                <Input
-                  value={giverCompany}
-                  onChange={(e) => setGiverCompany(e.target.value)}
-                  className="h-8 text-xs bg-background"
-                />
-              </div>
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
+                Status Kesepakatan <span className="text-rose-500">*</span>
+              </label>
+              <Select
+                value={status}
+                onValueChange={(val: GoodsHandoverStatus) => setStatus(val)}
+              >
+                <SelectTrigger className="h-9 text-xs font-semibold">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="COMPLETED" className="text-emerald-700 font-semibold">
+                    <span className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>COMPLETED (Diterima Baik)</span>
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="PENDING" className="text-amber-700 font-semibold">
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>PENDING (Uji Coba / Penyesuaian)</span>
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
-          {/* Bagian Pihak Penerima (Kebun / Estate) */}
-          <div className="p-3 rounded-md border bg-muted/20 space-y-3">
-            <div className="font-semibold text-xs text-foreground flex items-center justify-between">
-              <span>Pihak Penerima (Gudang Central / Tim Teknis Kebun)</span>
-              <span className="text-[11px] text-muted-foreground font-normal">Pihak Kedua</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-medium text-muted-foreground block mb-1">
-                  Nama Penerima <span className="text-rose-500">*</span>
-                </label>
-                <Input
-                  value={receiverName}
-                  onChange={(e) => setReceiverName(e.target.value)}
-                  className="h-8 text-xs bg-background"
-                />
+          {/* Pihak Penyerah & Pihak Penerima Berdampingan (2 Kolom) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="p-2.5 rounded-md border bg-muted/20 space-y-2">
+              <div className="font-semibold text-xs text-foreground flex items-center justify-between">
+                <span>Pihak Penyerah (Vendor)</span>
+                <span className="text-[10px] text-muted-foreground font-normal">Pihak 1</span>
               </div>
-              <div>
-                <label className="text-[11px] font-medium text-muted-foreground block mb-1">
-                  Jabatan Penerima
-                </label>
-                <Input
-                  value={receiverJabatan}
-                  onChange={(e) => setReceiverJabatan(e.target.value)}
-                  className="h-8 text-xs bg-background"
-                />
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">
+                    Nama Penanggung Jawab <span className="text-rose-500">*</span>
+                  </label>
+                  <Input
+                    value={giverName}
+                    onChange={(e) => setGiverName(e.target.value)}
+                    placeholder="Nama perwakilan vendor"
+                    className="h-8 text-xs bg-background"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">
+                    Perusahaan / Ekspedisi
+                  </label>
+                  <Input
+                    value={giverCompany}
+                    onChange={(e) => setGiverCompany(e.target.value)}
+                    className="h-8 text-xs bg-background"
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Status Dokumen BAST */}
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
-              Status Kesepakatan Serah Terima <span className="text-rose-500">*</span>
-            </label>
-            <Select
-              value={status}
-              onValueChange={(val: GoodsHandoverStatus) => setStatus(val)}
-            >
-              <SelectTrigger className="h-8 text-xs font-semibold">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="COMPLETED" className="text-emerald-700 font-semibold">
-                  <span className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5" />
-                    <span>COMPLETED (Diserahterimakan Penuh & Diterima Baik)</span>
-                  </span>
-                </SelectItem>
-                <SelectItem value="PENDING" className="text-amber-700 font-semibold">
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>PENDING (Dalam Masa Uji Coba Lapangan / Penyesuaian)</span>
-                  </span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="p-2.5 rounded-md border bg-muted/20 space-y-2">
+              <div className="font-semibold text-xs text-foreground flex items-center justify-between">
+                <span>Pihak Penerima (Kebun)</span>
+                <span className="text-[10px] text-muted-foreground font-normal">Pihak 2</span>
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">
+                    Nama Penerima <span className="text-rose-500">*</span>
+                  </label>
+                  <Input
+                    value={receiverName}
+                    onChange={(e) => setReceiverName(e.target.value)}
+                    className="h-8 text-xs bg-background"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">
+                    Jabatan Penerima
+                  </label>
+                  <Input
+                    value={receiverJabatan}
+                    onChange={(e) => setReceiverJabatan(e.target.value)}
+                    className="h-8 text-xs bg-background"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Catatan Pengujian & Pemeriksaan */}
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Catatan Kondisi Barang & Hasil Uji Fisik Lapangan <span className="text-rose-500">*</span>
             </label>
             <Textarea
-              rows={3}
+              rows={2}
               placeholder="Catat kondisi fisik barang (bebas cacat, kemasan utuh, sertifikasi sesuai) dan hasil pengujian lapangan bila ada..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -323,8 +319,8 @@ export function GoodsHandoverDialog({
           </div>
 
           {/* Berkas Scan Dokumen BAST */}
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Lampiran Dokumen BAST Bertanda Tangan (Opsional)
             </label>
             <div className="flex gap-2">
@@ -347,9 +343,9 @@ export function GoodsHandoverDialog({
               </label>
             </div>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+        <DialogFooter>
           <Button
             variant="outline"
             size="sm"

@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -190,11 +191,11 @@ export function USPKCreateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent scrollable className="sm:max-w-2xl">
         <DialogHeader>
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-              <Briefcase className="w-5 h-5" />
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 shrink-0">
+              <Briefcase className="w-4 h-4" />
             </div>
             <div>
               <DialogTitle className="text-base font-bold">
@@ -207,21 +208,21 @@ export function USPKCreateDialog({
           </div>
         </DialogHeader>
 
-        <div className="grid gap-4 py-2 text-xs">
+        <DialogBody className="space-y-3 text-xs">
           {/* Row 1: Nomor USPK, Tanggal & Status Awal */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="space-y-1.5">
-              <label className="font-semibold text-foreground">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Nomor USPK <span className="text-red-500">*</span>
               </label>
               <Input
                 value={uspkNumber}
                 onChange={(e) => setUspkNumber(e.target.value)}
                 placeholder="USPK-2026-00..."
-                className="font-mono text-xs"
+                className="h-9 font-mono text-xs"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label className="font-semibold text-foreground flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> Tanggal USPK <span className="text-red-500">*</span>
               </label>
@@ -229,18 +230,18 @@ export function USPKCreateDialog({
                 type="date"
                 value={uspkDate}
                 onChange={(e) => setUspkDate(e.target.value)}
-                className="text-xs font-mono"
+                className="h-9 text-xs font-mono"
               />
             </div>
-            <div className="space-y-1.5">
-              <label className="font-semibold text-foreground">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Status Pengajuan
               </label>
               <Select
                 value={status}
                 onValueChange={(val: USPKStatus) => setStatus(val)}
               >
-                <SelectTrigger className="text-xs">
+                <SelectTrigger className="h-9 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -251,91 +252,74 @@ export function USPKCreateDialog({
             </div>
           </div>
 
-          {/* Row 2: Rekanan Vendor */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="font-semibold text-foreground">
+          {/* Row 2: Rekanan Vendor & Work Item Terkait (2 Kolom) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Rekanan Kontraktor / Vendor Jasa <span className="text-red-500">*</span>
               </label>
-              <span className="text-[11px] text-muted-foreground">
-                Pilih dari Master Vendor atau tulis baru
-              </span>
-            </div>
-            <SearchableSelect
-              value={vendorId}
-              onValueChange={(val) => {
-                setVendorId(val);
-                setCustomVendorName("");
-              }}
-              options={suppliers.map((s) => ({
-                value: s.id,
-                label: `${s.name} (${s.category})`,
-              }))}
-              placeholder="Cari atau pilih rekanan..."
-            />
-            <div className="pt-1">
+              <SearchableSelect
+                value={vendorId}
+                onValueChange={(val) => {
+                  setVendorId(val);
+                  setCustomVendorName("");
+                }}
+                options={suppliers.map((s) => ({
+                  value: s.id,
+                  label: `${s.name} (${s.category})`,
+                }))}
+                placeholder="Cari atau pilih rekanan..."
+              />
               <Input
                 value={customVendorName}
                 onChange={(e) => setCustomVendorName(e.target.value)}
-                placeholder="Atau ketik nama rekanan jika belum ada di master..."
-                className="text-xs placeholder:text-[11px]"
+                placeholder="Atau ketik nama baru jika belum di master..."
+                className="h-8 text-xs placeholder:text-[11px]"
               />
             </div>
+
+            {project.workItems.length > 0 && (
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
+                  Item Pekerjaan Proyek Terkait (WBS)
+                </label>
+                <Select value={workItemId} onValueChange={setWorkItemId}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Pilih WBS terkait..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {project.workItems.map((wi) => (
+                      <SelectItem key={wi.id} value={wi.id} className="text-xs">
+                        {wi.name} (Bobot: {wi.weight}%)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
-          {/* Row 3: Work Item Terkait */}
-          {project.workItems.length > 0 && (
-            <div className="space-y-1.5">
-              <label className="font-semibold text-foreground">
-                Item Pekerjaan Proyek Terkait (WBS)
-              </label>
-              <Select value={workItemId} onValueChange={setWorkItemId}>
-                <SelectTrigger className="text-xs">
-                  <SelectValue placeholder="Pilih WBS terkait..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {project.workItems.map((wi) => (
-                    <SelectItem key={wi.id} value={wi.id} className="text-xs">
-                      {wi.name} (Bobot: {wi.weight}%)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {/* Row 4: Lingkup Pekerjaan Teknis */}
-          <div className="space-y-1.5">
-            <label className="font-semibold text-foreground">
+          {/* Row 3: Lingkup Pekerjaan Teknis */}
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Lingkup Pekerjaan Teknis (Scope of Work) <span className="text-red-500">*</span>
             </label>
             <Textarea
               value={scope}
               onChange={(e) => setScope(e.target.value)}
               placeholder="Deskripsikan spesifikasi pekerjaan teknis, volume, lokasi detail, metode pelaksanaan..."
-              rows={3}
-              className="text-xs leading-relaxed"
+              rows={2}
+              className="text-xs leading-relaxed resize-none"
             />
           </div>
 
-          {/* Row 4B: Target Kerja & Satuan (uoM) */}
-          <div className="p-3 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50 space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="font-semibold text-foreground text-xs">
-                Target Kerja Fisik & Satuan (uoM) <span className="text-red-500">*</span>
-              </label>
-              {targetVolume && unit ? (
-                <span className="font-mono text-xs font-bold text-blue-700 dark:text-blue-300">
-                  Target: {targetVolume} {unit}
-                </span>
-              ) : null}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Row 4: Target Kerja, Satuan & Nilai Penawaran */}
+          <div className="p-2.5 rounded-lg border bg-blue-50/40 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50 space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <div className="space-y-1">
-                <span className="text-[11px] text-muted-foreground font-medium">
-                  Volume Target Kontrak
-                </span>
+                <label className="text-[11px] font-semibold text-foreground block">
+                  Volume Target <span className="text-red-500">*</span>
+                </label>
                 <Input
                   type="number"
                   min="0.1"
@@ -343,122 +327,121 @@ export function USPKCreateDialog({
                   value={targetVolume}
                   onChange={(e) => setTargetVolume(e.target.value === "" ? "" : Number(e.target.value))}
                   placeholder="Misal: 500"
-                  className="font-mono text-xs bg-background"
+                  className="h-8 font-mono text-xs bg-background"
                 />
               </div>
 
               <div className="space-y-1">
-                <span className="text-[11px] text-muted-foreground font-medium">
-                  Satuan Ukuran (uoM)
-                </span>
+                <label className="text-[11px] font-semibold text-foreground block">
+                  Satuan (uoM) <span className="text-red-500">*</span>
+                </label>
                 <Input
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
                   placeholder="M3, M, Ha, Titik..."
-                  className="text-xs font-mono uppercase bg-background"
+                  className="h-8 text-xs font-mono uppercase bg-background"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between gap-1">
+                  <label className="text-[11px] font-semibold text-foreground">
+                    Nilai Penawaran (Rp) <span className="text-red-500">*</span>
+                  </label>
+                </div>
+                <Input
+                  type="number"
+                  value={value || ""}
+                  onChange={(e) => setValue(Number(e.target.value))}
+                  placeholder="50000000"
+                  className="h-8 font-mono text-xs bg-background"
                 />
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              <span className="text-[10px] text-muted-foreground">Pilihan cepat:</span>
-              {["M3", "M", "Ha", "Titik", "Batang", "Unit", "Kg", "Ton", "Jam", "Hari"].map((u) => (
-                <button
-                  key={u}
-                  type="button"
-                  onClick={() => setUnit(u)}
-                  className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
-                    unit.toUpperCase() === u
-                      ? "bg-blue-600 text-white border-blue-600 font-bold"
-                      : "bg-background text-muted-foreground hover:bg-muted border-border"
-                  }`}
-                >
-                  {u}
-                </button>
-              ))}
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              * Target ini akan diwariskan ke SPK dan menjadi dasar pengurangan volume harian (*burn-down*).
-            </p>
-          </div>
-
-          {/* Row 5: Nilai Penawaran */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="font-semibold text-foreground">
-                Nilai Penawaran Usulan (Rp) <span className="text-red-500">*</span>
-              </label>
-              <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-[10px] text-muted-foreground mr-0.5">Satuan cepat:</span>
+                {["M3", "M", "Ha", "Titik", "Batang", "Unit", "Kg", "Ton", "Jam", "Hari"].map((u) => (
+                  <button
+                    key={u}
+                    type="button"
+                    onClick={() => setUnit(u)}
+                    className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+                      unit.toUpperCase() === u
+                        ? "bg-blue-600 text-white border-blue-600 font-bold"
+                        : "bg-background text-muted-foreground hover:bg-muted border-border"
+                    }`}
+                  >
+                    {u}
+                  </button>
+                ))}
+              </div>
+              <span className="font-mono text-[11px] font-bold text-blue-700 dark:text-blue-300">
                 {formatIDR(Number(value) || 0)}
               </span>
             </div>
-            <Input
-              type="number"
-              value={value || ""}
-              onChange={(e) => setValue(Number(e.target.value))}
-              placeholder="50000000"
-              className="font-mono text-xs"
-            />
           </div>
 
-          {/* Row 6: Tanggal Pelaksanaan */}
+          {/* Row 5: Tanggal Pelaksanaan & Lampiran */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="font-semibold text-foreground flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> Tanggal Mulai Pelaksanaan
-              </label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="text-xs font-mono"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="font-semibold text-foreground flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> Target Selesai
-              </label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="text-xs font-mono"
-              />
-            </div>
-          </div>
-
-          {/* Row 7: Lampiran Berkas */}
-          <div className="space-y-1.5">
-            <label className="font-semibold text-foreground flex items-center gap-1">
-              <UploadCloud className="w-3.5 h-3.5 text-muted-foreground" /> Berkas Penawaran / Proposal Teknis (Opsional)
-            </label>
-            <div className="flex items-center gap-2">
-              <Input
-                value={attachmentName}
-                onChange={(e) => setAttachmentName(e.target.value)}
-                placeholder="Tautan Google Drive atau nama berkas proposal"
-                className="text-xs"
-              />
-              <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1">
-                {uploadingAttachment ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
-                )}
-                <span>Unggah</span>
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="image/*,application/pdf"
-                  onChange={handleFileUpload}
-                  disabled={uploadingAttachment}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> Mulai
+                </label>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="h-9 text-xs font-mono"
                 />
+              </div>
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> Target Selesai
+                </label>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground flex items-center gap-1">
+                <UploadCloud className="w-3.5 h-3.5 text-muted-foreground" /> Proposal Teknis (Opsional)
               </label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  value={attachmentName}
+                  onChange={(e) => setAttachmentName(e.target.value)}
+                  placeholder="Tautan Drive atau nama berkas"
+                  className="h-9 text-xs"
+                />
+                <label className="h-9 px-2.5 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1">
+                  {uploadingAttachment ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                  )}
+                  <span>Unggah</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*,application/pdf"
+                    onChange={handleFileUpload}
+                    disabled={uploadingAttachment}
+                  />
+                </label>
+              </div>
             </div>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+        <DialogFooter>
           <Button
             type="button"
             variant="outline"

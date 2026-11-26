@@ -26,6 +26,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -307,7 +308,7 @@ export default function MasterDataSuppliersPage() {
 
       {/* Add / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent scrollable className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-base">
               {editingItem ? "Ubah Data Rekanan" : "Tambah Rekanan Baru"}
@@ -317,22 +318,22 @@ export default function MasterDataSuppliersPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-1 text-xs">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="font-semibold text-foreground block mb-1">
+          <DialogBody className="space-y-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
                   Kode Vendor <span className="text-rose-500">*</span>
                 </label>
                 <Input
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   placeholder="VND-..."
-                  className="font-mono"
+                  className="h-9 font-mono text-xs"
                 />
               </div>
 
-              <div>
-                <label className="font-semibold text-foreground block mb-1">
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
                   Rating Kinerja (1-5)
                 </label>
                 <Input
@@ -342,69 +343,75 @@ export default function MasterDataSuppliersPage() {
                   max="5"
                   value={rating}
                   onChange={(e) => setRating(Number(e.target.value))}
-                  className="font-mono"
+                  className="h-9 font-mono text-xs"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
-                Nama Perusahaan Rekanan <span className="text-rose-500">*</span>
-              </label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Contoh: PT Wira Rekayasa Konstruksi"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
+                  Nama Perusahaan Rekanan <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Contoh: PT Wira Rekayasa Konstruksi"
+                  className="h-9 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
+                  Kualifikasi / Spesialisasi
+                </label>
+                <Input
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  placeholder="Kontraktor Sipil & Tata Air"
+                  className="h-9 text-xs"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
-                Kualifikasi / Spesialisasi
-              </label>
-              <Input
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="Kontraktor Sipil & Tata Air"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="font-semibold text-foreground block mb-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
                   Contact Person (PIC)
                 </label>
                 <Input
                   value={contactPerson}
                   onChange={(e) => setContactPerson(e.target.value)}
                   placeholder="Nama PIC"
+                  className="h-9 text-xs"
                 />
               </div>
 
-              <div>
-                <label className="font-semibold text-foreground block mb-1">
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
                   Nomor Telepon / WA
                 </label>
                 <Input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="0812-..."
+                  className="h-9 text-xs"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">Nomor Pokok Wajib Pajak (NPWP)</label>
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">Nomor Pokok Wajib Pajak (NPWP)</label>
               <Input
                 value={npwp}
                 onChange={(e) => setNpwp(e.target.value)}
                 placeholder="01.423.854.2-121.000"
-                className="font-mono"
+                className="h-9 font-mono text-xs"
               />
             </div>
-          </div>
+          </DialogBody>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter>
             <Button
               variant="outline"
               size="sm"

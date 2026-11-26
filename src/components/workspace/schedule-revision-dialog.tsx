@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -150,10 +151,10 @@ export function ScheduleRevisionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent scrollable className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <CalendarClock className="w-5 h-5 text-amber-500" />
+            <CalendarClock className="w-4 h-4 text-amber-500 shrink-0" />
             Pengajuan Revisi Jadwal Proyek (Addendum Waktu)
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -161,58 +162,49 @@ export function ScheduleRevisionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-1 text-xs">
-          {/* Baseline Info */}
-          <div className="p-3 rounded-lg bg-muted/40 border space-y-1">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Jadwal Baseline Awal:</span>
-              <span className="font-mono font-medium">
-                {formatIDDate(project.baselineStartDate)} s/d {formatIDDate(project.baselineEndDate)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Target Selesai Saat Ini:</span>
-              <span className="font-mono font-semibold text-foreground">
-                {formatIDDate(project.targetEndDate)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Jumlah Revisi Sebelumnya:</span>
-              <span className="font-mono">{project.revisions.length} Kali</span>
-            </div>
+        <DialogBody className="space-y-3 text-xs">
+          {/* Baseline Info Strip */}
+          <div className="px-3 py-2 rounded-md bg-muted/40 border flex flex-wrap items-center justify-between gap-2 text-[11px]">
+            <span>
+              Baseline: <strong className="font-mono text-foreground">{formatIDDate(project.baselineStartDate)} s/d {formatIDDate(project.baselineEndDate)}</strong>
+            </span>
+            <span>
+              Target Saat Ini: <strong className="font-mono text-foreground">{formatIDDate(project.targetEndDate)}</strong> ({project.revisions.length}x revisi)
+            </span>
           </div>
 
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
-              Target Tanggal Selesai Baru <span className="text-rose-500">*</span>
-            </label>
-            <Input
-              type="date"
-              value={newEndDate}
-              onChange={(e) => setNewEndDate(e.target.value)}
-            />
-          </div>
+          {/* 3 Kolom: Target Baru, Tanggal Approval & Pejabat */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
+                Target Selesai Baru <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="date"
+                value={newEndDate}
+                onChange={(e) => setNewEndDate(e.target.value)}
+                className="h-9 font-mono text-xs"
+              />
+            </div>
 
-          {/* Addendum Approval Date & Approver */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="font-semibold text-foreground block mb-1 flex items-center gap-1">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-amber-600" />
-                Tanggal Approval Addendum <span className="text-rose-500">*</span>
+                Tgl Approval <span className="text-rose-500">*</span>
               </label>
               <Input
                 type="date"
                 value={approvalDate}
                 onChange={(e) => setApprovalDate(e.target.value)}
-                className="font-mono text-xs"
+                className="h-9 font-mono text-xs"
                 required
               />
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1 flex items-center gap-1">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
-                Pejabat Penyetuju Addendum <span className="text-rose-600">*</span>
+                Pejabat Penyetuju <span className="text-rose-600">*</span>
               </label>
               <SearchableSelect
                 value={approvedBy}
@@ -229,7 +221,7 @@ export function ScheduleRevisionDialog({
             </div>
           </div>
 
-          <div className="p-2.5 rounded bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center justify-between text-xs text-amber-800 dark:text-amber-300">
+          <div className="px-3 py-2 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center justify-between text-xs text-amber-800 dark:text-amber-300">
             <span className="flex items-center gap-1.5 font-medium">
               <AlertTriangle className="w-4 h-4 text-amber-600" />
               Perpanjangan Waktu:
@@ -239,20 +231,21 @@ export function ScheduleRevisionDialog({
             </span>
           </div>
 
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Alasan Justifikasi Keterlambatan / Kendala Lapangan <span className="text-rose-500">*</span>
             </label>
             <Textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Jelaskan alasan teknis (misal: cuaca ekstrem, kendala suplai material, atau kerusakan alat berat)..."
-              rows={3}
+              rows={2}
+              className="text-xs resize-none"
             />
           </div>
 
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Lampiran Berita Acara (BA) / Bukti Pendukung (Opsional)
             </label>
             <div className="flex items-center gap-2">
@@ -260,7 +253,7 @@ export function ScheduleRevisionDialog({
                 value={attachmentName}
                 onChange={(e) => setAttachmentName(e.target.value)}
                 placeholder="Tautan Google Drive atau nama berkas Berita Acara"
-                className="text-xs"
+                className="h-9 text-xs"
               />
               <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1">
                 {uploadingAttachment ? (
@@ -279,9 +272,9 @@ export function ScheduleRevisionDialog({
               </label>
             </div>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Batal
           </Button>

@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -21,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAppState } from "@/context/app-state-context";
-import { Project } from "@/types";
+import { Project, WeeklyProgressRecord } from "@/types";
 import { toast } from "sonner";
 import {
   TrendingUp,
@@ -30,6 +31,10 @@ import {
   UserCheck,
   Layers,
   Loader2,
+  ChevronDown,
+  ChevronUp,
+  History,
+  Copy,
 } from "lucide-react";
 
 interface WeeklyProgressDialogProps {
@@ -68,17 +73,37 @@ function getCurrentWeekWindow() {
   };
 }
 
+function sortByLatestWeekly(a: WeeklyProgressRecord, b: WeeklyProgressRecord) {
+  const endDiff = (b.endDate || "").localeCompare(a.endDate || "");
+  if (endDiff !== 0) return endDiff;
+  return (b.recordedAt || "").localeCompare(a.recordedAt || "");
+}
+
 export function WeeklyProgressDialog({
   open,
   onOpenChange,
   project,
   preselectedWorkItemId,
 }: WeeklyProgressDialogProps) {
-  const { addWeeklyProgress, spkContracts, dailyProgress, userProfile } = useAppState();
+  const { addWeeklyProgress, spkContracts, dailyProgress, weeklyProgress, userProfile } =
+    useAppState();
 
   const projectSpks = useMemo(
     () => spkContracts.filter((s) => s.projectId === project.id && !s.deletedAt),
     [spkContracts, project.id]
+  );
+
+  const projectWeeklyLogs = useMemo(
+    () =>
+      weeklyProgress
+        .filter((wp) => wp.projectId === project.id)
+        .sort(sortByLatestWeekly),
+    [weeklyProgress, project.id]
+  );
+
+  const getLatestWeeklyForItem = useCallback(
+    (wiId: string) => projectWeeklyLogs.find((wp) => wp.workItemId === wiId),
+    [projectWeeklyLogs]
   );
 
   const [workItemId, setWorkItemId] = useState(
@@ -89,7 +114,7 @@ export function WeeklyProgressDialog({
   const [period, setPeriod] = useState(() => getCurrentWeekWindow().period);
   const [startDate, setStartDate] = useState(() => getCurrentWeekWindow().startDate);
   const [endDate, setEndDate] = useState(() => getCurrentWeekWindow().endDate);
-  const [plannedProgress, setPlannedProgress] = useState<number>(85);
+  const [plannedProgress, setPlannedProgress] = useState<number>(0);
   const [actualProgress, setActualProgress] = useState<number>(
     project.workItems.find((w) => w.id === (preselectedWorkItemId || project.workItems[0]?.id))
       ?.progress ?? 0
@@ -100,6 +125,44 @@ export function WeeklyProgressDialog({
   const [uploadingReport, setUploadingReport] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdBy, setCreatedBy] = useState(userProfile?.fullName || "");
+  const [showOptional, setShowOptional] = useState(false);
+
+  const applyDefaultsFromWorkItem = useCallback(
+    (wiId: string) => {
+      const targetWi = project.workItems.find((w) => w.id === wiId);
+      const lastWeekly = getLatestWeeklyForItem(wiId);
+      const matchingSpks = projectSpks.filter((s) => s.workItemId === wiId);
+
+      const wiProgress = targetWi?.progress ?? 0;
+      const nextActual =
+        lastWeekly && wiProgress === 0 ? lastWeekly.actualProgress : wiProgress;
+      const nextPlanned = lastWeekly ? lastWeekly.plannedProgress : wiProgress;
+
+      setActualProgress(nextActual);
+      setPlannedProgress(nextPlanned);
+
+      if (lastWeekly?.spkId && projectSpks.some((s) => s.id === lastWeekly.spkId)) {
+        setSelectedSpkId(lastWeekly.spkId);
+        setCustomContractor("");
+      } else if (lastWeekly && !lastWeekly.spkId) {
+        setSelectedSpkId("none");
+        setCustomContractor(
+          lastWeekly.contractorName && lastWeekly.contractorName !== "Tim Swakelola Kebun"
+            ? lastWeekly.contractorName
+            : ""
+        );
+      } else if (matchingSpks.length > 0) {
+        setSelectedSpkId(matchingSpks[0].id);
+        setCustomContractor("");
+      } else {
+        setSelectedSpkId("none");
+        setCustomContractor("");
+      }
+
+      setCreatedBy(lastWeekly?.createdBy || userProfile?.fullName || "");
+    },
+    [getLatestWeeklyForItem, project.workItems, projectSpks, userProfile?.fullName]
+  );
 
   const handleReportUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -126,7 +189,7 @@ export function WeeklyProgressDialog({
         json.data.webViewLink ||
           (json.data.fileId ? `/api/files/${json.data.fileId}/download` : "")
       );
-      toast.success(`Laporan "${json.data.fileName}" berhasil diunggah ke Google Drive!`);
+      toast.success(`Laporan "${json.data.fileName}" berhasil diunggah ke Google Drive.`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Gagal mengunggah laporan");
     } finally {
@@ -137,44 +200,40 @@ export function WeeklyProgressDialog({
   useEffect(() => {
     if (open) {
       const win = getCurrentWeekWindow();
-      const initialWiId = preselectedWorkItemId || project.workItems[0]?.id || "";
-      const initialWi = project.workItems.find((w) => w.id === initialWiId);
+      const latestProjectWeekly = projectWeeklyLogs[0];
+      const latestWiExists =
+        latestProjectWeekly &&
+        project.workItems.some((wi) => wi.id === latestProjectWeekly.workItemId);
+
+      const initialWiId =
+        preselectedWorkItemId ||
+        (latestWiExists ? latestProjectWeekly.workItemId : project.workItems[0]?.id || "");
+
       setWorkItemId(initialWiId);
-      setActualProgress(initialWi?.progress ?? 0);
       setPeriod(win.period);
       setStartDate(win.startDate);
       setEndDate(win.endDate);
-      setCustomContractor("");
       setNotes("");
       setReportName("");
       setReportUrl("");
-      setCreatedBy(userProfile?.fullName || "");
-
-      const matchingSpks = projectSpks.filter((s) => s.workItemId === initialWiId);
-      if (matchingSpks.length > 0) {
-        setSelectedSpkId(matchingSpks[0].id);
-      } else {
-        setSelectedSpkId("none");
-      }
+      setShowOptional(false);
+      applyDefaultsFromWorkItem(initialWiId);
     }
-  }, [open, preselectedWorkItemId, project.workItems, projectSpks, userProfile?.fullName]);
+  }, [open, preselectedWorkItemId, project.workItems, projectWeeklyLogs, applyDefaultsFromWorkItem]);
 
   const selectedWi = project.workItems.find((w) => w.id === workItemId);
   const activeSpk = projectSpks.find((s) => s.id === selectedSpkId);
+  const lastWeeklyForItem = useMemo(
+    () => getLatestWeeklyForItem(workItemId),
+    [getLatestWeeklyForItem, workItemId]
+  );
   const hasDailyLogsForItem = dailyProgress.some(
     (dp) => dp.projectId === project.id && dp.workItemId === workItemId
   );
 
   const handleWorkItemChange = (newWiId: string) => {
     setWorkItemId(newWiId);
-    const nextWi = project.workItems.find((w) => w.id === newWiId);
-    setActualProgress(nextWi?.progress ?? 0);
-    const matchingSpks = projectSpks.filter((s) => s.workItemId === newWiId);
-    if (matchingSpks.length > 0) {
-      setSelectedSpkId(matchingSpks[0].id);
-    } else {
-      setSelectedSpkId("none");
-    }
+    applyDefaultsFromWorkItem(newWiId);
   };
 
   const handleSpkChange = (newSpkId: string) => {
@@ -184,7 +243,9 @@ export function WeeklyProgressDialog({
       if (targetSpk?.workItemId) {
         setWorkItemId(targetSpk.workItemId);
         const nextWi = project.workItems.find((w) => w.id === targetSpk.workItemId);
-        setActualProgress(nextWi?.progress ?? 0);
+        const lastW = getLatestWeeklyForItem(targetSpk.workItemId);
+        setActualProgress(nextWi?.progress ?? lastW?.actualProgress ?? 0);
+        if (lastW) setPlannedProgress(lastW.plannedProgress);
       }
     }
   };
@@ -253,7 +314,7 @@ export function WeeklyProgressDialog({
       if (!ok) return;
 
       toast.success(
-        `Laporan mingguan berhasil disimpan! Realisasi aktual terintegrasi otomatis: ${currentActualProgress}%.`
+        `Laporan mingguan berhasil disimpan. Realisasi aktual terintegrasi otomatis: ${currentActualProgress}%.`
       );
       onOpenChange(false);
     } finally {
@@ -263,112 +324,141 @@ export function WeeklyProgressDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent scrollable className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-bold">
-            <TrendingUp className="w-5 h-5 text-indigo-600" />
+            <TrendingUp className="w-4 h-4 text-indigo-600 shrink-0" />
             Input Progress Mingguan (Weekly S-Curve Log)
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Evaluasi deviasi rencana vs realisasi fisik berkala untuk proyek {project.code}. Realisasi aktual (%) ditarik otomatis dari progress kumulatif lapangan.
+            Evaluasi deviasi rencana vs realisasi fisik berkala proyek {project.code}. Realisasi aktual (%) ditarik dari capaian kumulatif lapangan.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-1 text-xs">
-          {/* Item Pekerjaan (Chained) */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
+        <DialogBody className="space-y-3 text-xs">
+          {/* Baris 1: Item Pekerjaan & Kontrak SPK */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
               <label className="font-semibold text-foreground flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-blue-600" />
+                <Layers className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                 Item Pekerjaan (WBS) <span className="text-rose-500">*</span>
               </label>
-              <span className="text-[10px] text-muted-foreground font-mono">
-                Terkoneksi ke SPK
-              </span>
+              <SearchableSelect
+                value={workItemId}
+                onValueChange={handleWorkItemChange}
+                placeholder="Pilih work item..."
+                searchPlaceholder="Cari item pekerjaan..."
+                options={project.workItems.map((wi) => ({
+                  value: wi.id,
+                  label: wi.name,
+                  subLabel: `Bobot: ${wi.weight}% | Realisasi: ${wi.progress}%`,
+                }))}
+              />
             </div>
-            <SearchableSelect
-              value={workItemId}
-              onValueChange={handleWorkItemChange}
-              placeholder="Pilih work item..."
-              searchPlaceholder="Cari item pekerjaan..."
-              options={project.workItems.map((wi) => ({
-                value: wi.id,
-                label: wi.name,
-                subLabel: `Bobot: ${wi.weight}% • Realisasi saat ini: ${wi.progress}%`,
-              }))}
-            />
+
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground flex items-center gap-1.5">
+                <FileSignature className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                Kontrak SPK Pelaksana
+              </label>
+              <Select value={selectedSpkId} onValueChange={handleSpkChange}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Pilih SPK Kontraktor..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Tanpa SPK (Swakelola Kebun / Internal)</SelectItem>
+                  {projectSpks.map((spk) => {
+                    const isMatch = spk.workItemId === workItemId;
+                    return (
+                      <SelectItem key={spk.id} value={spk.id}>
+                        {spk.spkNumber} - {spk.vendorName}
+                        {isMatch ? " [Terkait WBS]" : ""}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          {/* SPK Rekanan Selection (Chained) */}
-          <div>
-            <label className="font-semibold text-foreground block mb-1 flex items-center gap-1.5">
-              <FileSignature className="w-3.5 h-3.5 text-indigo-500" />
-              Kontrak SPK Pelaksana (Jasa Rekanan)
-            </label>
-            <Select value={selectedSpkId} onValueChange={handleSpkChange}>
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue placeholder="Pilih SPK Kontraktor..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Tanpa SPK (Swakelola Kebun / Internal)</SelectItem>
-                {projectSpks.map((spk) => {
-                  const isMatch = spk.workItemId === workItemId;
-                  return (
-                    <SelectItem key={spk.id} value={spk.id}>
-                      {spk.spkNumber} &bull; {spk.vendorName}
-                      {isMatch ? " [Terkait WBS]" : ""}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-            {selectedSpkId === "none" && (
+          {selectedSpkId === "none" && (
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-muted-foreground block">
+                Nama Pelaksana / Kontraktor Swakelola
+              </label>
               <Input
                 value={customContractor}
                 onChange={(e) => setCustomContractor(e.target.value)}
-                placeholder="Nama pelaksana / kontraktor (contoh: Tim Swakelola Kebun)"
-                className="mt-1.5 text-xs"
+                placeholder="Tim Swakelola Kebun"
+                className="h-8 text-xs"
               />
-            )}
-          </div>
+            </div>
+          )}
 
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
-              Nama Periode Laporan <span className="text-rose-500">*</span>
-            </label>
-            <Input
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              placeholder="Contoh: Minggu 14 (26 Okt - 01 Nov 2026)"
-              className="text-xs"
-            />
-          </div>
+          {/* Referensi Laporan Mingguan Terakhir */}
+          {lastWeeklyForItem && (
+            <div className="px-3 py-2 rounded-md border bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200/80 dark:border-indigo-900/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <div className="flex items-center gap-1.5 min-w-0 flex-1 text-indigo-950 dark:text-indigo-200">
+                <History className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <span className="truncate">
+                  Terakhir ({lastWeeklyForItem.period}): Rencana{" "}
+                  <strong className="font-mono">{lastWeeklyForItem.plannedProgress}%</strong> | Realisasi{" "}
+                  <strong className="font-mono">{lastWeeklyForItem.actualProgress}%</strong>
+                </span>
+              </div>
+              {lastWeeklyForItem.notes && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNotes(lastWeeklyForItem.notes);
+                    setShowOptional(true);
+                  }}
+                  className="px-2 py-1 rounded border border-indigo-300 dark:border-indigo-800 bg-background hover:bg-indigo-100/70 dark:hover:bg-indigo-900/40 text-[11px] font-medium text-indigo-800 dark:text-indigo-200 inline-flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+                >
+                  <Copy className="w-3 h-3" />
+                  Salin Catatan
+                </button>
+              )}
+            </div>
+          )}
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="font-semibold text-foreground block mb-1">Tanggal Mulai</label>
+          {/* Baris 2: Periode & Rentang Tanggal (3 Kolom) */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <div className="sm:col-span-6 space-y-1">
+              <label className="font-semibold text-foreground block">
+                Nama Periode Laporan <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                value={period}
+                onChange={(e) => setPeriod(e.target.value)}
+                placeholder="Contoh: Minggu 14 (26 Okt - 01 Nov 2026)"
+                className="h-9 text-xs"
+              />
+            </div>
+            <div className="sm:col-span-3 space-y-1">
+              <label className="font-semibold text-foreground block">Mulai</label>
               <Input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="text-xs font-mono"
+                className="h-9 text-xs font-mono"
               />
             </div>
-            <div>
-              <label className="font-semibold text-foreground block mb-1">Tanggal Selesai</label>
+            <div className="sm:col-span-3 space-y-1">
+              <label className="font-semibold text-foreground block">Selesai</label>
               <Input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="text-xs font-mono"
+                className="h-9 text-xs font-mono"
               />
             </div>
           </div>
 
-          {/* Progress Comparation: Plan Input & Actual Input */}
-          <div className="grid grid-cols-2 gap-2 items-end">
-            <div>
-              <label htmlFor="weekly-planned-progress" className="font-semibold text-foreground block mb-1">
+          {/* Baris 3: Rencana, Realisasi & Ringkasan Deviasi (3 Kolom) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            <div className="space-y-1">
+              <label htmlFor="weekly-planned-progress" className="font-semibold text-foreground block">
                 Rencana Baseline (%) <span className="text-rose-500">*</span>
               </label>
               <Input
@@ -378,12 +468,12 @@ export function WeeklyProgressDialog({
                 max="100"
                 value={plannedProgress}
                 onChange={(e) => setPlannedProgress(Number(e.target.value))}
-                className="font-mono font-bold text-xs"
+                className="h-9 font-mono font-bold text-xs"
               />
             </div>
 
-            <div>
-              <label htmlFor="weekly-actual-progress" className="font-semibold text-foreground block mb-1">
+            <div className="space-y-1">
+              <label htmlFor="weekly-actual-progress" className="font-semibold text-foreground block">
                 Realisasi Aktual (%) <span className="text-rose-500">*</span>
               </label>
               <Input
@@ -393,8 +483,25 @@ export function WeeklyProgressDialog({
                 max="100"
                 value={actualProgress}
                 onChange={(e) => setActualProgress(Number(e.target.value))}
-                className="font-mono font-bold text-xs border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300"
+                className="h-9 font-mono font-bold text-xs border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300"
               />
+            </div>
+
+            <div className="h-9 px-3 rounded-md bg-muted/40 border flex items-center justify-between gap-2 text-xs">
+              <div>
+                <span className="text-[10px] text-muted-foreground block leading-none">Deviasi</span>
+                <span
+                  className={`font-mono font-bold ${
+                    variance >= 0 ? "text-emerald-600" : "text-rose-600"
+                  }`}
+                >
+                  {variance >= 0 ? `+${variance}%` : `${variance}%`}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-muted-foreground block leading-none">Capaian</span>
+                <span className="font-mono font-bold text-foreground">{achievement}%</span>
+              </div>
             </div>
           </div>
 
@@ -402,89 +509,99 @@ export function WeeklyProgressDialog({
             {selectedWi?.progressMode === "Daily" && hasDailyLogsForItem
               ? `Nilai awal diambil dari akumulasi log harian (${selectedWi.progress}%), dan dapat disesuaikan untuk evaluasi mingguan.`
               : currentActualProgress >= 100
-              ? "Capaian 100% akan menandai item selesai dan menampilkan tanda centang pada Gantt Chart."
+              ? "Capaian 100% menandai item selesai dan menampilkan tanda centang pada Gantt Chart."
               : currentActualProgress > 0
-              ? "Capaian di atas 0% akan menampilkan simbol # pada minggu periode laporan di Gantt Chart."
+              ? "Capaian di atas 0% menampilkan simbol # pada minggu periode laporan di Gantt Chart."
               : "Isi realisasi aktual di atas 0% agar progres tercatat pada Kurva S dan Gantt Chart."}
           </p>
 
-          {/* Auto calculated Variance & Achievement Indicator */}
-          <div className="p-2.5 rounded-lg bg-muted/40 border grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <span className="text-muted-foreground block text-[10px]">Deviasi (Actual - Plan):</span>
-              <span
-                className={`font-mono text-xs font-bold ${
-                  variance >= 0 ? "text-emerald-600" : "text-rose-600"
-                }`}
-              >
-                {variance >= 0 ? `+${variance}% (Lebih Cepat)` : `${variance}% (Terlambat)`}
-              </span>
-            </div>
-
-            <div>
-              <span className="text-muted-foreground block text-[10px]">Tingkat Pencapaian:</span>
-              <span className="font-mono text-xs font-bold text-foreground">
-                {achievement}%
-              </span>
-            </div>
-          </div>
-
-          <div>
-            <label className="font-semibold text-foreground block mb-1 flex items-center gap-1.5">
-              <UserCheck className="w-3.5 h-3.5 text-muted-foreground" />
-              Penyusun / Pelapor
-            </label>
-            <Input
-              value={createdBy}
-              onChange={(e) => setCreatedBy(e.target.value)}
-              placeholder="Nama penyusun laporan mingguan..."
-              className="text-xs"
-            />
-          </div>
-
-          <div>
-            <label className="font-semibold text-foreground block mb-1">Catatan Evaluasi Kendala</label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Evaluasi kendala material, alat, atau cuaca minggu ini..."
-              rows={2}
-              className="text-xs"
-            />
-          </div>
-
-          <div>
-            <label className="font-semibold text-foreground flex items-center justify-between mb-1">
-              <span>Lampiran Laporan Mingguan Resmi (PDF, Opsional)</span>
-              {uploadingReport && (
-                <span className="text-[10px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-normal">
-                  <Loader2 className="w-3 h-3 animate-spin" /> Mengunggah ke Drive...
+          {/* Baris 4: Collapsible Detail Tambahan */}
+          <div className="rounded-md border bg-muted/20">
+            <button
+              type="button"
+              onClick={() => setShowOptional((prev) => !prev)}
+              aria-expanded={showOptional}
+              className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-muted/40 transition-colors rounded-md cursor-pointer"
+            >
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
+                <span className="font-semibold text-foreground">
+                  Catatan Evaluasi, Pelapor & Lampiran PDF (Opsional)
                 </span>
+                <span className="text-[11px] text-muted-foreground truncate">
+                  Pelapor: {createdBy || userProfile?.fullName || "-"}
+                  {reportName ? ` | PDF: ${reportName}` : ""}
+                </span>
+              </div>
+              {showOptional ? (
+                <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
               )}
-            </label>
-            <div className="flex items-center gap-2">
-              <Input
-                value={reportName}
-                onChange={(e) => setReportName(e.target.value)}
-                placeholder="Nama berkas atau unggah PDF ke Google Drive"
-                className="text-xs"
-              />
-              <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 text-foreground transition-colors gap-1.5">
-                <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
-                <span>Unggah PDF</span>
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="application/pdf"
-                  onChange={handleReportUpload}
-                  disabled={uploadingReport}
-                />
-              </label>
-            </div>
-          </div>
-        </div>
+            </button>
 
-        <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+            {showOptional && (
+              <div className="px-3 pb-3 pt-2 border-t space-y-2.5">
+                <div className="space-y-1">
+                  <label className="font-semibold text-foreground block">Catatan Evaluasi Kendala</label>
+                  <Textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Evaluasi kendala material, alat, atau cuaca minggu ini..."
+                    rows={2}
+                    className="text-xs resize-none bg-background"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-foreground flex items-center gap-1">
+                      <UserCheck className="w-3.5 h-3.5 text-muted-foreground" />
+                      Penyusun / Pelapor
+                    </label>
+                    <Input
+                      value={createdBy}
+                      onChange={(e) => setCreatedBy(e.target.value)}
+                      placeholder="Nama penyusun laporan mingguan..."
+                      className="h-8 text-xs bg-background"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-semibold text-foreground flex items-center justify-between">
+                      <span>Lampiran Laporan Resmi (PDF)</span>
+                      {uploadingReport && (
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1 font-normal">
+                          <Loader2 className="w-3 h-3 animate-spin" /> Mengunggah...
+                        </span>
+                      )}
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        value={reportName}
+                        onChange={(e) => setReportName(e.target.value)}
+                        placeholder="Nama berkas atau unggah PDF"
+                        className="h-8 text-xs bg-background"
+                      />
+                      <label className="h-8 px-2.5 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 text-foreground transition-colors gap-1">
+                        <UploadCloud className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                        <span>PDF</span>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="application/pdf"
+                          onChange={handleReportUpload}
+                          disabled={uploadingReport}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogBody>
+
+        <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Batal
           </Button>

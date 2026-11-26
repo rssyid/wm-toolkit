@@ -41,6 +41,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -1205,7 +1206,7 @@ function MasterDataLocationsContent() {
 
       {/* ================= DIALOG: KEBUN (ESTATE) ================= */}
       <Dialog open={estateDialogOpen} onOpenChange={setEstateDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent scrollable className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-base">
               {editingEstate ? "Ubah Data Kebun (Estate)" : "Tambah Kebun Baru"}
@@ -1215,47 +1216,62 @@ function MasterDataLocationsContent() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-1 text-xs">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="font-semibold text-foreground block mb-1">
+          <DialogBody className="space-y-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
                   Kode Kebun <span className="text-rose-500">*</span>
                 </label>
                 <Input
                   value={estateCode}
                   onChange={(e) => setEstateCode(e.target.value)}
                   placeholder="KBN-..."
-                  className="font-mono"
+                  className="h-9 font-mono text-xs"
                 />
               </div>
 
-              <div>
-                <label className="font-semibold text-foreground block mb-1">
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
                   Luas Hektar (Ha)
                 </label>
                 <Input
                   type="number"
                   value={estateHectares}
                   onChange={(e) => setEstateHectares(Number(e.target.value))}
-                  className="font-mono"
+                  className="h-9 font-mono text-xs"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
-                Nama Kebun (Estate) <span className="text-rose-500">*</span>
-              </label>
-              <Input
-                value={estateName}
-                onChange={(e) => setEstateName(e.target.value)}
-                placeholder="Contoh: Kebun Sei Silau"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
+                  Nama Kebun (Estate) <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  value={estateName}
+                  onChange={(e) => setEstateName(e.target.value)}
+                  placeholder="Contoh: Kebun Sei Silau"
+                  className="h-9 text-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
+                  Kabupaten / Distrik
+                </label>
+                <Input
+                  value={estateDistrict}
+                  onChange={(e) => setEstateDistrict(e.target.value)}
+                  placeholder="Contoh: Asahan"
+                  className="h-9 text-xs"
+                />
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="font-semibold text-foreground block mb-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
                   Perusahaan (PT) <span className="text-rose-500">*</span>
                 </label>
                 <SearchableSelect
@@ -1268,8 +1284,8 @@ function MasterDataLocationsContent() {
                 />
               </div>
 
-              <div>
-                <label className="font-semibold text-foreground block mb-1">
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
                   Wilayah (Region) <span className="text-rose-500">*</span>
                 </label>
                 <SearchableSelect
@@ -1282,20 +1298,9 @@ function MasterDataLocationsContent() {
                 />
               </div>
             </div>
+          </DialogBody>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
-                Kabupaten / Distrik
-              </label>
-              <Input
-                value={estateDistrict}
-                onChange={(e) => setEstateDistrict(e.target.value)}
-                placeholder="Contoh: Asahan"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setEstateDialogOpen(false)} disabled={isSubmitting}>
               Batal
             </Button>

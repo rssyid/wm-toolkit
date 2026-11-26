@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -144,10 +145,10 @@ export function GRReceiptDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent scrollable className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <PackageCheck className="w-5 h-5 text-emerald-600" />
+            <PackageCheck className="w-4 h-4 text-emerald-600 shrink-0" />
             Catat Penerimaan Barang (Goods Receipt)
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -155,93 +156,87 @@ export function GRReceiptDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-1 text-xs">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
+        <DialogBody className="space-y-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Nomor Dokumen GR <span className="text-rose-500">*</span>
               </label>
               <Input
                 value={grNumber}
                 onChange={(e) => setGrNumber(e.target.value)}
                 placeholder="GR-2026-..."
-                className="font-mono"
+                className="h-9 font-mono text-xs"
               />
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">Tanggal Terima Fisik</label>
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">Tanggal Terima Fisik</label>
               <Input
                 type="date"
                 value={receiptDate}
                 onChange={(e) => setReceiptDate(e.target.value)}
+                className="h-9 text-xs font-mono"
               />
             </div>
           </div>
 
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
-              Pilih Item Material PO <span className="text-rose-500">*</span>
-            </label>
-            <SearchableSelect
-              value={selectedItemId}
-              onValueChange={setSelectedItemId}
-              placeholder="Pilih item..."
-              searchPlaceholder="Cari item material..."
-              options={po.items.map((it) => ({
-                value: it.id,
-                label: it.materialName,
-                subLabel: `Sisa: ${it.remainingVolume} ${it.unit} dari ${it.volume} ${it.unit}`,
-              }))}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
+                Pilih Item Material PO <span className="text-rose-500">*</span>
+              </label>
+              <SearchableSelect
+                value={selectedItemId}
+                onValueChange={setSelectedItemId}
+                placeholder="Pilih item..."
+                searchPlaceholder="Cari item material..."
+                options={po.items.map((it) => ({
+                  value: it.id,
+                  label: it.materialName,
+                  subLabel: `Sisa: ${it.remainingVolume} ${it.unit} dari ${it.volume} ${it.unit}`,
+                }))}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
+                Kuantitas Diterima ({selectedItem?.unit || "Unit"}) <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="number"
+                min="1"
+                max={selectedItem?.remainingVolume || 9999}
+                value={receivedVolume || ""}
+                onChange={(e) => setReceivedVolume(Number(e.target.value))}
+                placeholder="Masukkan jumlah diterima..."
+                className="h-9 font-mono font-bold text-sm"
+              />
+            </div>
           </div>
 
           {selectedItem && (
-            <div className="p-3 rounded-lg bg-muted/40 border space-y-1.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total Dipesan:</span>
-                <span className="font-mono font-semibold">
-                  {selectedItem.volume} {selectedItem.unit}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Sudah Diterima:</span>
-                <span className="font-mono text-emerald-700 dark:text-emerald-400 font-semibold">
-                  {selectedItem.receivedVolume} {selectedItem.unit}
-                </span>
-              </div>
-              <div className="flex justify-between border-t pt-1">
-                <span className="text-foreground font-semibold">Sisa Belum Diterima:</span>
-                <span className="font-mono text-amber-700 dark:text-amber-400 font-bold">
-                  {selectedItem.remainingVolume} {selectedItem.unit}
-                </span>
-              </div>
+            <div className="px-3 py-2 rounded-md bg-muted/40 border flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <span>
+                Dipesan: <strong className="font-mono text-foreground">{selectedItem.volume} {selectedItem.unit}</strong>
+              </span>
+              <span>
+                Diterima: <strong className="font-mono text-emerald-700 dark:text-emerald-400">{selectedItem.receivedVolume} {selectedItem.unit}</strong>
+              </span>
+              <span>
+                Sisa: <strong className="font-mono text-amber-700 dark:text-amber-400">{selectedItem.remainingVolume} {selectedItem.unit}</strong>
+              </span>
             </div>
           )}
 
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
-              Kuantitas Diterima Saat Ini ({selectedItem?.unit || "Unit"}){" "}
-              <span className="text-rose-500">*</span>
-            </label>
-            <Input
-              type="number"
-              min="1"
-              max={selectedItem?.remainingVolume || 9999}
-              value={receivedVolume || ""}
-              onChange={(e) => setReceivedVolume(Number(e.target.value))}
-              placeholder="Masukkan jumlah yang diterima..."
-              className="font-mono font-bold text-sm"
-            />
-            {selectedItem && receivedVolume > selectedItem.remainingVolume && (
-              <p className="text-[11px] text-rose-500 mt-1 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> Melebihi sisa pemesanan ({selectedItem.remainingVolume})
-              </p>
-            )}
-          </div>
+          {selectedItem && receivedVolume > selectedItem.remainingVolume && (
+            <p className="text-[11px] text-rose-500 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" /> Melebihi sisa pemesanan ({selectedItem.remainingVolume})
+            </p>
+          )}
 
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Catatan Kondisi Fisik / Hasil Pemeriksaan Gudang
             </label>
             <Textarea
@@ -249,11 +244,12 @@ export function GRReceiptDialog({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Kondisi kemasan utuh, sertifikat mill sheet terlampir..."
               rows={2}
+              className="text-xs resize-none"
             />
           </div>
 
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Lampiran Surat Jalan / Screenshot GR SAP (Opsional)
             </label>
             <div className="flex items-center gap-2">
@@ -261,7 +257,7 @@ export function GRReceiptDialog({
                 value={attachmentName}
                 onChange={(e) => setAttachmentName(e.target.value)}
                 placeholder="Tautan Google Drive atau nama berkas"
-                className="text-xs"
+                className="h-9 text-xs"
               />
               <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1.5">
                 {uploadingAttachment ? (
@@ -280,9 +276,9 @@ export function GRReceiptDialog({
               </label>
             </div>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Batal
           </Button>

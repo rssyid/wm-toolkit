@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -153,10 +154,10 @@ export function VendorEvaluationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent scrollable className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-            <ClipboardCheck className="w-5 h-5 text-blue-600" />
+            <ClipboardCheck className="w-4 h-4 text-blue-600 shrink-0" />
             Catat Evaluasi Vendor Rekanan Barang
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -164,63 +165,47 @@ export function VendorEvaluationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* PR Target Summary Card */}
-        <div className="p-3 rounded-lg border bg-blue-50/60 dark:bg-blue-950/20 text-xs space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="font-semibold text-blue-900 dark:text-blue-300">
-              PR: {pr.prNumber} ({pr.sapPrNumber})
-            </span>
-            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">
+        <DialogBody className="space-y-3 text-xs">
+          {/* PR Target Summary Strip */}
+          <div className="px-3 py-2 rounded-md border bg-blue-50/50 dark:bg-blue-950/20 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-blue-900 dark:text-blue-300">
+                PR: {pr.prNumber} ({pr.sapPrNumber}) - {pr.workItemName}
+              </div>
+              <div className="text-[11px] text-muted-foreground truncate">{pr.description}</div>
+            </div>
+            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 shrink-0">
               {pr.prType}
             </span>
           </div>
-          <div className="font-medium text-foreground">{pr.workItemName}</div>
-          <div className="text-[11px] text-muted-foreground line-clamp-2">
-            {pr.description}
-          </div>
-        </div>
 
-        <div className="space-y-4 py-1 text-xs">
-          {/* Supplier Selection */}
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
-              Rekanan Vendor <span className="text-rose-500">*</span>
-            </label>
-            <SearchableSelect
-              options={suppliers.map((s) => ({
-                value: s.id,
-                label: `${s.name} (${s.category})`,
-                description: `NPWP: ${s.npwp} • Rating: ${s.rating}/5`,
-              }))}
-              value={supplierId}
-              onValueChange={setSupplierId}
-              placeholder="Cari & pilih vendor rekanan..."
-            />
-          </div>
-
-          {/* Grid: Tanggal & Hasil Evaluasi */}
+          {/* Supplier & Tanggal & Hasil */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
-                Tanggal Evaluasi <span className="text-rose-500">*</span>
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
+                Rekanan Vendor <span className="text-rose-500">*</span>
               </label>
-              <Input
-                type="date"
-                value={evaluationDate}
-                onChange={(e) => setEvaluationDate(e.target.value)}
-                className="h-8 text-xs"
+              <SearchableSelect
+                options={suppliers.map((s) => ({
+                  value: s.id,
+                  label: `${s.name} (${s.category})`,
+                  description: `NPWP: ${s.npwp} | Rating: ${s.rating}/5`,
+                }))}
+                value={supplierId}
+                onValueChange={setSupplierId}
+                placeholder="Cari & pilih vendor rekanan..."
               />
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Hasil Rekomendasi <span className="text-rose-500">*</span>
               </label>
               <Select
                 value={result}
                 onValueChange={(val: VendorEvaluationResult) => setResult(val)}
               >
-                <SelectTrigger className="h-8 text-xs font-semibold">
+                <SelectTrigger className="h-9 text-xs font-semibold">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -241,11 +226,23 @@ export function VendorEvaluationDialog({
             </div>
           </div>
 
-          {/* Grid: Skor & Evaluator */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
-                Skor Penilaian (1-100)
+          {/* Grid: Tanggal, Skor, Evaluator & Jabatan */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
+                Tgl Evaluasi <span className="text-rose-500">*</span>
+              </label>
+              <Input
+                type="date"
+                value={evaluationDate}
+                onChange={(e) => setEvaluationDate(e.target.value)}
+                className="h-9 text-xs font-mono"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
+                Skor (1-100)
               </label>
               <Input
                 type="number"
@@ -253,41 +250,41 @@ export function VendorEvaluationDialog({
                 max={100}
                 value={score}
                 onChange={(e) => setScore(Number(e.target.value))}
-                className="h-8 text-xs font-mono font-bold"
+                className="h-9 text-xs font-mono font-bold"
               />
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Nama Evaluator <span className="text-rose-500">*</span>
               </label>
               <Input
                 value={evaluatorName}
                 onChange={(e) => setEvaluatorName(e.target.value)}
-                className="h-8 text-xs"
+                className="h-9 text-xs"
               />
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Jabatan Evaluator
               </label>
               <Input
                 value={evaluatorJabatan}
                 onChange={(e) => setEvaluatorJabatan(e.target.value)}
-                className="h-8 text-xs"
+                className="h-9 text-xs"
               />
             </div>
           </div>
 
           {/* Catatan Evaluasi Teknis & Komersial */}
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Catatan Evaluasi Teknis & Komersial <span className="text-rose-500">*</span>
             </label>
             <Textarea
-              rows={3}
-              placeholder="Jelaskan justifikasi teknis, ketersediaan workshop, uji bahan, kepatuhan spesifikasi, garansi, atau komparasi harga penawaran..."
+              rows={2}
+              placeholder="Jelaskan justifikasi teknis, ketersediaan workshop, uji bahan, kepatuhan spesifikasi, garansi, atau komparasi harga..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="text-xs resize-none"
@@ -295,8 +292,8 @@ export function VendorEvaluationDialog({
           </div>
 
           {/* Dokumen Bukti Komparasi / Berita Acara */}
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Lampiran Dokumen Berita Acara Komparasi / Evaluasi (Opsional)
             </label>
             <div className="flex gap-2">
@@ -323,9 +320,9 @@ export function VendorEvaluationDialog({
               </label>
             </div>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+        <DialogFooter>
           <Button
             variant="outline"
             size="sm"

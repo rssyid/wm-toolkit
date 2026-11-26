@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -131,10 +132,10 @@ export function PRRecordDialog({ open, onOpenChange, project }: PRRecordDialogPr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent scrollable className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <FilePlus2 className="w-5 h-5 text-blue-600" />
+            <FilePlus2 className="w-4 h-4 text-blue-600 shrink-0" />
             Catat Rilis Purchase Requisition (PR)
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -142,46 +143,48 @@ export function PRRecordDialog({ open, onOpenChange, project }: PRRecordDialogPr
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 py-1 text-xs">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
+        <DialogBody className="space-y-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Nomor PR Internal <span className="text-rose-500">*</span>
               </label>
               <Input
                 value={prNumber}
                 onChange={(e) => setPrNumber(e.target.value)}
                 placeholder="PR-2026-..."
+                className="h-9 text-xs font-mono"
               />
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Nomor SAP PR <span className="text-rose-500">*</span>
               </label>
               <Input
                 value={sapPrNumber}
                 onChange={(e) => setSapPrNumber(e.target.value)}
                 placeholder="10045..."
-                className="font-mono"
+                className="h-9 text-xs font-mono"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Tanggal Approval & Rilis PR <span className="text-rose-500">*</span>
               </label>
               <Input
                 type="date"
                 value={releaseDate}
                 onChange={(e) => setReleaseDate(e.target.value)}
+                className="h-9 text-xs font-mono"
               />
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">Tipe PR</label>
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">Tipe PR</label>
               <SearchableSelect
                 value={prType}
                 onValueChange={(val) => setPrType(val as PRType)}
@@ -193,8 +196,8 @@ export function PRRecordDialog({ open, onOpenChange, project }: PRRecordDialogPr
             </div>
           </div>
 
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Item Pekerjaan Terkait <span className="text-rose-500">*</span>
             </label>
             <SearchableSelect
@@ -205,24 +208,24 @@ export function PRRecordDialog({ open, onOpenChange, project }: PRRecordDialogPr
               options={project.workItems.map((wi) => ({
                 value: wi.id,
                 label: wi.name,
-                subLabel: `Bobot: ${wi.weight}% • ${wi.phase}`,
+                subLabel: `Bobot: ${wi.weight}% | ${wi.phase}`,
               }))}
             />
           </div>
 
-          <div>
-            <label className="font-semibold text-foreground block mb-1">Uraian Kebutuhan PR</label>
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">Uraian Kebutuhan PR</label>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Deskripsi spesifikasi material atau lingkup sewa alat..."
               rows={2}
+              className="text-xs resize-none"
             />
           </div>
 
-          {/* Lampiran Screenshot SAP / Google Drive */}
-          <div>
-            <label className="font-semibold text-foreground block mb-1">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Lampiran Screenshot SAP / Dokumen Pendukung (Opsional)
             </label>
             <div className="flex items-center gap-2">
@@ -230,7 +233,7 @@ export function PRRecordDialog({ open, onOpenChange, project }: PRRecordDialogPr
                 value={attachmentName}
                 onChange={(e) => setAttachmentName(e.target.value)}
                 placeholder="Tautan Google Drive atau nama berkas"
-                className="text-xs"
+                className="h-9 text-xs"
               />
               <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1.5">
                 {uploadingAttachment ? (
@@ -249,9 +252,9 @@ export function PRRecordDialog({ open, onOpenChange, project }: PRRecordDialogPr
               </label>
             </div>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Batal
           </Button>

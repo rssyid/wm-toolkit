@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -213,10 +214,10 @@ export function POCreateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent scrollable className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <ShoppingCart className="w-5 h-5 text-indigo-600" />
+            <ShoppingCart className="w-4 h-4 text-indigo-600 shrink-0" />
             Terbitkan Purchase Order (PO)
           </DialogTitle>
           <DialogDescription className="text-xs">
@@ -224,7 +225,7 @@ export function POCreateDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-1 text-xs">
+        <DialogBody className="space-y-3 text-xs">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="font-semibold text-foreground block mb-1">
@@ -391,9 +392,9 @@ export function POCreateDialog({
               </span>
             </div>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Batal
           </Button>

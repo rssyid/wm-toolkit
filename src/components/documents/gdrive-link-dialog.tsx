@@ -6,6 +6,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogDescription,
   DialogFooter,
@@ -140,10 +141,10 @@ export function GDriveLinkDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent scrollable className="sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-950 flex items-center justify-center text-blue-700 dark:text-blue-300">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-950 flex items-center justify-center text-blue-700 dark:text-blue-300 shrink-0">
               <Link2 className="w-4 h-4" />
             </div>
             <div>
@@ -155,91 +156,95 @@ export function GDriveLinkDialog({
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-3.5 py-1 text-xs">
-          <div>
-            <label htmlFor="gdrive-link-url" className="font-semibold text-foreground block mb-1">
-              Tautan Google Drive (HTTPS) <span className="text-rose-600">*</span>
-            </label>
-            <Input
-              id="gdrive-link-url"
-              type="url"
-              value={fileUrl}
-              onChange={(e) => setFileUrl(e.target.value)}
-              placeholder="https://drive.google.com/file/d/..."
-              className="text-xs font-mono"
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="gdrive-link-name" className="font-semibold text-foreground block mb-1">
-              Nama Tampilan Dokumen <span className="text-rose-600">*</span>
-            </label>
-            <Input
-              id="gdrive-link-name"
-              value={fileName}
-              onChange={(e) => setFileName(e.target.value)}
-              placeholder="Contoh: Peta_Kontur_Blok_A12.pdf"
-              className="text-xs"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="gdrive-link-cat" className="font-semibold text-foreground block mb-1">
-                Kategori Dokumen
-              </label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger id="gdrive-link-cat" className="text-xs h-9">
-                  <SelectValue placeholder="Pilih kategori" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORY_OPTIONS.map((cat) => (
-                    <SelectItem key={cat} value={cat} className="text-xs">
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label htmlFor="gdrive-link-docnum" className="font-semibold text-foreground block mb-1">
-                Nomor Dokumen / SAP
+        <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+          <DialogBody className="space-y-3 text-xs">
+            <div className="space-y-1">
+              <label htmlFor="gdrive-link-url" className="font-semibold text-foreground block">
+                Tautan Google Drive (HTTPS) <span className="text-rose-600">*</span>
               </label>
               <Input
-                id="gdrive-link-docnum"
-                value={docNumber}
-                onChange={(e) => setDocNumber(e.target.value)}
-                placeholder="Opsional"
-                className="text-xs font-mono"
+                id="gdrive-link-url"
+                type="url"
+                value={fileUrl}
+                onChange={(e) => setFileUrl(e.target.value)}
+                placeholder="https://drive.google.com/file/d/..."
+                className="h-9 text-xs font-mono"
+                required
               />
             </div>
-          </div>
 
-          <div>
-            <label htmlFor="gdrive-link-size" className="font-semibold text-foreground block mb-1">
-              Keterangan Ukuran File (Opsional)
-            </label>
-            <Input
-              id="gdrive-link-size"
-              value={fileSize}
-              onChange={(e) => setFileSize(e.target.value)}
-              placeholder="Contoh: 2.5 MB"
-              className="text-xs"
-            />
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label htmlFor="gdrive-link-name" className="font-semibold text-foreground block">
+                  Nama Tampilan Dokumen <span className="text-rose-600">*</span>
+                </label>
+                <Input
+                  id="gdrive-link-name"
+                  value={fileName}
+                  onChange={(e) => setFileName(e.target.value)}
+                  placeholder="Contoh: Peta_Kontur_Blok_A12.pdf"
+                  className="h-9 text-xs"
+                  required
+                />
+              </div>
 
-          <div className="rounded-md bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-2.5 flex items-start gap-2 text-[11px] text-blue-900 dark:text-blue-200">
-            <ExternalLink className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-            <span>
-              Pastikan hak akses tautan Google Drive diatur minimal ke{" "}
-              <strong>Anyone with the link (Viewer)</strong> agar dapat dibuka tim terkait.
-            </span>
-          </div>
+              <div className="space-y-1">
+                <label htmlFor="gdrive-link-cat" className="font-semibold text-foreground block">
+                  Kategori Dokumen
+                </label>
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger id="gdrive-link-cat" className="text-xs h-9">
+                    <SelectValue placeholder="Pilih kategori" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORY_OPTIONS.map((cat) => (
+                      <SelectItem key={cat} value={cat} className="text-xs">
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-          <DialogFooter className="gap-2 sm:gap-0 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label htmlFor="gdrive-link-docnum" className="font-semibold text-foreground block">
+                  Nomor Dokumen / SAP
+                </label>
+                <Input
+                  id="gdrive-link-docnum"
+                  value={docNumber}
+                  onChange={(e) => setDocNumber(e.target.value)}
+                  placeholder="Opsional"
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="gdrive-link-size" className="font-semibold text-foreground block">
+                  Keterangan Ukuran (Opsional)
+                </label>
+                <Input
+                  id="gdrive-link-size"
+                  value={fileSize}
+                  onChange={(e) => setFileSize(e.target.value)}
+                  placeholder="Contoh: 2.5 MB"
+                  className="h-9 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-md bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2 flex items-start gap-2 text-[11px] text-blue-900 dark:text-blue-200">
+              <ExternalLink className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>
+                Pastikan hak akses tautan diatur minimal ke{" "}
+                <strong>Anyone with the link (Viewer)</strong> agar dapat dibuka tim terkait.
+              </span>
+            </div>
+          </DialogBody>
+
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"

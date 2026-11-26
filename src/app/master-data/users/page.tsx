@@ -31,6 +31,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -415,7 +416,7 @@ export default function MasterDataUsersPage() {
 
       {/* Add / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent scrollable className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-base">
               {editingItem ? "Ubah Data Pengguna" : "Tambah Pengguna Baru"}
@@ -425,9 +426,9 @@ export default function MasterDataUsersPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-1 text-xs">
-            <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/20">
-              <Avatar className="w-12 h-12 border-2 border-emerald-500/30 shrink-0">
+          <DialogBody className="space-y-3 text-xs">
+            <div className="flex items-center gap-3 p-2.5 rounded-lg border bg-muted/20">
+              <Avatar className="w-11 h-11 border-2 border-emerald-500/30 shrink-0">
                 {avatarUrl ? (
                   <AvatarImage
                     src={avatarUrl}
@@ -470,40 +471,44 @@ export default function MasterDataUsersPage() {
               </div>
             </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
-                Nama Lengkap & Gelar <span className="text-rose-500">*</span>
-              </label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Contoh: Ir. Budi Santoso, M.M."
-              />
-            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
+                  Nama Lengkap & Gelar <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Contoh: Ir. Budi Santoso, M.M."
+                  className="h-9 text-xs"
+                />
+              </div>
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
-                Alamat Email Resmi <span className="text-rose-500">*</span>
-              </label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="nama@perusahaan.co.id"
-              />
-              {!editingItem && (
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Akun baru akan menggunakan sandi bawaan sistem (default) untuk login perdana.
-                </p>
-              )}
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
+                  Alamat Email Resmi <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="nama@perusahaan.co.id"
+                  className="h-9 text-xs"
+                />
+              </div>
             </div>
+            {!editingItem && (
+              <p className="text-[10px] text-muted-foreground -mt-1">
+                Akun baru menggunakan sandi bawaan sistem (default) untuk login perdana.
+              </p>
+            )}
 
-            <div>
-              <label className="font-semibold text-foreground block mb-1">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Peran Otoritas (Role) <span className="text-rose-500">*</span>
               </label>
               <Select value={role} onValueChange={(val: SystemRole) => setRole(val)}>
-                <SelectTrigger className="w-full text-xs">
+                <SelectTrigger className="w-full h-9 text-xs">
                   <SelectValue placeholder="Pilih Peran Sistem..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -533,37 +538,36 @@ export default function MasterDataUsersPage() {
                   </SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-muted-foreground mt-1">
-                Peran ini menentukan wewenang RBAC pengguna dalam seluruh alur kerja proyek.
-              </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="font-semibold text-foreground block mb-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
                   Jabatan Kedinasan
                 </label>
                 <Input
                   value={jabatan}
                   onChange={(e) => setJabatan(e.target.value)}
                   placeholder="Contoh: Manager Estate"
+                  className="h-9 text-xs"
                 />
               </div>
 
-              <div>
-                <label className="font-semibold text-foreground block mb-1">
+              <div className="space-y-1">
+                <label className="font-semibold text-foreground block">
                   Unit Kerja / Kebun
                 </label>
                 <Input
                   value={estateName}
                   onChange={(e) => setEstateName(e.target.value)}
                   placeholder="Nama kebun atau unit kerja"
+                  className="h-9 text-xs"
                 />
               </div>
             </div>
-          </div>
+          </DialogBody>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter>
             <Button
               variant="outline"
               size="sm"

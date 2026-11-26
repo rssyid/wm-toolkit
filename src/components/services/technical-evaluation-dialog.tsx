@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -164,62 +165,61 @@ export function TechnicalEvaluationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent scrollable className="sm:max-w-2xl">
         <DialogHeader>
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-              <ClipboardCheck className="w-5 h-5" />
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 shrink-0">
+              <ClipboardCheck className="w-4 h-4" />
             </div>
             <div>
               <DialogTitle className="text-base font-bold">
                 Catat Evaluasi Teknis Rekanan Jasa
               </DialogTitle>
               <DialogDescription className="text-xs">
-                Penilaian kelaikan metodologi teknis, peralatan, dan kapasitas rekanan kontraktor untuk {uspk.uspkNumber}.
+                Penilaian kelaikan metodologi teknis, peralatan, dan kapasitas kontraktor untuk {uspk.uspkNumber}.
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        {/* USPK Summary Card */}
-        <div className="p-3 bg-muted/60 rounded-lg border space-y-1.5 text-xs">
-          <div className="flex flex-wrap items-center justify-between gap-1">
-            <span className="font-mono font-bold text-foreground">
-              {uspk.uspkNumber}
-            </span>
-            <div className="flex items-center gap-2">
-              {uspk.targetVolume && (
-                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                  Target: {uspk.targetVolume} {uspk.unit || "Unit"}
+        <DialogBody className="space-y-3 text-xs">
+          {/* USPK Summary Strip */}
+          <div className="px-3 py-2 bg-muted/50 rounded-md border space-y-1 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono font-bold text-foreground">{uspk.uspkNumber}</span>
+                <span className="font-semibold text-foreground">{uspk.vendorName}</span>
+                <span className="text-[11px] text-muted-foreground">
+                  ({formatIDDate(uspk.startDate)} s/d {formatIDDate(uspk.endDate)})
                 </span>
-              )}
-              <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                {formatIDR(uspk.value)}
-              </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {uspk.targetVolume && (
+                  <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                    {uspk.targetVolume} {uspk.unit || "Unit"}
+                  </span>
+                )}
+                <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">
+                  {formatIDR(uspk.value)}
+                </span>
+              </div>
             </div>
+            <p className="text-muted-foreground truncate text-[11px] italic">
+              &quot;{uspk.scope}&quot;
+            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-            <span className="font-semibold text-foreground">{uspk.vendorName}</span>
-            <span>&bull;</span>
-            <span>Pelaksanaan: {formatIDDate(uspk.startDate)} s/d {formatIDDate(uspk.endDate)}</span>
-          </div>
-          <p className="text-muted-foreground line-clamp-2 text-[11px] pt-0.5 italic">
-            "{uspk.scope}"
-          </p>
-        </div>
 
-        <div className="grid gap-4 py-1 text-xs">
-          {/* Row 1: Hasil Rekomendasi & Skor Teknis */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="font-semibold text-foreground">
+          {/* Row 1: Hasil, Skor & Tanggal (3 Kolom) */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <div className="sm:col-span-6 space-y-1">
+              <label className="font-semibold text-foreground block">
                 Hasil Evaluasi Kelaikan <span className="text-red-500">*</span>
               </label>
               <Select
                 value={result}
                 onValueChange={(val: TechnicalEvaluationResult) => setResult(val)}
               >
-                <SelectTrigger className="text-xs font-semibold">
+                <SelectTrigger className="h-9 text-xs font-semibold">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -239,9 +239,9 @@ export function TechnicalEvaluationDialog({
               </Select>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="font-semibold text-foreground">
-                Skor Penilaian Teknis (0 - 100)
+            <div className="sm:col-span-3 space-y-1">
+              <label className="font-semibold text-foreground block">
+                Skor (0-100)
               </label>
               <Input
                 type="number"
@@ -249,14 +249,26 @@ export function TechnicalEvaluationDialog({
                 max={100}
                 value={score}
                 onChange={(e) => setScore(Number(e.target.value))}
-                className="font-mono text-xs"
+                className="h-9 font-mono text-xs"
+              />
+            </div>
+
+            <div className="sm:col-span-3 space-y-1">
+              <label className="font-semibold text-foreground flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> Tgl Evaluasi <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="date"
+                value={evaluationDate}
+                onChange={(e) => setEvaluationDate(e.target.value)}
+                className="h-9 text-xs font-mono"
               />
             </div>
           </div>
 
           {/* Row 2: Evaluator & Jabatan */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <label className="font-semibold text-foreground flex items-center gap-1">
                 <UserCheck className="w-3.5 h-3.5 text-muted-foreground" /> Nama Evaluator Teknis <span className="text-red-500">*</span>
               </label>
@@ -264,64 +276,51 @@ export function TechnicalEvaluationDialog({
                 value={evaluatorName}
                 onChange={(e) => setEvaluatorName(e.target.value)}
                 placeholder="Nama evaluator..."
-                className="text-xs"
+                className="h-9 text-xs"
               />
             </div>
-            <div className="space-y-1.5">
-              <label className="font-semibold text-foreground">
+            <div className="space-y-1">
+              <label className="font-semibold text-foreground block">
                 Jabatan Evaluator
               </label>
               <Input
                 value={evaluatorJabatan}
                 onChange={(e) => setEvaluatorJabatan(e.target.value)}
                 placeholder="Manager Estate / Area / Water Management"
-                className="text-xs"
+                className="h-9 text-xs"
               />
             </div>
           </div>
 
-          {/* Row 3: Tanggal Evaluasi & Rekomendasi */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="font-semibold text-foreground flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-muted-foreground" /> Tanggal Evaluasi Selesai <span className="text-red-500">*</span>
-              </label>
-              <Input
-                type="date"
-                value={evaluationDate}
-                onChange={(e) => setEvaluationDate(e.target.value)}
-                className="text-xs font-mono"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="font-semibold text-foreground">
-                Rekomendasi Formal <span className="text-red-500">*</span>
-              </label>
-              <Input
-                value={rekomendasi}
-                onChange={(e) => setRekomendasi(e.target.value)}
-                placeholder="Disetujui untuk Penerbitan SPK..."
-                className="text-xs"
-              />
-            </div>
+          {/* Row 3: Rekomendasi Formal */}
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
+              Rekomendasi Formal <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={rekomendasi}
+              onChange={(e) => setRekomendasi(e.target.value)}
+              placeholder="Disetujui untuk Penerbitan SPK..."
+              className="h-9 text-xs"
+            />
           </div>
 
           {/* Row 4: Catatan Evaluasi Teknis */}
-          <div className="space-y-1.5">
-            <label className="font-semibold text-foreground">
+          <div className="space-y-1">
+            <label className="font-semibold text-foreground block">
               Catatan & Justifikasi Teknis Lapangan <span className="text-red-500">*</span>
             </label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Jelaskan hasil uji kesiapan alat berat, kecukupan tenaga kerja, track record rekanan, kepatuhan K3 perkebunan, atau alasan jika tidak direkomendasikan..."
-              rows={4}
-              className="text-xs leading-relaxed"
+              placeholder="Jelaskan hasil uji kesiapan alat berat, kecukupan tenaga kerja, track record rekanan, kepatuhan K3, atau alasan jika tidak direkomendasikan..."
+              rows={3}
+              className="text-xs leading-relaxed resize-none"
             />
           </div>
 
           {/* Row 5: Berita Acara Evaluasi */}
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <label className="font-semibold text-foreground flex items-center gap-1">
               <UploadCloud className="w-3.5 h-3.5 text-muted-foreground" /> Lampiran Berita Acara Evaluasi Teknis (Opsional)
             </label>
@@ -330,7 +329,7 @@ export function TechnicalEvaluationDialog({
                 value={attachmentName}
                 onChange={(e) => setAttachmentName(e.target.value)}
                 placeholder="Tautan Google Drive atau nama berkas berita acara"
-                className="text-xs"
+                className="h-9 text-xs"
               />
               <label className="h-9 px-3 rounded-md border border-input bg-background hover:bg-muted text-xs font-medium flex items-center justify-center cursor-pointer shrink-0 gap-1">
                 {uploadingAttachment ? (
@@ -349,9 +348,9 @@ export function TechnicalEvaluationDialog({
               </label>
             </div>
           </div>
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
+        <DialogFooter>
           <Button
             type="button"
             variant="outline"
