@@ -32,9 +32,11 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   DailyProgressRecord,
   GoodsHandover,
+  GoodsReceipt,
   Project,
   PurchaseOrder,
   SPKContract,
+  ScheduleGanttCell,
   ScheduleGanttGroup,
   ScheduleGanttTask,
   WeeklyProgressRecord,
@@ -53,6 +55,7 @@ interface ScheduleGanttMatrixProps {
   dailyProgress?: DailyProgressRecord[];
   weeklyProgress?: WeeklyProgressRecord[];
   pos?: PurchaseOrder[];
+  grs?: GoodsReceipt[];
   goodsHandovers?: GoodsHandover[];
   spkContracts?: SPKContract[];
   canEdit?: boolean;
@@ -65,6 +68,7 @@ export function ScheduleGanttMatrix({
   dailyProgress = [],
   weeklyProgress = [],
   pos = [],
+  grs = [],
   goodsHandovers = [],
   spkContracts = [],
   canEdit = false,
@@ -89,9 +93,39 @@ export function ScheduleGanttMatrix({
 
   const today = useMemo(() => parseLocalDate(new Date()), []);
 
+  const extraRealizationDates = useMemo(() => {
+    const dates: (string | undefined)[] = [];
+    for (const dp of dailyProgress) {
+      if (dp.projectId === project.id) dates.push(dp.date);
+    }
+    for (const wp of weeklyProgress) {
+      if (wp.projectId === project.id) {
+        dates.push(wp.startDate, wp.endDate);
+      }
+    }
+    const activeProjectPos = pos.filter(
+      (p) => p.projectId === project.id && !p.deletedAt && p.status !== "Cancelled"
+    );
+    const activePoIds = new Set(activeProjectPos.map((p) => p.id));
+    for (const po of activeProjectPos) {
+      if (po.status === "Released" || po.status === "Closed" || po.receiptProgressPercent > 0) {
+        dates.push(po.releaseDate || po.poDate);
+      }
+    }
+    for (const gr of grs) {
+      if (activePoIds.has(gr.poId)) dates.push(gr.receiptDate);
+    }
+    for (const gh of goodsHandovers) {
+      if (gh.status === "COMPLETED" && (activePoIds.has(gh.poId) || gh.projectId === project.id)) {
+        dates.push(gh.handoverDate);
+      }
+    }
+    return dates;
+  }, [project.id, dailyProgress, weeklyProgress, pos, grs, goodsHandovers]);
+
   const weeks = useMemo(
-    () => calculateDynamicWeekColumns(project, today),
-    [project, today]
+    () => calculateDynamicWeekColumns(project, today, extraRealizationDates),
+    [project, today, extraRealizationDates]
   );
 
   const monthSpans = useMemo(() => groupWeeksByMonth(weeks), [weeks]);
@@ -109,10 +143,11 @@ export function ScheduleGanttMatrix({
         dailyProgress,
         weeklyProgress,
         pos,
+        grs,
         goodsHandovers,
         spkContracts,
       }),
-    [project, weeks, today, dailyProgress, weeklyProgress, pos, goodsHandovers, spkContracts]
+    [project, weeks, today, dailyProgress, weeklyProgress, pos, grs, goodsHandovers, spkContracts]
   );
 
   const filteredGroups = useMemo(() => {
@@ -169,9 +204,23 @@ export function ScheduleGanttMatrix({
       setEditingTask(null);
       return;
     }
+    // Hanya simpan sel yang diubah manual agar sel otomatis selalu tersinkronisasi dinamis
+    const manualOnlyGroups: ScheduleGanttGroup[] = updatedGroups.map((grp) => ({
+      ...grp,
+      tasks: grp.tasks.map((t) => {
+        const manualCells: Record<string, ScheduleGanttCell> = {};
+        for (const [wk, c] of Object.entries(t.cells)) {
+          if (c?.manual) {
+            manualCells[wk] = c;
+          }
+        }
+        return { ...t, cells: manualCells };
+      }),
+    }));
+
     setIsSavingCell(true);
     try {
-      const result = await onUpdateSchedule(updatedGroups);
+      const result = await onUpdateSchedule(manualOnlyGroups);
       if (result !== false) {
         setEditingTask(null);
         toast.success(successMsg);
@@ -527,6 +576,9 @@ export function ScheduleGanttMatrix({
                             } else if (isDoneCell) {
                               cellBg = "bg-emerald-100 dark:bg-emerald-900/70";
                               textColor = "text-emerald-950 dark:text-emerald-100 font-bold";
+                            } else if (isProgressCell) {
+                              cellBg = "bg-amber-50 dark:bg-amber-950/40";
+                              textColor = "text-amber-900 dark:text-amber-200 font-bold";
                             }
 
                             const borderExtra = isCurrentWeek

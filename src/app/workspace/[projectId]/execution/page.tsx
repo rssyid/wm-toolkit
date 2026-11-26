@@ -103,6 +103,7 @@ function UnifiedExecutionHubContent() {
     dailyProgress,
     weeklyProgress,
     pos,
+    grs,
     goodsHandovers,
     spkContracts,
     tableDensity,
@@ -1430,6 +1431,7 @@ function UnifiedExecutionHubContent() {
             dailyProgress={projectDaily}
             weeklyProgress={projectWeekly}
             pos={pos}
+            grs={grs}
             goodsHandovers={goodsHandovers}
             spkContracts={spkContracts}
             canEdit={canEditProjects}

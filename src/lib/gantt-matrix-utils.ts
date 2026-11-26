@@ -1,6 +1,7 @@
 import {
   DailyProgressRecord,
   GoodsHandover,
+  GoodsReceipt,
   Project,
   ProjectStatus,
   PurchaseOrder,
@@ -35,6 +36,7 @@ export interface BuildScheduleMatrixInput {
   dailyProgress?: DailyProgressRecord[];
   weeklyProgress?: WeeklyProgressRecord[];
   pos?: PurchaseOrder[];
+  grs?: GoodsReceipt[];
   goodsHandovers?: GoodsHandover[];
   spkContracts?: SPKContract[];
 }
@@ -87,6 +89,34 @@ export function parseLocalDate(dateInput: string | Date | undefined | null): Dat
   return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
 }
 
+function tryParseLocalDate(dateInput: string | Date | undefined | null): Date | null {
+  if (!dateInput) return null;
+  if (dateInput instanceof Date) {
+    if (Number.isNaN(dateInput.getTime())) return null;
+    return new Date(dateInput.getFullYear(), dateInput.getMonth(), dateInput.getDate());
+  }
+  const raw = String(dateInput).trim();
+  if (!raw) return null;
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+}
+
+function getLatestDate(dates: (string | Date | undefined | null)[]): Date | null {
+  let latest: Date | null = null;
+  for (const raw of dates) {
+    const parsed = tryParseLocalDate(raw);
+    if (parsed && (!latest || parsed.getTime() > latest.getTime())) {
+      latest = parsed;
+    }
+  }
+  return latest;
+}
+
 export function formatShortIdDate(dateInput: string | Date | undefined | null): string {
   if (!dateInput) return "-";
   const d = parseLocalDate(dateInput);
@@ -94,10 +124,14 @@ export function formatShortIdDate(dateInput: string | Date | undefined | null): 
 }
 
 /**
- * Menghitung kolom mingguan (W1..WN) mulai dari tanggal awal paling awal (proyek/WBS)
- * hingga tanggal akhir terjauh (baseline, target revisi, atau item pekerjaan WBS).
+ * Menghitung kolom mingguan (W1..WN) mulai dari tanggal awal paling awal (proyek/WBS/realisasi)
+ * hingga tanggal akhir terjauh (baseline, target revisi, item pekerjaan WBS, atau realisasi aktual).
  */
-export function calculateDynamicWeekColumns(project: Project, today: Date): WeekColumn[] {
+export function calculateDynamicWeekColumns(
+  project: Project,
+  today: Date,
+  extraDates?: (string | Date | undefined | null)[]
+): WeekColumn[] {
   const candidateStarts: Date[] = [];
   const candidateEnds: Date[] = [];
 
@@ -108,6 +142,14 @@ export function calculateDynamicWeekColumns(project: Project, today: Date): Week
   for (const wi of project.workItems || []) {
     if (wi.startDate) candidateStarts.push(parseLocalDate(wi.startDate));
     if (wi.endDate) candidateEnds.push(parseLocalDate(wi.endDate));
+  }
+
+  for (const rawDate of extraDates || []) {
+    const parsed = tryParseLocalDate(rawDate);
+    if (parsed) {
+      candidateStarts.push(parsed);
+      candidateEnds.push(parsed);
+    }
   }
 
   const start =
@@ -181,6 +223,7 @@ function resolveEffectiveWorkItemState(
   dailyLogs: DailyProgressRecord[],
   weeklyLogs: WeeklyProgressRecord[],
   linkedPos: PurchaseOrder[],
+  linkedGrs: GoodsReceipt[],
   linkedHandovers: GoodsHandover[],
   linkedSpks: SPKContract[]
 ): {
@@ -196,9 +239,10 @@ function resolveEffectiveWorkItemState(
   const activePos = linkedPos.filter((p) => !p.deletedAt && p.status !== "Cancelled");
   if (activePos.length > 0) {
     const poIds = new Set(activePos.map((p) => p.id));
-    const completedHandover = linkedHandovers.some(
+    const completedHandovers = linkedHandovers.filter(
       (gh) => poIds.has(gh.poId) && gh.status === "COMPLETED"
     );
+    const completedHandover = completedHandovers.length > 0;
     const poProgressAvg = Math.round(
       activePos.reduce(
         (sum, po) =>
@@ -212,7 +256,15 @@ function resolveEffectiveWorkItemState(
         progress = 100;
         status = "Completed";
       }
-      hints.push("PO/BAST Tuntas 100%");
+      const latestHandoverDate = getLatestDate(completedHandovers.map((gh) => gh.handoverDate));
+      const latestGrDate = getLatestDate(linkedGrs.map((g) => g.receiptDate));
+      if (latestHandoverDate) {
+        hints.push(`BAST Tuntas 100% (${formatShortIdDate(latestHandoverDate)})`);
+      } else if (latestGrDate) {
+        hints.push(`GR Tuntas 100% (${formatShortIdDate(latestGrDate)})`);
+      } else {
+        hints.push("PO/BAST Tuntas 100%");
+      }
     } else if (activePos.some((p) => p.status === "Released" || p.receiptProgressPercent > 0)) {
       if (item.type === "Material" || progress === 0) {
         progress = Math.max(progress, poProgressAvg);
@@ -334,6 +386,7 @@ export function buildMergedScheduleMatrix({
   dailyProgress = [],
   weeklyProgress = [],
   pos = [],
+  grs = [],
   goodsHandovers = [],
   spkContracts = [],
 }: BuildScheduleMatrixInput): ScheduleGanttGroup[] {
@@ -380,6 +433,12 @@ export function buildMergedScheduleMatrix({
         (w) => w.projectId === project.id && w.workItemId === item.id
       );
       const itemPos = pos.filter((p) => p.projectId === project.id && p.workItemId === item.id);
+      const activeItemPos = itemPos.filter((p) => !p.deletedAt && p.status !== "Cancelled");
+      const itemPoIds = new Set(activeItemPos.map((p) => p.id));
+      const itemGrs = grs.filter((g) => itemPoIds.has(g.poId));
+      const itemCompletedHandovers = goodsHandovers.filter(
+        (gh) => itemPoIds.has(gh.poId) && gh.status === "COMPLETED"
+      );
       const itemSpks = spkContracts.filter(
         (s) => s.projectId === project.id && s.workItemId === item.id
       );
@@ -389,21 +448,33 @@ export function buildMergedScheduleMatrix({
         itemDailyLogs,
         itemWeeklyLogs,
         itemPos,
+        itemGrs,
         goodsHandovers,
         itemSpks
       );
 
-      // Cari minggu di mana ada log progres atau penyelesaian
+      // Cari minggu di mana ada log progres atau realisasi pengadaan (PO, GR, BAST)
       const loggedWeekIndices = new Set<number>();
       let latestLoggedWeekIndex = -1;
 
-      for (const dp of itemDailyLogs) {
-        const dDate = parseLocalDate(dp.date);
-        const matched = weeks.find((w) => dDate >= w.startDate && dDate <= w.endDate);
+      const findWeekForDate = (
+        rawDate: string | Date | undefined | null
+      ): WeekColumn | undefined => {
+        const parsed = tryParseLocalDate(rawDate);
+        if (!parsed) return undefined;
+        return weeks.find((w) => parsed >= w.startDate && parsed <= w.endDate);
+      };
+
+      const recordRealizationWeek = (rawDate: string | Date | undefined | null) => {
+        const matched = findWeekForDate(rawDate);
         if (matched) {
           loggedWeekIndices.add(matched.index);
           latestLoggedWeekIndex = Math.max(latestLoggedWeekIndex, matched.index);
         }
+      };
+
+      for (const dp of itemDailyLogs) {
+        recordRealizationWeek(dp.date);
       }
 
       for (const wp of itemWeeklyLogs) {
@@ -414,6 +485,20 @@ export function buildMergedScheduleMatrix({
           loggedWeekIndices.add(w.index);
           latestLoggedWeekIndex = Math.max(latestLoggedWeekIndex, w.index);
         }
+      }
+
+      for (const po of activeItemPos) {
+        if (po.status === "Released" || po.status === "Closed" || po.receiptProgressPercent > 0) {
+          recordRealizationWeek(po.releaseDate || po.poDate);
+        }
+      }
+
+      for (const gr of itemGrs) {
+        recordRealizationWeek(gr.receiptDate);
+      }
+
+      for (const gh of itemCompletedHandovers) {
+        recordRealizationWeek(gh.handoverDate);
       }
 
       const activeWeeks = weeks.filter((w) => startD <= w.endDate && endD >= w.startDate);
@@ -435,18 +520,30 @@ export function buildMergedScheduleMatrix({
         };
       }
 
-      // Terapkan simbol sesuai Opsi A:
-      // - Item selesai (100%): minggu sebelumnya "#", minggu selesai/akhir "DONE" (Check)
+      // Terapkan simbol sesuai realisasi aktual:
+      // - Item selesai (100%): minggu aktivitas sebelumnya "#", minggu realisasi selesai "DONE" (Check)
+      //   Prioritas tanggal selesai pengadaan barang: BAST COMPLETED -> GR terakhir -> log/PO -> fallback akhir rencana.
       // - Item berjalan (In Progress):
-      //   * Bila sudah ada log progres (mingguan/harian), "#" hanya muncul pada minggu yang ada log.
-      //   * Bila tanpa log (mis. GR material parsial atau update progres langsung), tandai minggu aktif berjalan.
+      //   * Bila sudah ada log progres / aktivitas PO / GR, "#" hanya muncul pada minggu realisasi tersebut.
+      //   * Bila tanpa tanggal realisasi, tandai minggu aktif berjalan.
       if (effective.status === "Completed") {
         const fallbackLastWeek =
           activeWeeks[activeWeeks.length - 1] || currentWeek || weeks[weeks.length - 1];
-        const completionWeek =
-          (latestLoggedWeekIndex > 0
+        const latestHandoverWeek = findWeekForDate(
+          getLatestDate(itemCompletedHandovers.map((gh) => gh.handoverDate))
+        );
+        const latestGrWeek = findWeekForDate(
+          getLatestDate(itemGrs.map((g) => g.receiptDate))
+        );
+        const latestLogWeek =
+          latestLoggedWeekIndex > 0
             ? weeks.find((w) => w.index === latestLoggedWeekIndex)
-            : undefined) || fallbackLastWeek;
+            : undefined;
+        const hasPhysicalLogs = itemDailyLogs.length > 0 || itemWeeklyLogs.length > 0;
+        const completionWeek =
+          (item.type === "Material" || !hasPhysicalLogs
+            ? latestHandoverWeek || latestGrWeek || latestLogWeek
+            : latestLogWeek || latestHandoverWeek || latestGrWeek) || fallbackLastWeek;
 
         if (completionWeek) {
           if (loggedWeekIndices.size > 0) {
@@ -455,7 +552,7 @@ export function buildMergedScheduleMatrix({
                 const loggedWeek = weeks.find((w) => w.index === loggedIdx);
                 if (loggedWeek) {
                   cells[loggedWeek.key] = {
-                    type: cells[loggedWeek.key]?.type || "plan",
+                    type: cells[loggedWeek.key]?.type || "empty",
                     symbol: "#",
                     note: cells[loggedWeek.key]?.note || item.notes,
                   };
@@ -470,7 +567,7 @@ export function buildMergedScheduleMatrix({
             }
           }
           cells[completionWeek.key] = {
-            type: cells[completionWeek.key]?.type || "plan",
+            type: cells[completionWeek.key]?.type || "empty",
             symbol: "DONE",
             note: cells[completionWeek.key]?.note || item.notes,
           };
@@ -482,7 +579,7 @@ export function buildMergedScheduleMatrix({
             const loggedWeek = weeks.find((w) => w.index === loggedIdx);
             if (loggedWeek) {
               cells[loggedWeek.key] = {
-                type: cells[loggedWeek.key]?.type || "plan",
+                type: cells[loggedWeek.key]?.type || "empty",
                 symbol: "#",
                 note: cells[loggedWeek.key]?.note || item.notes,
               };
@@ -507,7 +604,7 @@ export function buildMergedScheduleMatrix({
             weeks[0];
           if (anchorWeek) {
             cells[anchorWeek.key] = {
-              type: cells[anchorWeek.key]?.type || "plan",
+              type: cells[anchorWeek.key]?.type || "empty",
               symbol: "#",
               note: cells[anchorWeek.key]?.note || item.notes,
             };
@@ -538,13 +635,13 @@ export function buildMergedScheduleMatrix({
             }
           } else {
             // Kompatibilitas data lama sebelum flag `manual` diperkenalkan:
-            // hormati simbol/catatan/revisi manual jika ada, tanpa menimpa simbol otomatis yang baru.
+            // pertahankan tipe revisi dan catatan saja tanpa memunculkan ulang simbol lama yang sudah usang.
             const autoCell = cells[weekKey];
-            const mergedSymbol = normalizedSym ?? autoCell?.symbol ?? null;
+            const mergedSymbol = autoCell?.symbol ?? null;
             const mergedType =
               savedCell.type === "revised" || savedCell.type === "extended-revised"
                 ? savedCell.type
-                : autoCell?.type || savedCell.type;
+                : autoCell?.type || "empty";
 
             if (mergedType !== "empty" || mergedSymbol || savedCell.note) {
               cells[weekKey] = {
