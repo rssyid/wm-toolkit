@@ -22,9 +22,11 @@ import {
   FolderGit2,
   Bell,
   FileBarChart2,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppState } from "@/context/app-state-context";
+import { useOnboarding } from "@/context/onboarding-context";
 
 interface AppSidebarProps {
   collapsed: boolean;
@@ -41,6 +43,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const pathname = usePathname() || "";
   const { unreadNotificationCount, canManageSystem } = useAppState();
+  const { hydrated, completedCount, totalSteps, isAllCompleted } = useOnboarding();
   const [masterDataOpen, setMasterDataOpen] = useState(pathname.startsWith("/master-data"));
 
   React.useEffect(() => {
@@ -48,6 +51,9 @@ export function AppSidebar({
       setMasterDataOpen(true);
     }
   }, [pathname]);
+
+  const guideProgressLabel =
+    hydrated && !isAllCompleted ? `${completedCount}/${totalSteps}` : undefined;
 
   const navItems = [
     {
@@ -74,6 +80,13 @@ export function AppSidebar({
       href: "/notifications",
       active: pathname === "/notifications",
       badge: unreadNotificationCount,
+    },
+    {
+      label: "Panduan",
+      icon: BookOpen,
+      href: "/guide",
+      active: pathname.startsWith("/guide"),
+      progressLabel: guideProgressLabel,
     },
   ];
 
@@ -133,11 +146,20 @@ export function AppSidebar({
               aria-current={item.active ? "page" : undefined}
               className={cn(
                 "relative flex items-center gap-3 rounded-md px-3 py-2 text-xs font-medium transition-colors",
+                isMobileDrawer && "min-h-[44px]",
                 item.active
                   ? "bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 font-semibold"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
-              title={collapsed ? (item.badge && item.badge > 0 ? `${item.label} (${item.badge} baru)` : item.label) : undefined}
+              title={
+                collapsed
+                  ? item.badge && item.badge > 0
+                    ? `${item.label} (${item.badge} baru)`
+                    : item.progressLabel
+                    ? `${item.label} (${item.progressLabel})`
+                    : item.label
+                  : undefined
+              }
             >
               <div className="relative shrink-0">
                 <Icon className={cn("h-4 w-4", item.active && "text-emerald-700 dark:text-emerald-400")} />
@@ -149,6 +171,11 @@ export function AppSidebar({
               {!collapsed && item.badge && item.badge > 0 ? (
                 <span className="flex h-4 px-1.5 items-center justify-center rounded-full bg-rose-600 text-[9px] font-bold text-white shadow-sm">
                   {item.badge}
+                </span>
+              ) : null}
+              {!collapsed && item.progressLabel ? (
+                <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                  {item.progressLabel}
                 </span>
               ) : null}
             </Link>

@@ -22,10 +22,12 @@ import {
   DashboardFilterState,
 } from "@/components/dashboard/dashboard-filter-bar";
 import { PipelineStatusBar } from "@/components/dashboard/pipeline-status-bar";
+import { OnboardingChecklistBanner } from "@/components/onboarding/onboarding-checklist-banner";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useAppState } from "@/context/app-state-context";
+import { useOnboarding } from "@/context/onboarding-context";
 import { formatIDR, isProjectDelayed } from "@/lib/utils";
 
 function formatCompactIDR(amount: number): string {
@@ -65,6 +67,11 @@ function DashboardContent() {
     locations,
     auditLogs,
   } = useAppState();
+  const {
+    hydrated: onboardingHydrated,
+    dashboardWidgetHidden,
+    isAllCompleted: onboardingAllCompleted,
+  } = useOnboarding();
 
   useEffect(() => {
     if (tabParam === "audit-log") {
@@ -210,8 +217,11 @@ function DashboardContent() {
 
         {/* Tab 1: Overview Operasional */}
         <TabsContent value="overview" className="space-y-6 mt-0">
-          {/* Empty Workspace Notification Banner */}
-          {projects.filter((p) => !p.deletedAt).length === 0 && (
+          <OnboardingChecklistBanner />
+
+          {/* Empty Workspace Notification Banner (tampil hanya saat checklist onboarding tersembunyi/selesai) */}
+          {projects.filter((p) => !p.deletedAt).length === 0 &&
+            (!onboardingHydrated || dashboardWidgetHidden || onboardingAllCompleted) && (
             <div className="rounded-xl border border-dashed border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 rounded-lg bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 shrink-0">

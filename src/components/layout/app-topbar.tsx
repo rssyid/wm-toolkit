@@ -16,6 +16,7 @@ import {
   ArrowRight,
   LogOut,
   Settings,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -336,6 +337,13 @@ export function AppTopbar({ onToggleSidebar }: AppTopbarProps) {
             </DropdownMenuLabel>
 
             <DropdownMenuSeparator />
+
+            <DropdownMenuItem asChild>
+              <Link href="/guide" className="flex items-center gap-2 cursor-pointer text-xs">
+                <BookOpen className="w-3.5 h-3.5 text-muted-foreground" />
+                <span>Panduan &amp; Onboarding</span>
+              </Link>
+            </DropdownMenuItem>
 
             <DropdownMenuItem asChild>
               <Link href="/settings" className="flex items-center gap-2 cursor-pointer text-xs">

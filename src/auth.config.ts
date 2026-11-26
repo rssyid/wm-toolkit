@@ -59,6 +59,8 @@ export const authConfig: NextAuthConfig = {
         "/master-data",
         "/settings",
         "/notifications",
+        "/reports",
+        "/guide",
       ];
       const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
       if (isProtected) {

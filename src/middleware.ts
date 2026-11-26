@@ -31,6 +31,8 @@ export const config = {
     "/master-data/:path*",
     "/settings/:path*",
     "/notifications/:path*",
+    "/reports/:path*",
+    "/guide/:path*",
     "/api/:path*",
   ],
 };
